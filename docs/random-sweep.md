@@ -406,7 +406,7 @@ port and the console agreed on every compared frame.
 - [x] #40 seed 380017556, Flatzone: Peach vs Koopa vs Peach vs Mars -- identical, match over at frame 7200  (2026-10-08 19:24)
 - [x] #37 seed 356073616, PStadium: Link vs Emblem vs PopoNana vs Fox -- identical, match over at frame 7200  (2026-10-08 19:24)
 - [x] #1 seed 463427697, Fourside: Mario vs Falco vs Mewtwo vs Pichu -- identical, match over at frame 7200  (2026-10-08 19:25)
-- [ ] #22 seed 284533230, Inishie2: Mewtwo vs Mars vs Kirby vs PopoNana -- diverged at 5008 (rng_draws)  (2026-10-08 19:25)
+- [x] #22 seed 284533230, Inishie2: Mewtwo vs Mars vs Kirby vs PopoNana -- diverged at 5008 (rng_draws)  (2026-10-08 19:25)  -- fixed, identical to match end on rerun
 - [x] #1 seed 771239967, RCruise: Koopa vs Mario vs Link vs Falco -- identical, match over at frame 7200  (2026-10-08 19:26)
 - [x] #1 seed 559522522, Castle: DrMario vs Mario vs Mars vs Koopa -- identical, match over at frame 7200  (2026-10-08 19:26)
 - [x] #39 seed 694859015, Shrine: Peach vs Samus vs Ness vs Pichu -- identical, match over at frame 7200  (2026-10-08 19:26)
@@ -416,7 +416,7 @@ port and the console agreed on every compared frame.
 - [x] #13 seed 630380371, Shrine: Donkey vs Mewtwo vs Zelda vs DrMario -- identical, match over at frame 7200  (2026-10-08 19:28)
 - [x] #41 seed 722620910, Greens: Captain vs PopoNana vs Mewtwo vs Luigi -- identical, match over at frame 7200  (2026-10-08 19:28)
 - [x] #2 seed 39365809, Kraid: Mario vs Mewtwo vs Seak vs Falco -- identical, match over at frame 7200  (2026-10-08 19:29)
-- [ ] #42 seed 306388599, Corneria: PopoNana vs Koopa vs Kirby vs Fox -- diverged at 584 (p0.motion)  (2026-10-08 19:29)
+- [x] #42 seed 306388599, Corneria: PopoNana vs Koopa vs Kirby vs Fox -- diverged at 584 (p0.motion)  (2026-10-08 19:29)  -- fixed, identical to match end on rerun
 - [x] #2 seed 66089074, Pura: DrMario vs Samus vs Mewtwo vs Emblem -- identical, match over at frame 7200  (2026-10-08 19:29)
 - [x] #40 seed 273014302, Inishie2: Yoshi vs Link vs Seak vs Fox -- identical, match over at frame 7200  (2026-10-08 19:29)
 - [x] #39 seed 643436724, Flatzone: Pikachu vs Mewtwo vs Pichu vs PopoNana -- identical, match over at frame 7200  (2026-10-08 19:30)
@@ -464,7 +464,7 @@ port and the console agreed on every compared frame.
 - [x] #45 seed 452444205, Corneria: Zelda vs GameWatch vs DrMario vs PopoNana -- identical, match over at frame 7200  (2026-10-08 19:46)
 - [x] #44 seed 365529209, Greens: Donkey vs Ness vs Captain vs Kirby -- identical, match over at frame 7200  (2026-10-08 19:47)
 - [x] #7 seed 905785615, Inishie1: Donkey vs Koopa vs Luigi vs Koopa -- identical, match over at frame 7200  (2026-10-08 19:47)
-- [ ] #21 seed 775963454, Yoster: Kirby vs GameWatch vs Ness vs GameWatch -- stopped-early at 6603 (?)  (2026-10-08 19:47)
+- [x] #21 seed 775963454, Yoster: Kirby vs GameWatch vs Ness vs GameWatch -- stopped-early at 6603 (?)  (2026-10-08 19:47)  -- fixed, identical to match end on rerun
 - [x] #9 seed 620644907, Inishie2: CLink vs Ganon vs Purin vs Samus -- identical, match over at frame 7200  (2026-10-08 19:47)
 - [x] #8 seed 731000492, Story: Luigi vs Donkey vs PopoNana vs GameWatch -- identical, match over at frame 7200  (2026-10-08 19:48)
 - [x] #21 seed 146154732, GreatBay: Donkey vs DrMario vs Donkey vs Pikachu -- identical, match over at frame 7200  (2026-10-08 19:48)
@@ -488,7 +488,7 @@ port and the console agreed on every compared frame.
 - [x] #12 seed 117061169, Kraid: Emblem vs Captain vs Kirby vs Emblem -- identical, match over at frame 7200  (2026-10-08 19:56)
 - [x] #23 seed 1024661206, Venom: Emblem vs Yoshi vs PopoNana vs Falco -- identical, match over at frame 7200  (2026-10-08 19:56)
 - [x] #49 seed 788336531, Fourside: Emblem vs Koopa vs Mewtwo vs Pichu -- identical, match over at frame 7200  (2026-10-08 19:56)
-- [ ] #23 seed 465825848, RCruise: Samus vs Kirby vs GameWatch vs Pichu -- stopped-early at 1065 (?)  (2026-10-08 19:56)
+- [x] #23 seed 465825848, RCruise: Samus vs Kirby vs GameWatch vs Pichu -- stopped-early at 1065 (?)  (2026-10-08 19:56)  -- fixed, identical to match end on rerun
 - [x] #11 seed 576791502, OldYoshi: Emblem vs Ganon vs Mewtwo vs Pikachu -- identical, match over at frame 7200  (2026-10-08 19:57)
 - [x] #48 seed 837569692, Greens: Captain vs Yoshi vs Zelda vs DrMario -- identical, match over at frame 7200  (2026-10-08 19:57)
 - [x] #24 seed 701681383, OldYoshi: DrMario vs Captain vs Zelda vs Falco -- identical, match over at frame 7200  (2026-10-08 19:58)
@@ -501,7 +501,7 @@ port and the console agreed on every compared frame.
 - [x] #51 seed 771289537, Kongo: Donkey vs Seak vs Seak vs Captain -- identical, match over at frame 7200  (2026-10-08 20:00)
 - [x] #25 seed 421434472, Greens: DrMario vs Ness vs GameWatch vs Koopa -- identical, match over at frame 7200  (2026-10-08 20:00)
 - [x] #12 seed 108373495, Kraid: Mario vs Ness vs Samus vs CLink -- identical, match over at frame 7200  (2026-10-08 20:00)
-- [ ] #13 seed 196550748, Icemt: Mars vs Kirby vs Seak vs Donkey -- diverged at 1421 (p1.motion)  (2026-10-08 20:01)
+- [x] #13 seed 196550748, Icemt: Mars vs Kirby vs Seak vs Donkey -- diverged at 1421 (p1.motion)  (2026-10-08 20:01)  -- fixed, identical to match end on rerun
 - [x] #15 seed 419570510, GreatBay: CLink vs Yoshi vs Ness vs Luigi -- identical, match over at frame 7200  (2026-10-08 20:01)
 - [x] #13 seed 279293320, Shrine: Ganon vs Samus vs Donkey vs Zelda -- identical, match over at frame 7200  (2026-10-08 20:02)
 - [ ] #16 seed 121086018, Pura: Luigi vs Seak vs Link vs Kirby -- diverged at 1589 (p1.aihash)  (2026-10-08 20:02)
@@ -511,12 +511,12 @@ port and the console agreed on every compared frame.
 - [x] #27 seed 437602311, OldPupupu: Pikachu vs GameWatch vs Seak vs Peach -- identical, match over at frame 7200  (2026-10-08 20:03)
 - [x] #14 seed 1036234617, Kraid: Pikachu vs Mewtwo vs Seak vs Captain -- identical, match over at frame 7200  (2026-10-08 20:03)
 - [x] #51 seed 990831835, Zebes: Kirby vs Yoshi vs DrMario vs Fox -- identical, match over at frame 7200  (2026-10-08 20:03)
-- [ ] #15 seed 100206974, Inishie1: Kirby vs DrMario vs GameWatch vs GameWatch -- stopped-early at 986 (?)  (2026-10-08 20:04)
+- [x] #15 seed 100206974, Inishie1: Kirby vs DrMario vs GameWatch vs GameWatch -- stopped-early at 986 (?)  (2026-10-08 20:04)  -- fixed, identical to match end on rerun
 - [x] #28 seed 475301804, PStadium: Fox vs Peach vs Fox vs Ness -- identical, frame cap reached before the match ended  (2026-10-08 20:04)
 - [x] #52 seed 276379301, Castle: Fox vs DrMario vs Link vs Luigi -- identical, match over at frame 7200  (2026-10-08 20:05)
 - [x] #53 seed 190916629, Venom: Purin vs PopoNana vs Zelda vs Captain -- identical, match over at frame 7200  (2026-10-08 20:05)
 - [x] #29 seed 986271428, Inishie2: Seak vs Emblem vs Donkey vs Samus -- identical, match over at frame 7200  (2026-10-08 20:05)
-- [ ] #54 seed 141473229, Yoster: Purin vs Fox vs Kirby vs GameWatch -- stopped-early at 3109 (?)  (2026-10-08 20:06)
+- [x] #54 seed 141473229, Yoster: Purin vs Fox vs Kirby vs GameWatch -- stopped-early at 3109 (?)  (2026-10-08 20:06)  -- fixed, identical to match end on rerun
 - [x] #53 seed 874593521, Inishie2: Mario vs Pikachu vs Donkey vs Kirby -- identical, match over at frame 7200  (2026-10-08 20:06)
 - [x] #30 seed 515923449, RCruise: Purin vs CLink vs Zelda vs GameWatch -- identical, match over at frame 7200  (2026-10-08 20:07)
 - [x] #54 seed 309330230, Corneria: Yoshi vs Fox vs Mars vs DrMario -- identical, match over at frame 7200  (2026-10-08 20:07)
@@ -534,7 +534,7 @@ port and the console agreed on every compared frame.
 - [x] #60 seed 254833709, Kraid: Koopa vs Seak vs Koopa vs Fox -- identical, match over at frame 7200  (2026-10-08 20:12)
 - [x] #37 seed 232797759, Venom: Koopa vs GameWatch vs Emblem vs Seak -- identical, match over at frame 7200  (2026-10-08 20:13)
 - [x] #61 seed 116058078, Kongo: Emblem vs Ganon vs Mewtwo vs Link -- identical, match over at frame 7200  (2026-10-08 20:13)
-- [ ] #38 seed 1022168733, GreatBay: DrMario vs Luigi vs GameWatch vs Kirby -- stopped-early at 3372 (?)  (2026-10-08 20:13)
+- [x] #38 seed 1022168733, GreatBay: DrMario vs Luigi vs GameWatch vs Kirby -- stopped-early at 3372 (?)  (2026-10-08 20:13)  -- fixed, identical to match end on rerun
 - [x] #62 seed 231370344, Kraid: Mario vs Fox vs Zelda vs Fox -- identical, match over at frame 7200  (2026-10-08 20:14)
 - [x] #63 seed 316049469, Venom: Pikachu vs Mewtwo vs Mars vs Kirby -- identical, match over at frame 7200  (2026-10-08 20:15)
 - [x] #64 seed 384950405, OldKongo: Mewtwo vs Luigi vs GameWatch vs Fox -- identical, match over at frame 7200  (2026-10-08 20:15)
@@ -560,7 +560,7 @@ port and the console agreed on every compared frame.
 - [x] #1 seed 21788455, Kraid: Koopa vs Mewtwo vs Purin vs Mewtwo -- identical, match over at frame 7200  (2026-10-08 20:52)
 - [x] #1 seed 405012666, Last: DrMario vs Purin vs DrMario vs Peach -- identical, match over at frame 7200  (2026-10-08 20:52)
 - [x] #1 seed 355936660, Kongo: Purin vs Emblem vs DrMario vs Pichu -- identical, match over at frame 7200  (2026-10-08 20:52)
-- [ ] #1 seed 586089805, Story: Koopa vs Mars vs Kirby vs Koopa -- diverged at 6218 (rng_draws)  (2026-10-08 20:52)
+- [x] #1 seed 586089805, Story: Koopa vs Mars vs Kirby vs Koopa -- diverged at 6218 (rng_draws)  (2026-10-08 20:52)  -- fixed, identical to match end on rerun
 - [x] #1 seed 347202597, Yoster: Fox vs Koopa vs PopoNana vs Ness -- identical, match over at frame 7200  (2026-10-08 20:53)
 - [x] #1 seed 634689612, Corneria: Pikachu vs Fox vs Koopa vs Zelda -- identical, match over at frame 7200  (2026-10-08 20:53)
 - [x] #1 seed 768500876, MuteCity: Kirby vs Captain vs Emblem vs Falco -- identical, match over at frame 7200  (2026-10-08 20:54)
@@ -578,12 +578,12 @@ port and the console agreed on every compared frame.
 - [x] #3 seed 684215960, Yoster: GameWatch vs Peach vs Ness vs Captain -- identical, match over at frame 7200  (2026-10-08 20:58)
 - [x] #3 seed 893487145, OldPupupu: Purin vs Luigi vs Fox vs Pikachu -- identical, match over at frame 7200  (2026-10-08 20:58)
 - [x] #3 seed 652770527, Pura: Mewtwo vs Emblem vs GameWatch vs Samus -- identical, match over at frame 7200  (2026-10-08 20:58)
-- [ ] #4 seed 704223244, Last: Samus vs Purin vs Falco vs PopoNana -- diverged at 4180 (p3.mv1c)  (2026-10-08 20:59)
+- [x] #4 seed 704223244, Last: Samus vs Purin vs Falco vs PopoNana -- diverged at 4180 (p3.mv1c)  (2026-10-08 20:59)  -- fixed, identical to match end on rerun
 - [x] #2 seed 537255448, Izumi: Captain vs Fox vs Falco vs DrMario -- identical, match over at frame 7200  (2026-10-08 20:59)
 - [x] #3 seed 470149630, Corneria: Ganon vs Purin vs Kirby vs Seak -- identical, match over at frame 7200  (2026-10-08 21:00)
 - [x] #3 seed 640011144, Pura: Falco vs Ness vs GameWatch vs Yoshi -- identical, match over at frame 7200  (2026-10-08 21:00)
 - [x] #3 seed 321307496, BigBlue: Ness vs DrMario vs Mars vs Purin -- identical, match over at frame 7200  (2026-10-08 21:01)
-- [ ] #4 seed 249890845, Zebes: Mewtwo vs Mario vs PopoNana vs Captain -- diverged at 6860 (p2.mv1c)  (2026-10-08 21:01)
+- [x] #4 seed 249890845, Zebes: Mewtwo vs Mario vs PopoNana vs Captain -- diverged at 6860 (p2.mv1c)  (2026-10-08 21:01)  -- fixed, identical to match end on rerun
 - [x] #3 seed 288083927, OldKongo: Falco vs Pikachu vs PopoNana vs Mewtwo -- identical, match over at frame 7200  (2026-10-08 21:02)
 - [x] #4 seed 260277187, Izumi: Seak vs Fox vs Mario vs Emblem -- identical, match over at frame 7200  (2026-10-08 21:02)
 - [x] #4 seed 50539690, Inishie2: DrMario vs Ganon vs Samus vs Mars -- identical, match over at frame 7200  (2026-10-08 21:02)
@@ -632,3 +632,4 @@ port and the console agreed on every compared frame.
 - [x] #11 seed 51493417, Inishie1: Zelda vs Ganon vs Mars vs Link -- identical, match over at frame 7200  (2026-10-08 21:23)
 
 Known, trace-only (not fixed): seed 68194490 (Pura, Yoshi) -- ftAnim_8006F3DC has no part with an AObj for three frames after GuardDamage is re-entered on a shield hit, so cur_anim_frame is whatever f1 held on the console (100.0) and 0 here; motion changes and positions stay identical.
+- [x] #10 seed 215788738, Fourside: Emblem vs Donkey vs CLink vs PopoNana -- identical, match over at frame 7200  (2026-10-08 21:23)
