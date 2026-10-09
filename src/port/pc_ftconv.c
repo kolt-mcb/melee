@@ -1364,13 +1364,31 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
             ArticleDynamicBones* ab = pc_lowmem_alloc(sizeof(*ab));
             if (dy != NULL && ab != NULL) {
                 int i;
-                for (i = 0; i < dnum; i++) {
+                /* Past dynamicsNum as well: the array can hold more chains
+                 * than the count says, and ftCo_8009DC54 reads them by
+                 * index. Jigglypuff's file says 1 and holds five -- entries
+                 * 1-2 are the costume-2 accessory, 3-4 the costume-3 one --
+                 * and with only entry 0 converted, the third Jigglypuff in a
+                 * match (costume 2) set up a chain of length 0 and
+                 * lb_8000FD48 walked a NULL list (random sweep seed
+                 * 578818156: the port died loading the match). Entries past
+                 * the count are taken only while they look like chains. */
+                for (i = 0; i < Ft_Dynamics_NumMax &&
+                            boff + (u32) (i + 1) * 0x18u <= len;
+                     i++)
+                {
                     const u8* e = base + boff + (u32) i * 0x18u;
                     BoneDynamicsDesc* b = &ab->array[i];
                     u32 ioff = pc_be32(*(const u32*) (e + 4));
                     u32 icount = pc_be32(*(const u32*) (e + 8));
                     u32* pos = (u32*) &b->dyn_desc.pos;
                     int w;
+                    if (i >= dnum &&
+                        (icount > 64 || ioff == 0 ||
+                         ioff + icount * 0x3Cu > len))
+                    {
+                        break;
+                    }
                     b->bone_id = (int) pc_be32(*(const u32*) e);
                     b->dyn_desc.count = icount;
                     for (w = 0; w < 3; w++) {
