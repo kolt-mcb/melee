@@ -507,7 +507,18 @@ void ftCo_80095D5C(Fighter* fp, Vec3* arg1)
     array_element = (u8*) co_attrs;
     vel *= vel_mul * *(float*) (array_element - 0x468);
     if (cmd_var0 != 0) {
+#if BUILD_TARGET_PC
+        /* ftCo_ItemThrowCmd is {pad:20, angle:12}; MWCC allocates from the
+         * most significant bit, so the angle is the word's low 12 bits,
+         * signed. This compiler allocates from the least significant bit
+         * and the overlay read the top 12 -- Pikachu's scripted throw angle
+         * came out 4 degrees instead of the script's, the Super Scope left
+         * the hand backwards and hit Marth the other way (random sweep seed
+         * 646577653, Rainbow Cruise, 1038). */
+        int int_angle = ((s32) (cmd_var0 << 20)) >> 20;
+#else
         int int_angle = ((ftCo_ItemThrowCmd*) fp->cmd_vars)->angle;
+#endif
         if (int_angle == 361) {
             angle = *(float*) (array_element - 0x464);
         } else {
