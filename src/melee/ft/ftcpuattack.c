@@ -2859,7 +2859,13 @@ int ftCo_800BB220(Fighter* fp, Item* ip, Vec3* arg2, f32 arg3)
         result = true;
         break;
     default:
+#if BUILD_TARGET_PC
+        /* An Item, read as a Fighter: the console compares the item's kind
+         * (see ftCo_800A5980_item). */
+        result = ftCo_800A5980_item(ip);
+#else
         result = ftCo_800A5980((Fighter*) ip);
+#endif
         break;
     }
     if (result) {

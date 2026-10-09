@@ -3099,6 +3099,30 @@ bool ftCo_800A5980(Fighter* fp)
     return false;
 }
 
+#if BUILD_TARGET_PC
+/* The CPU's item checks (ftCo_ItemCheck below, ftCo_800BB220) hand the
+ * function above an Item. On the console that reads the word at Item+0x10,
+ * which is the item's kind, so the comparisons sort out item kinds 43..46
+ * (the motion-id range) -- a CPU never chases or dodges those. Here the
+ * Fighter's motion_id sits at a different byte offset once its pointer is
+ * eight bytes wide, and the cast landed on spawn_kind instead: Marth on
+ * Shrine (random sweep seed 114995247) evaluated a kind-43 item the console
+ * ignored, decided to air-dodge it, and the match parted on frame 1200. */
+bool ftCo_800A5980_item(Item* ip)
+{
+    s32 m = (s32) ip->kind;
+    if (m >= ftCo_MS_LandingFallSpecial && m < ftCo_MS_Attack100Start) {
+        return true;
+    }
+    if (m == ftCo_MS_Furafura || m == ftCo_MS_Catch ||
+        m == ftCo_MS_CatchPull || m == ftCo_MS_CatchAttack)
+    {
+        return true;
+    }
+    return false;
+}
+#endif
+
 bool ftCo_800A59C0(Item* ip)
 {
     if (ip->xCC_item_attr->x0_78 == 3) {
@@ -6579,7 +6603,11 @@ void ftCo_800ADC28(Fighter* fp)
 
 static inline bool ftCo_ItemCheck(Item* ip)
 {
+#if BUILD_TARGET_PC
+    return ftCo_800A5980_item(ip);
+#else
     return ftCo_800A5980((Fighter*) ip);
+#endif
 }
 
 static inline f32 ftCo_800ADE48_inline0(f32 y)
