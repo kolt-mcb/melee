@@ -611,11 +611,24 @@ static void q_swap_exec(void* p)
     atomic_fetch_add_explicit(&q_frames_done, 1, memory_order_release);
     q_wake_game();
 }
+/* MELEE_GLQ_INFLIGHT=n: how many presented frames the game thread may run
+ * ahead of the render thread. 1 (the default) overlaps recording frame N+1
+ * with drawing frame N and costs a frame of input latency; 0 makes the game
+ * thread wait for its own frame's swap, so input sampled at the next frame
+ * start is one frame fresher -- worth it only where record + draw still fit
+ * the 16.7 ms, or the frame rate pays instead. */
+static int q_inflight = -1;
 static int q_frame_room(void* p)
 {
     (void) p;
-    return atomic_load_explicit(&q_frames_sent, memory_order_relaxed) -
-               atomic_load_explicit(&q_frames_done, memory_order_acquire) <= 1;
+    if (q_inflight < 0) {
+        const char* e = getenv("MELEE_GLQ_INFLIGHT");
+        q_inflight = e != NULL ? atoi(e) : 1;
+        if (q_inflight < 0) q_inflight = 0;
+    }
+    return (int) (atomic_load_explicit(&q_frames_sent, memory_order_relaxed) -
+                  atomic_load_explicit(&q_frames_done, memory_order_acquire)) <=
+           q_inflight;
 }
 static void pc_glq_resume(void);
 int pc_glq_want_resume(void) { return atomic_load(&q_want_resume); }

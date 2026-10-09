@@ -63,6 +63,21 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         mIsSurfaceReady = false;
     }
 
+    // Android batches joystick MotionEvents and delivers them with the next
+    // Choreographer frame, so a stick or analog trigger sampled at frame
+    // start can be up to a vsync stale where a button press is not. Asking
+    // for unbuffered dispatch of joystick and gamepad sources hands each
+    // report over as it arrives. The view has to be attached to a window for
+    // the request to stick, hence here and not in the constructor.
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (Build.VERSION.SDK_INT >= 29 /* Android 10 (Q) */) {
+            requestUnbufferedDispatch(InputDevice.SOURCE_JOYSTICK |
+                                      InputDevice.SOURCE_GAMEPAD);
+        }
+    }
+
     public void handlePause() {
         enableSensor(Sensor.TYPE_ACCELEROMETER, false);
     }

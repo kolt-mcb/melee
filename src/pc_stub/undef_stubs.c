@@ -2179,6 +2179,135 @@ static uint32_t pc_pad_stick_dirs(int x, int y, uint32_t up, uint32_t down,
     return bits;
 }
 
+#ifdef __ANDROID__
+/* Android: players join on their first input, not by SDL device index.
+ *
+ * An Android TV box enumerates a pad twice -- "Xbox Wireless Controller" and
+ * an "Xbox Wireless Controller (Virtual)" the remote service makes of it --
+ * plus the remote's own "virtual-search" and "virtual-remote". With device
+ * index as port, the dead virtual duplicate took port 1, the remote took 2
+ * and 3, and the real pad ended up on whatever was left: nothing the
+ * player held moved player 1. SDL names both Xbox devices the same, so they
+ * cannot be told apart by name; they can by whether they ever send input.
+ * Every pad stays open in a pool and takes the lowest free port the first
+ * frame it has a button down or a stick past half; a pad that disconnects
+ * gives its port back. The remote's virtual devices never join. */
+#define PC_PAD_POOL 8
+static void* pc_pool_gc[PC_PAD_POOL];
+static void* pc_pool_js[PC_PAD_POOL];
+static SDL_JoystickID pc_pool_id[PC_PAD_POOL];
+static int pc_pool_port[PC_PAD_POOL] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+
+static int pc_pool_attached(int k)
+{
+    if (pc_pool_gc[k] != NULL) {
+        return SDL_GameControllerGetAttached((SDL_GameController*) pc_pool_gc[k]);
+    }
+    if (pc_pool_js[k] != NULL) {
+        return SDL_JoystickGetAttached((SDL_Joystick*) pc_pool_js[k]);
+    }
+    return 0;
+}
+
+static void pc_android_pads_update(void)
+{
+    int k, d, n;
+
+    for (k = 0; k < PC_PAD_POOL; k++) {
+        if ((pc_pool_gc[k] != NULL || pc_pool_js[k] != NULL) &&
+            !pc_pool_attached(k))
+        {
+            if (pc_pool_port[k] >= 0) {
+                fprintf(stderr, "[PAD] port %d: disconnected\n",
+                        pc_pool_port[k] + 1);
+                g_controllers[pc_pool_port[k]] = NULL;
+                g_joysticks[pc_pool_port[k]] = NULL;
+            }
+            if (pc_pool_gc[k] != NULL) {
+                SDL_GameControllerClose((SDL_GameController*) pc_pool_gc[k]);
+            }
+            if (pc_pool_js[k] != NULL) {
+                SDL_JoystickClose((SDL_Joystick*) pc_pool_js[k]);
+            }
+            pc_pool_gc[k] = pc_pool_js[k] = NULL;
+            pc_pool_port[k] = -1;
+        }
+    }
+
+    n = SDL_NumJoysticks();
+    for (d = 0; d < n; d++) {
+        const char* nm = SDL_JoystickNameForIndex(d);
+        SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(d);
+        int have = 0, free_k = -1;
+        if (nm != NULL && (strcmp(nm, "Android Accelerometer") == 0 ||
+                           strncmp(nm, "virtual-", 8) == 0))
+        {
+            continue;
+        }
+        for (k = 0; k < PC_PAD_POOL; k++) {
+            if ((pc_pool_gc[k] != NULL || pc_pool_js[k] != NULL) &&
+                pc_pool_id[k] == id)
+            {
+                have = 1;
+            } else if (free_k < 0 && pc_pool_gc[k] == NULL &&
+                       pc_pool_js[k] == NULL)
+            {
+                free_k = k;
+            }
+        }
+        if (have || free_k < 0) {
+            continue;
+        }
+        if (SDL_IsGameController(d)) {
+            pc_pool_gc[free_k] = SDL_GameControllerOpen(d);
+        }
+        if (pc_pool_gc[free_k] == NULL) {
+            pc_pool_js[free_k] = SDL_JoystickOpen(d);
+        }
+        if (pc_pool_gc[free_k] != NULL || pc_pool_js[free_k] != NULL) {
+            pc_pool_id[free_k] = id;
+            pc_pool_port[free_k] = -1;
+            fprintf(stderr, "[PAD] found %s (waiting for input to join)\n",
+                    nm != NULL ? nm : "?");
+        }
+    }
+
+    for (k = 0; k < PC_PAD_POOL; k++) {
+        GCPadStatus t;
+        int p;
+        if (pc_pool_port[k] >= 0 ||
+            (pc_pool_gc[k] == NULL && pc_pool_js[k] == NULL))
+        {
+            continue;
+        }
+        memset(&t, 0, sizeof(t));
+        if (pc_pool_gc[k] != NULL) {
+            poll_controller(pc_pool_gc[k], &t);
+        } else {
+            poll_joystick(pc_pool_js[k], &t);
+        }
+        if (t.button == 0 && abs(t.stickX) < 64 && abs(t.stickY) < 64) {
+            continue;
+        }
+        for (p = 0; p < 4; p++) {
+            if (g_controllers[p] == NULL && g_joysticks[p] == NULL) {
+                break;
+            }
+        }
+        if (p == 4) {
+            continue;
+        }
+        g_controllers[p] = pc_pool_gc[k];
+        g_joysticks[p] = pc_pool_js[k];
+        pc_pool_port[k] = p;
+        fprintf(stderr, "[PAD] port %d: %s joined\n", p + 1,
+                pc_pool_gc[k] != NULL
+                    ? SDL_GameControllerName((SDL_GameController*) pc_pool_gc[k])
+                    : SDL_JoystickName((SDL_Joystick*) pc_pool_js[k]));
+    }
+}
+#endif
+
 /* Read SDL2 input and update GC pad state.
  * Joysticks are opened once at init time and reused. */
 void HSD_PadRenewRawStatus(bool unused)
@@ -2193,7 +2322,13 @@ void HSD_PadRenewRawStatus(bool unused)
         memset(&g_gc_pads[pad], 0, sizeof(GCPadStatus));
         
         /* Lazy-init: pick up a pad plugged in after boot */
+#ifdef __ANDROID__
+        if (pad == 0) {
+            pc_android_pads_update();
+        }
+#else
         pc_pad_open(pad);
+#endif
 
         /* Read from the persistent handle (if connected) */
         if (g_controllers[pad]) {
@@ -2427,9 +2562,11 @@ void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
     
     /* Open SDL joysticks once — persistent handles reused each frame.
      * Only open if not already open (lazy-init handles normal path). */
+#ifndef __ANDROID__
     for (int i = 0; i < 4; i++) {
         pc_pad_open(i);
     }
+#endif
 }
 
 /* Public pad arrays the game reads.
