@@ -1333,7 +1333,19 @@ typedef struct itPokemonSpawn_DatAttrs {
 ASSERT_SIZE(itPokemonSpawn_DatAttrs, 0x2BC);
 
 typedef struct itZako_ItemVars {
+#if BUILD_TARGET_PC
+    /* Four bytes, as on the console: an 8-byte pointer here moves every
+     * field after it by four, and the item variables are a union that other
+     * kinds read at the console's offsets. Birdo (itKyasarin) keeps its
+     * owner ground at +20 and runs the zako logic, whose x14.z (+1C) then
+     * landed on that pointer -- its low word became a sound id, and the
+     * ground callback on Birdo's death dereferenced 0x17b (random sweep
+     * seed 142715277, Temple). Nothing reads this field; it is only ever
+     * stored. */
+    /* ip+DD4 */ u32 jobj;
+#else
     /* ip+DD4 */ HSD_JObj* jobj;
+#endif
     /* ip+DD8 */ s32 idx;
     /* ip+DDC */ Vec3 x8;
     /* ip+DE8 */ S32Vec3 x14;
