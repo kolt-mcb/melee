@@ -201,20 +201,40 @@ static inline int pc_mem_probe(uintptr_t aligned, size_t len)
      * this function is asked for. */
     return msync((void*) aligned, len, MS_ASYNC) == 0;
 #endif
-    if (fd == -2) {
-        fd = open("/dev/null", O_WRONLY
-#ifdef O_CLOEXEC
-                                  | O_CLOEXEC
-#endif
-        );
+    /* /dev/null never reads the buffer it is handed -- the kernel's
+     * write_null returns the count without touching the bytes -- so a
+     * write there succeeded for any user-space address, mapped or not, and
+     * every guard built on this probe let wild pointers through: a Game &
+     * Watch item's never-set bone list (0x700000000) reached itdraw and
+     * crashed the port in a Fourside match (random sweep seed 506526986).
+     * A pipe copies what it is given, so an unreadable page is EFAULT. One
+     * byte per page is enough to ask, and each is read straight back out so
+     * the pipe never fills. */
+    static int pfd[2] = { -2, -2 };
+    if (pfd[0] == -2) {
+        if (pipe(pfd) != 0) {
+            pfd[0] = pfd[1] = -1;
+        }
     }
-    if (fd >= 0) {
-        ssize_t w = write(fd, (const void*) aligned, len);
-        if (w < 0) {
-            return 0;
+    if (pfd[0] >= 0) {
+        static long page;
+        uintptr_t a;
+        if (page == 0) {
+            page = sysconf(_SC_PAGESIZE);
+            if (page <= 0) page = 4096;
+        }
+        for (a = aligned; a < aligned + len; a += (uintptr_t) page) {
+            char c;
+            if (write(pfd[1], (const void*) a, 1) != 1) {
+                return 0;
+            }
+            if (read(pfd[0], &c, 1) != 1) {
+                return 0;
+            }
         }
         return 1;
     }
+    (void) fd;
     return msync((void*) aligned, len, MS_ASYNC) == 0;
 }
 
