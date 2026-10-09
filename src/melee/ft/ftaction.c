@@ -268,6 +268,22 @@ void ftAction_80071028(Fighter_GObj* gobj, CommandInfo* cmd)
             NEXT_CMD(cmd);
             gfx_id = cmd->u->spawn_gfx_1.gfxID;
             unk = cmd->u->spawn_gfx_1.unkFloat;
+#if BUILD_TARGET_PC
+            /* MELEE_GFXTRACE also prints the command's own words, as the
+             * interpreter sees them, so a gfx id can be checked against the
+             * script in the file and against the console's read of it
+             * (MELEE_CODE_BP=800711BC with MELEE_MEMAT=800711BC:11:4:-8). */
+            if (getenv("MELEE_GFXTRACE") != NULL) {
+                extern u32 gm_GetFrameCount(void);
+                const u32* w = (const u32*) cmd->u;
+                fprintf(stderr,
+                        "[GFXCMD] gframe=%u p%d motion=%d gfx=%u words %08x %08x %08x %08x\n",
+                        (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                        (int) fp->motion_id, (unsigned) gfx_id,
+                        (unsigned) w[-1], (unsigned) w[0], (unsigned) w[1],
+                        (unsigned) w[2]);
+            }
+#endif
 
             NEXT_CMD(cmd);
             /// @todo i believe they are actually read in reverse order, maybe

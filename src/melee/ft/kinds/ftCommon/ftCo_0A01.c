@@ -1418,14 +1418,39 @@ s32 ftCo_800A229C(Fighter* fp, Vec3* arg1)
         grLib_801C9E60(&sp20);
         mag = ABS(sp20.y);
         frac = CO_FMAD(0.4, mag, 0.4); /* 800A2640: double fmadd */
+#if BUILD_TARGET_PC
+        /* MELEE_CPUATK: the Icicle Mountain recovery test's inputs. The
+         * scroll speed (grIceMt_801FA728) and the blast zones move with the
+         * stage, and none of them is in the lockstep trace. */
+        if (getenv("MELEE_CPUATK") != NULL) {
+            extern u32 gm_GetFrameCount(void);
+            fprintf(stderr,
+                    "[CPUATK] gframe=%u p%d icemt scroll=%.9g h=%.9g frac=%.9g "
+                    "top=%.9g bottom=%.9g y=%.9g stkind=%d\n",
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                    (double) sp20.y, (double) h, (double) frac,
+                    (double) Stage_GetBlastZoneTopOffset(),
+                    (double) Stage_GetBlastZoneBottomOffset(),
+                    (double) fp->cur_pos.y, (int) Stage_80225194());
+        }
+#endif
+        /* 800A2670 fmadds and 800A26A0 fnmsubs: the threshold is h * frac
+         * plus (or top minus) the blast zone in one single-precision
+         * rounding, with frac already rounded to single by the frsp at
+         * 800A2650. Done as a multiply and an add it came out 3e-7 higher,
+         * and Kirby at y = 1.6799984 fell on the other side of it: the
+         * port's CPU went to recover, the console's attacked (random sweep
+         * seed 196550748, Icicle Mountain). */
         if (sp20.y < 0.0) {
-            if (fp->cur_pos.y < h * frac + Stage_GetBlastZoneBottomOffset()) {
+            if (fp->cur_pos.y <
+                CO_FMA(h, frac, Stage_GetBlastZoneBottomOffset()))
+            {
                 *arg1 = fp->cur_pos;
                 return 2;
             }
             goto block_43;
         }
-        if (fp->cur_pos.y > -(h * frac - Stage_GetBlastZoneTopOffset())) {
+        if (fp->cur_pos.y > CO_FMA(-h, frac, Stage_GetBlastZoneTopOffset())) {
             *arg1 = fp->cur_pos;
             return 2;
         }
