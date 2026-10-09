@@ -408,6 +408,13 @@ void pc_trace_sync_wait(void)
 /* MELEE_ITEMS=1 lists the live items once per frame, in the same format the
  * local Dolphin build prints under the same variable. Items are gobjs on
  * p-link 9; there is no item array to read. */
+static unsigned pc_trace_f32bits(f32 f)
+{
+    union { f32 f; unsigned u; } b;
+    b.f = f;
+    return b.u;
+}
+
 static void pc_trace_items(void)
 {
     HSD_GObj* gobj;
@@ -425,7 +432,7 @@ static void pc_trace_items(void)
             fprintf(stderr,
                     " %d@(%.1f,%.1f,z%.2f)s%d v(%.4f,%.4f)ln%u f%02x "
                     "e%x p%x fl%d/%x lw%d rw%d"
-                    " lwf%xn(%.4f,%.4f) rwf%xn(%.4f,%.4f) c30=%d"
+                    " lwf%xn(%.4f,%.4f) rwf%xn(%.4f,%.4f) c30=%d px=%08x py=%08x vx=%08x vy=%08x"
                     " md(%u,%d,%x)"
                     " a58=%.4f a5c=%.4f[hb st=%d dmg=%.0f scl=%.2f "
                     "seg=(%.1f,%.1f,z%.2f)-(%.1f,%.1f,z%.2f)]",
@@ -445,7 +452,10 @@ static void pc_trace_items(void)
                     (unsigned) ip->x378_itemColl.right_facing_wall.flags,
                     ip->x378_itemColl.right_facing_wall.normal.x,
                     ip->x378_itemColl.right_facing_wall.normal.y,
-                    (int) ip->xC30,
+                    (int) ip->xC30, pc_trace_f32bits(ip->pos.x),
+                    pc_trace_f32bits(ip->pos.y),
+                    pc_trace_f32bits(ip->x40_vel.x),
+                    pc_trace_f32bits(ip->x40_vel.y),
                     (unsigned) ip->xC4_article_data->x10_modelDesc
                         ->x4_bone_count,
                     (int) ip->xC4_article_data->x10_modelDesc

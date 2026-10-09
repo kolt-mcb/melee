@@ -1051,7 +1051,13 @@ static inline float sqrtf_accurate_local(float x)
 
 static inline float return_sqrt_value(Vec3* v)
 {
-    return sqrtf_accurate_local(product_xy(v, v));
+    /* Not product_xy: the console squares and adds plainly here (8027784C:
+     * fmuls, fmuls, fadds -- the same shape as lbVector_NormalizeXY), and
+     * fuses only the dot products with the wall and floor normals. Fused, a
+     * Maxim Tomato's floor bounce on Brinstar came out one ulp fast and two
+     * CPUs chasing it parted on their AI hash (random sweep seed
+     * 968961189). */
+    return sqrtf_accurate_local(v->x * v->x + v->y * v->y);
 }
 
 bool it_8027781C(Item_GObj* item_gobj)
