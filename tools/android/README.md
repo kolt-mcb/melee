@@ -72,10 +72,43 @@ MELEE_FPS=1
 EOF
 ```
 
+Keys are applied with `setenv(..., overwrite=0)`: the first occurrence of a
+key in the file wins, so a key the file repeats is not updated.
+
 Everything the port would print to a terminal — `PORT_LOG_*`, `OSReport`,
 raw `fprintf(stderr)` — is forwarded line by line to logcat under the tag
 `melee` (`src/port/pc_android.c`). A native crash prints the port's own
 `[CRASH]` block there before Android's tombstone.
+
+### Internal resolution
+
+The game renders into the window's own surface. On Android that surface
+can be smaller than the panel and the display hardware scales it up for
+free (`window_apply_surface_scale` in `window.c`, logged as `[IRES]`):
+
+- `MELEE_INTERNAL_RES=<k>` renders at k times the GameCube framebuffer
+  (480 lines): `2.25` is 1080p, `3` is 1440p, `0` the window's own size.
+- With `MELEE_INTERNAL_RES` unset, a window taller than
+  `MELEE_IRES_MAX_LINES` (default 1440) is rendered at that many lines.
+  This is for 4K boxes: on the Beelink SEi (Iris Xe, Mesa, 3840x2160@60)
+  a match holds 60 fps at native 4K, with the GPU busy most of the frame;
+  at 1440p the same frame costs about half the GPU time and the picture is
+  still 3x the console's. A 1080p phone is below the cap and renders at
+  its native size as before. `MELEE_IRES_MAX_LINES=0` turns the cap off.
+- `MELEE_IRES_FBO=1` keeps the older offscreen-framebuffer path instead of
+  the surface scale.
+
+To see the frame rate and where a frame goes, add `MELEE_FPS=1` (and
+`MELEE_GLTIME=1` for the per-thread split) and read the `[FPS]`, `[SPLIT]`,
+`[FRAME]`, `[GLQ]` and `[GXQ]` lines in logcat. `MELEE_FPS=2`'s
+`gpu(glFinish)` column only means something with `MELEE_GL_THREAD=0`: with
+the render thread on, the glFinish is queued and the game thread's clock
+brackets only the enqueue. What the display actually received is in
+`adb shell dumpsys SurfaceFlinger --timestats -enable` ... `-dump`
+(`present2present` histogram, `droppedFrames`, `jankyFrames` for the
+`SurfaceView[com.melee.pcport/...](BLAST)` layer; `-disable` and `-clear`
+after). On an Intel box the GPU's idle share over an interval is
+`1 - delta(/sys/class/drm/card1/power/rc6_residency_ms) / delta(ms)`.
 
 ### Symbolising
 

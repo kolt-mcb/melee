@@ -420,23 +420,66 @@ static int window_resize_watch(void* user, SDL_Event* e)
     }
     return 0;
 }
+/* The tallest surface the game renders into by default, in lines, when
+ * nothing asks for an internal resolution: MELEE_IRES_MAX_LINES=<n>, 0 for
+ * the window's own size whatever it is. A 4K panel is 8.3 million pixels,
+ * 27x the console's. On the Beelink SEi (Iris Xe, Mesa, 3840x2160@60) a VS
+ * match presents a steady 60 fps at native 4K -- SurfaceFlinger counted no
+ * dropped frame in 2400 -- but the GPU is out of its idle state (rc6) for
+ * 61% of the time, at a power-managed 700-800 MHz; at 1440 lines that is
+ * 23% (19% at 1080), for the same 60 fps and the same three vsyncs of
+ * post-to-present latency. The cap buys headroom for heavier scenes (four
+ * players, stages with reflections) and power, not frame rate, and
+ * 2560x1440 is still 3x the GameCube framebuffer; a 1080p phone or tablet
+ * is below the cap and sees no change. MELEE_INTERNAL_RES, set to anything
+ * (0 included), takes precedence. */
+#define PC_IRES_MAX_LINES_DEFAULT 1440
+static int pc_ires_max_lines(void)
+{
+    static int n = -1;
+    if (n < 0) {
+        const char* e = getenv("MELEE_IRES_MAX_LINES");
+        n = e != NULL ? atoi(e) : PC_IRES_MAX_LINES_DEFAULT;
+        if (n < 0) n = 0;
+    }
+    return n;
+}
 void window_apply_surface_scale(void)
 {
     extern float pc_ires_want(void);
     static int watching;
+    static int said_cap;
     SDL_SysWMinfo info;
     int w = 0, h = 0, th;
     float k;
     if (getenv("MELEE_IRES_FBO") != NULL || g_sdl_window == NULL) return;
-    k = pc_ires_want();
-    if (k <= 0.0f) return;
+    /* Watch from the first call: the window can start small (below the
+     * cap) and only grow to the panel once the app goes fullscreen. */
     if (!watching) {
         watching = 1;
         SDL_AddEventWatch(window_resize_watch, NULL);
     }
     SDL_GetWindowSize(g_sdl_window, &w, &h);
+    k = pc_ires_want();
+    if (k <= 0.0f && getenv("MELEE_INTERNAL_RES") == NULL) {
+        int cap = pc_ires_max_lines();
+        if (cap > 0 && h > cap) {
+            k = (float) cap / 480.0f;
+            if (!said_cap) {
+                said_cap = 1;
+                fprintf(stderr, "[IRES] window is %d lines, over the %d-line default cap (MELEE_IRES_MAX_LINES): rendering at %.2fx the GameCube framebuffer\n",
+                        h, cap, (double) k);
+            }
+        }
+    }
     th = (int) (480.0f * k + 0.5f);
-    if (w <= 0 || h <= 0 || th >= h) return;
+    if (k <= 0.0f || w <= 0 || h <= 0 || th >= h) {
+        /* Nothing to scale: SDL has the surface at the window's own size
+         * (it resets the geometry whenever it recreates the EGL surface),
+         * so a size kept from an earlier, larger window would be stale. */
+        g_surf_w = g_surf_h = 0;
+        return;
+    }
     SDL_VERSION(&info.version);
     if (!SDL_GetWindowWMInfo(g_sdl_window, &info) || info.info.android.window == NULL) return;
     g_surf_h = th;
