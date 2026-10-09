@@ -234,6 +234,15 @@ static struct arch* find_arch(const void* p)
     return NULL;
 }
 
+int pc_itconv_field_is_ptr(const void* field)
+{
+    struct arch* a = find_arch(field);
+    if (a == NULL) {
+        return 0;
+    }
+    return arch_is_ptr(a, (u32) ((const u8*) field - a->base));
+}
+
 int pc_itconv_object(const void* p, const unsigned char** start,
                      const unsigned char** end)
 {

@@ -45,6 +45,12 @@ int pc_itconv_public(struct HSD_Archive* arc, const void* raw,
 int pc_itconv_locate(const void* p, const unsigned char** base,
                      unsigned long* len);
 
+/* Whether the word at `field` is one its archive relocates: a pointer, even
+ * when the offset it holds is 0 (the start of the data section). A plain
+ * number that happens to be 0 is not. Returns 0 for a word in no known
+ * archive. */
+int pc_itconv_field_is_ptr(const void* field);
+
 /* Bounds of the archive object containing `p`: from the nearest reloc
  * target at or before it to the next one after (or the end of the data
  * section). Returns 0 if `p` is in no known archive. */

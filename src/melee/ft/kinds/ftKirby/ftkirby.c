@@ -2733,6 +2733,38 @@ void ftKb_Init_LoadSpecialAttrs(HSD_GObj* gobj)
     COPY_ATTRS(gobj, ftKb_DatAttrs);
 }
 
+#if BUILD_TARGET_PC
+/* Game & Watch's copy, slot 4: not dynamics but the colour block that
+ * flattens Kirby (see ftKb_SpecialN_800F14B4), read through a dynamics
+ * struct whose two fields happen to sit on the two colours. ftLib_8008770C
+ * and ftLib_80087744 hand these to Kirby's Chef sausages as their colour
+ * and outline (it_8027CE64). Four bytes each, copied as the bytes they are:
+ * the console's s32 store lands them in memory in the same order. */
+static const u8* ftKb_hat_colors(void)
+{
+    KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Pichu];
+    return hat != NULL ? (const u8*) hat->pc_raw_slots[4] : NULL;
+}
+void ftKb_Init_800EEB00(Fighter_GObj* gobj, ArticleDynamicBones** arg1)
+{
+    const u8* c = ftKb_hat_colors();
+    if (c != NULL) {
+        memcpy(arg1, c + 4, 4);
+    } else {
+        memset(arg1, 0, 4);
+    }
+}
+
+void ftKb_Init_800EEB1C(Fighter_GObj* gobj, s32* arg1)
+{
+    const u8* c = ftKb_hat_colors();
+    if (c != NULL) {
+        memcpy(arg1, c + 8, 4);
+    } else {
+        *arg1 = 0;
+    }
+}
+#else
 void ftKb_Init_800EEB00(Fighter_GObj* gobj, ArticleDynamicBones** arg1)
 {
     *arg1 = ft_80459B88.hats[Ft_Kind_Pichu]->hat_dynamics[4]->ftDynamicBones;
@@ -2742,6 +2774,7 @@ void ftKb_Init_800EEB1C(Fighter_GObj* gobj, s32* arg1)
 {
     *arg1 = ft_80459B88.hats[Ft_Kind_Pichu]->hat_dynamics[4]->x4;
 }
+#endif
 
 void ftKb_Init_OnKnockbackEnter(HSD_GObj* gobj)
 {
@@ -3828,6 +3861,12 @@ u8* ftKb_SpecialN_800F1420(Fighter_GObj* gobj, const u32* arg1)
     FtPartsVisLookup* lookup = fp->x5AC.xC[4];
     int i;
     u8* p;
+#if BUILD_TARGET_PC
+    if (lookup == NULL) {
+        fprintf(stderr, "[PORT WARN] kirby copy: no parts table to colour\n");
+        return NULL;
+    }
+#endif
     for (i = 0; i < lookup->x0; i++) {
         int j;
         TempS* entry = &lookup->x4[i];
@@ -3869,12 +3908,37 @@ void ftKb_SpecialN_800F14B4(Fighter_GObj* gobj)
         return;
     }
     LOAD_HAT(gobj, fp, fp, Ft_Kind_Pichu, hat, part_dobj_indices);
+#if BUILD_TARGET_PC
+    /* Slot 3 is a FtPartsVisLookup table and slot 4 the colour block that
+     * flattens Kirby for Game & Watch, neither of them dynamics, and both
+     * still GCN-packed. The table is converted as Game & Watch's own is
+     * (ftgamewatch.c); the colours are four bytes each, read in place. Slot
+     * 4 points at the archive's first word -- offset 0, which the converter
+     * used to take for "no pointer", so the colour read went to address 4
+     * (random sweep seeds 465825848 and 775963454). */
+    {
+        extern void* pc_ftconv_vislookup(void* raw, unsigned model_num);
+        const u8* colors = hat->pc_raw_slots[4];
+        lookup = pc_ftconv_vislookup(hat->pc_raw_slots[3],
+                                     hat->desc.model_num);
+        fp->u.kb.hat.x24.xC[4] = lookup;
+        fp->x5AC.xC[4] = lookup;
+        ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);
+        if (colors != NULL) {
+            ftKb_SpecialN_800F1420(gobj, (const u32*) (colors + 4));
+            memcpy(&fp->x610_color_rgba[1], colors + 8, 4);
+        } else {
+            fprintf(stderr, "[PORT WARN] kirby copy: no colour block\n");
+        }
+    }
+#else
     lookup = (FtPartsVisLookup*) hat->hat_dynamics[3];
     fp->u.kb.hat.x24.xC[4] = lookup;
     fp->x5AC.xC[4] = lookup;
     ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);
     ftKb_SpecialN_800F1420(gobj, (u32*) ((u8*) hat->hat_dynamics[4] + 4));
     *(u32*) &fp->x610_color_rgba[1] = *(u32*) ((u8*) hat->hat_dynamics[4] + 8);
+#endif
     Fighter_UpdateModelScale(gobj);
 }
 #ifdef MUST_MATCH

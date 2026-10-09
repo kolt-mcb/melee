@@ -2235,13 +2235,20 @@ struct KirbyHatStruct {
      * these to it_8026B3F8, which converts a raw Article properly. Without it
      * the article kinds were registered with a dynamics object: Kirby copied
      * Fox, the blaster's article data came back NULL, the spawn was refused,
-     * and the next frame dereferenced the NULL it left behind. */
-    void* pc_raw_slots[5];
+     * and the next frame dereferenced the NULL it left behind.
+     *
+     * Eight, not five: Yoshi's and Game & Watch's copies index slots 5 and
+     * 6 (ftKb_SpecialN_800F16D0), past the five the struct declares -- on
+     * the console that reads the words after it, which those two files do
+     * put there. With five here the reads landed in pc_raw_words, so the
+     * Chef's sausages were registered from a plain number and never hit
+     * (random sweep seeds 465825848 and 775963454). */
+    void* pc_raw_slots[8];
     /* And the slot words themselves, untranslated: for some copy kinds a
      * slot is neither a pointer nor an Article but a plain number --
      * ftKb_SpecialN_800EF040 reads slot 1 as the mask of extra bones the
      * hat needs inserted into Kirby. */
-    u32 pc_raw_words[5];
+    u32 pc_raw_words[8];
 #endif
 };
 

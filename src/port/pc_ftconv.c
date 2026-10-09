@@ -364,14 +364,61 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
 static void kirby_hat_slots(KirbyHatStruct* h, const u8* p, const u8* base,
                             unsigned long len)
 {
+    extern int pc_itconv_field_is_ptr(const void* field);
+    extern int pc_itconv_object(const void*, const unsigned char**,
+                                const unsigned char**);
+    const u8* obj_start;
+    const u8* obj_end = p + 0x20;
     int q;
-    for (q = 0; q < 5; q++) {
-        u32 off = pc_be32(*(const u32*) (p + 0xC + 4 * q));
-        h->hat_dynamics[q] = pc_conv_dynamics_at(base, len, off);
+    /* Slots 5 to 7 exist only in the files that are long enough (Yoshi's,
+     * Game & Watch's): read to the end of this archive object and no
+     * further, so a five-slot hat does not take the next object's words
+     * for pointers. */
+    if (!pc_itconv_object(p, &obj_start, &obj_end)) {
+        obj_end = p + 0x20;
+    }
+    for (q = 0; q < 8; q++) {
+        const u8* field = p + 0xC + 4 * q;
+        u32 off;
+        if (field + 4 > obj_end) {
+            h->pc_raw_slots[q] = NULL;
+            h->pc_raw_words[q] = 0;
+            if (q < 5) h->hat_dynamics[q] = NULL;
+            continue;
+        }
+        off = pc_be32(*(const u32*) field);
+        if (q < 5) h->hat_dynamics[q] = pc_conv_dynamics_at(base, len, off);
+        /* Offset 0 is a pointer when the relocation table says so: Game &
+         * Watch's slot 4 points at the archive's first word, where the
+         * colours that flatten Kirby live (ftKb_SpecialN_800F14B4). */
         h->pc_raw_slots[q] =
-            (off != 0 && off < len) ? (void*) (base + off) : NULL;
+            (off < len && (off != 0 || pc_itconv_field_is_ptr(field)))
+                ? (void*) (base + off) : NULL;
         h->pc_raw_words[q] = off;
     }
+}
+
+/* The parts descriptor's visibility table: four rows, each a FtPartsVisLookup
+ * per model, converted like the fighter's own. */
+static void kirby_hat_vis(KirbyHatStruct* h, const u8* base, unsigned long len,
+                          u32 voff)
+{
+    void* (*rows)[4];
+    int c;
+    if (voff == 0 || voff + 16 > len) {
+        return;
+    }
+    rows = pc_lowmem_alloc(sizeof(void*) * 4);
+    if (rows == NULL) {
+        return;
+    }
+    for (c = 0; c < 4; c++) {
+        u32 e = pc_be32(*(const u32*) (base + voff + c * 4));
+        rows[0][c] = (e != 0 && e < len)
+                         ? (void*) pc_conv_VisLookup(base + e, base, len, h->desc.model_num)
+                         : NULL;
+    }
+    h->desc.vis_table = rows;
 }
 
 void* pc_ftconv_kirby_hat(void* raw)
@@ -405,6 +452,21 @@ void* pc_ftconv_kirby_hat(void* raw)
                  * of bones to insert in slot 1. Dropping it left Kirby
                  * short of seven bones and the copy crashed. */
                 kirby_hat_slots(h, p, base, len);
+                /* Game & Watch's copy has no hat model at all, and its
+                 * struct opens with the parts descriptor the loader reads
+                 * (LOAD_HAT casts the hat to one): a model count, then the
+                 * visibility table. Slot 3 is a FtPartsVisLookup over those
+                 * models, so the count is needed to convert it. */
+                {
+                    extern int pc_itconv_field_is_ptr(const void* field);
+                    if (joff >= 1 && joff <= 11 &&
+                        pc_itconv_field_is_ptr(p + 4))
+                    {
+                        h->desc.model_num = joff;
+                        kirby_hat_vis(h, base, len,
+                                      pc_be32(*(const u32*) (p + 4)));
+                    }
+                }
                 return h;
             }
             {
@@ -422,19 +484,7 @@ void* pc_ftconv_kirby_hat(void* raw)
             h->hat_joint = pc_ftconv_joint((void*) (base + joff));
             h->desc.model_num = pc_be32(*(const u32*) (p + 4));
             voff = pc_be32(*(const u32*) (p + 8));
-            if (voff != 0 && voff + 16 <= len) {
-                void* (*rows)[4] = pc_lowmem_alloc(sizeof(void*) * 4);
-                if (rows != NULL) {
-                    int c;
-                    for (c = 0; c < 4; c++) {
-                        u32 e = pc_be32(*(const u32*) (base + voff + c * 4));
-                        rows[0][c] = (e != 0 && e < len)
-                                         ? (void*) pc_conv_VisLookup(base + e, base, len, h->desc.model_num)
-                                         : NULL;
-                    }
-                    h->desc.vis_table = rows;
-                }
-            }
+            kirby_hat_vis(h, base, len, voff);
             kirby_hat_slots(h, p, base, len);
             if (pc_ftconv_trace()) {
                 fprintf(stderr, "[FTCONV] kirby hat %p -> joint %p model_num %u dyn %p %p %p %p %p\n", raw,
