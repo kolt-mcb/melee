@@ -138,7 +138,7 @@ void un_802FF1B4(void)
     un_803F9E08.x0_b0 = true;
     un_803F9E08.x0_b1 = false;
     un_804D6DA0 = lbArchive_80016DBC("IfCoGet.dat", &un_804D6DA4,
-                                     "ScInfCgt_scene_data", 0);
+                                     "ScInfCgt_scene_data", NULL);
 #if BUILD_TARGET_PC
     un_804D6DA4 = pc_conv_SceneDesc(
         un_804D6DA4, ((HSD_Archive*) un_804D6DA0)->data);

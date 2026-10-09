@@ -90,7 +90,7 @@ void fn_801A1134(void)
 
     scene = NULL;
     lbl_804D6700 =
-        lbArchive_80016DBC("GmPause", &scene, "ScGamPause_scene_data", 0);
+        lbArchive_80016DBC("GmPause", &scene, "ScGamPause_scene_data", NULL);
 #if BUILD_TARGET_PC
     /* PC port: symbol out-pointers are not resolved (see lbarchive.c);
      * scene stays NULL and the model walk below would crash. Pause UI

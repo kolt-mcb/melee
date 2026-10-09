@@ -1088,7 +1088,7 @@ void ifStock_802FAEC4(void)
     memzero(&ifStock_804A1A8C, sizeof(ifStock_804A1A8C));
     memzero(&ifStock_804A1774, sizeof(ifStock_804A1774));
     lbArchive_LoadSections(*ifAll_GetArchive(), (void**) &scene_models,
-                           ifStock_SceneModels, 0);
+                           ifStock_SceneModels, NULL);
 #if BUILD_TARGET_PC
     /* The archive hands back a NULL-terminated array of 32-bit
      * DynamicModelDesc offsets, unrelocated and big-endian. */

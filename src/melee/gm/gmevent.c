@@ -426,7 +426,7 @@ static void pc_gmevent_convert(void)
 void gm_801BA8FC(void)
 {
     lbArchive_LoadSymbols("GmEvent.dat", &gm_804D6900,
-                          "sqEventInitDataLevelTbl", 0);
+                          "sqEventInitDataLevelTbl", NULL);
 #if BUILD_TARGET_PC
     pc_gmevent_convert();
 #endif
@@ -594,7 +594,7 @@ void onEnterVs(GameModeState* arg0)
     PAD_STACK(0x10);
 
     lbArchive_LoadSymbols("GmEvent.dat", &gm_804D6900,
-                          "sqEventInitDataLevelTbl", 0);
+                          "sqEventInitDataLevelTbl", NULL);
 #if BUILD_TARGET_PC
     pc_gmevent_convert();
 #endif
@@ -1239,7 +1239,7 @@ void gm_801BC00C(void)
     case 44:
     case 48:
         lbArchive_LoadSymbols("GmEvent.dat", &gm_804D6900,
-                              "sqEventInitDataLevelTbl", 0);
+                              "sqEventInitDataLevelTbl", NULL);
         event_levels = gm_804D6900[0];
         break;
     }

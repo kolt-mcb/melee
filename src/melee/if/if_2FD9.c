@@ -203,7 +203,7 @@ void un_802FE260(void)
 
     un_804D6D90 = 0;
     lbArchive_LoadSections(*ifAll_GetArchive(), (void*) &un_804A1F10.x0,
-                           "Stc_rarwmdls", 0);
+                           "Stc_rarwmdls", NULL);
 #if BUILD_TARGET_PC
     un_804A1F10.x0 =
         pc_conv_ModelDescArray(un_804A1F10.x0, (*ifAll_GetArchive())->data);

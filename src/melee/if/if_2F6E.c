@@ -142,7 +142,7 @@ void ifStatus_802F7134(void)
 
     archive = ifAll_GetArchive();
     lbArchive_LoadSections(*archive, (void**) &models, "ScInfCnt_scene_models",
-                           0);
+                           NULL);
 #if BUILD_TARGET_PC
     /* The archive hands back a NULL-terminated array of 32-bit
      * DynamicModelDesc offsets, unrelocated and big-endian. */

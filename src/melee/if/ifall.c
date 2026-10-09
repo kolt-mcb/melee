@@ -210,7 +210,7 @@ void ifAll_802F390C(void)
     ifAll_ShowHUD();
     lbArchive_80016F80(parchive, "IfAll");
     lbArchive_LoadSections(*parchive, (void**) &sp14, "ScInfDmg_scene_data",
-                           0);
+                           NULL);
 #if BUILD_TARGET_PC
     /* ScInfDmg_scene_data comes straight out of IfAll.dat: big-endian, with
      * four pointer arrays that widen on x86_64. Convert it before anything

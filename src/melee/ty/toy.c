@@ -1946,7 +1946,7 @@ void Toy_80306D70(s32 arg0)
             idx = base->entries[arg0].idx;
             sym = base->symbols[idx].name;
             data->archive =
-                lbArchive_80016DBC(_Toy_str_TyLight_dat, &sp14, sym, 0);
+                lbArchive_80016DBC(_Toy_str_TyLight_dat, &sp14, sym, NULL);
         }
 
         if (sp14 != NULL) {

@@ -1158,7 +1158,7 @@ void fn_80186634(void* arg0)
     ClassicArchiveNameLocal local;
     PAD_STACK(12);
 
-    lbArchive_80016DBC("GmIntEz.dat", &lbl_804D6604, "gmIntroEasyTable", 0);
+    lbArchive_80016DBC("GmIntEz.dat", &lbl_804D6604, "gmIntroEasyTable", NULL);
     Camera_Init(0xC);
     lb_8000FCDC();
     mpColl_80041C78();
@@ -1172,9 +1172,9 @@ void fn_80186634(void* arg0)
 
     local.names = *(const ClassicArchiveNameArray*) lbl_803B7C58;
     lbl_804D65F4 = lbArchive_80016DBC(local.names.v[lbl_8047368C.game_type],
-                                      &lbl_804D65FC, lbl_803D9444, 0);
+                                      &lbl_804D65FC, lbl_803D9444, NULL);
     lbl_804D65F8 =
-        lbArchive_80016DBC(lbl_804D40B0, &lbl_804D6600, lbl_803D9444, 0);
+        lbArchive_80016DBC(lbl_804D40B0, &lbl_804D6600, lbl_803D9444, NULL);
 
 #if BUILD_TARGET_PC
     /* lbArchive_80016DBC hands back raw archive data: both of these are

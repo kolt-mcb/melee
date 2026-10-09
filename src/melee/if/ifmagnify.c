@@ -649,7 +649,7 @@ void ifMagnify_802FC870(void)
     ifMagnify_802FC7C0(&ifMagnify_804A1DE0);
     archive = ifAll_GetArchive();
     lbArchive_LoadSections(*archive, (void**) &ifMagnify_804A1DE0,
-                           ifMagnify_804D57E8, 0);
+                           ifMagnify_804D57E8, NULL);
 #if BUILD_TARGET_PC
     /* "lupe" is a bare DynamicModelDesc offset, unrelocated and big-endian
      * like every other pointer in the archive. Convert it in place so the

@@ -36,7 +36,7 @@ static bool ifTime_LoadModels(void)
     DynamicModelDesc** ScInfTim_scene_models;
     lbArchive_LoadSections(*ifAll_GetArchive(), (void*) &ScInfTim_scene_models,
                            "ScInfTim_scene_models",
-                           &ifTime_data.countdown_timer_models, "tdsce", 0);
+                           &ifTime_data.countdown_timer_models, "tdsce", NULL);
 #if BUILD_TARGET_PC
     ScInfTim_scene_models = pc_conv_ModelDescArray(
         ScInfTim_scene_models, (*ifAll_GetArchive())->data);

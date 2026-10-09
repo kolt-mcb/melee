@@ -409,7 +409,7 @@ void lbRefract_800222A4(void)
     PAD_STACK(4);
 
     lbl_804336D0.refractionUserCount = 0;
-    lbArchive_LoadSymbols("LbRf.dat", &refract_data, "lbRefData", 0);
+    lbArchive_LoadSymbols("LbRf.dat", &refract_data, "lbRefData", NULL);
 #if BUILD_TARGET_PC
     /* PC port: refraction stays off here, as it has been all along.
      *

@@ -343,17 +343,17 @@ void lbCardGame_LoadArchive(int jobj_translate_idx)
      * not needed for title screen rendering. */
     (void) jobj_translate_idx;
     /* if (_p(icon_data) == NULL) {
-        lbArchive_80016DBC("LbMcGame.", &_p(icon_data), "MemCardIconData", 0);
+        lbArchive_80016DBC("LbMcGame.", &_p(icon_data), "MemCardIconData", NULL);
         lbArchive_80016DBC("NtMemAc", &_p(scene_data),
-                           "ScNtcCommon_scene_data", 0);
+                           "ScNtcCommon_scene_data", NULL);
         _p(jobj_translate_idx) = jobj_translate_idx;
         _p(enable) = true;
     } */
 #else
     if (_p(icon_data) == NULL) {
-        lbArchive_80016DBC("LbMcGame.", &_p(icon_data), "MemCardIconData", 0);
+        lbArchive_80016DBC("LbMcGame.", &_p(icon_data), "MemCardIconData", NULL);
         lbArchive_80016DBC("NtMemAc", &_p(scene_data),
-                           "ScNtcCommon_scene_data", 0);
+                           "ScNtcCommon_scene_data", NULL);
         _p(jobj_translate_idx) = jobj_translate_idx;
         _p(enable) = true;
     }

@@ -38,7 +38,7 @@ void it_8027870C(s32 arg0)
         void* raw = NULL;
         lbArchive_80017040(&arc,
                            lbLang_IsSettingUS() ? it_803F1EE4 : it_803F1ED8,
-                           &raw, it_803F1EF0, 0);
+                           &raw, it_803F1EF0, NULL);
         if (!pc_itconv_public(arc, raw, &pc_public)) {
             PORT_LOG_WARN("it_8027870C: ItCo root unreadable; item common "
                           "data disabled\n");
@@ -55,9 +55,9 @@ void it_8027870C(s32 arg0)
     }
 #else
     if (lbLang_IsSettingUS()) {
-        lbArchive_80017040(NULL, it_803F1EE4, &it_804D6D20, it_803F1EF0, 0);
+        lbArchive_80017040(NULL, it_803F1EE4, &it_804D6D20, it_803F1EF0, NULL);
     } else {
-        lbArchive_80017040(NULL, it_803F1ED8, &it_804D6D20, it_803F1EF0, 0);
+        lbArchive_80017040(NULL, it_803F1ED8, &it_804D6D20, it_803F1EF0, NULL);
     }
 #endif
     it_804D6D28 = it_804D6D20->x0;

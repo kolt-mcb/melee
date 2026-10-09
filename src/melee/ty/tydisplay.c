@@ -1863,7 +1863,7 @@ void tyDisplay_Scene_OnEnter(void* arg0)
             archive_name = "TyMnDisp.usd";
         }
         data->archive =
-            lbArchive_80016DBC(archive_name, &sp18, "ToyDspBg_Top_joint", 0);
+            lbArchive_80016DBC(archive_name, &sp18, "ToyDspBg_Top_joint", NULL);
     }
 
     for (i = 0; i < 0x2B; i++) {

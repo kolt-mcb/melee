@@ -387,10 +387,10 @@ void gm_801A6EE4(void)
     gm_804D6744 = lbArchive_LoadSymbols(
         "GmRegEnd", &gm_804D6748, "cut1CanimScene", &gm_804D67A8,
         "cut2CanimScene", &gm_804D67A4, "cut3CanimScene", &gm_804D67A0,
-        "cut3BgScene", 0);
+        "cut3BgScene", NULL);
     {
         HSD_Archive* stnd =
-            lbArchive_LoadSymbols("GmRgStnd.dat", &gm_804D67AC, "standScene", 0);
+            lbArchive_LoadSymbols("GmRgStnd.dat", &gm_804D67AC, "standScene", NULL);
 #if BUILD_TARGET_PC
         /* PC port: lbArchive_LoadSymbols converts sections it recognises by
          * type suffix, and these scene symbols ("cut1CanimScene",

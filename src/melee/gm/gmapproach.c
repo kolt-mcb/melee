@@ -102,7 +102,7 @@ static void gm_801ADB04(void)
     PAD_STACK(4);
 
     gm_80480D98.x0 =
-        lbArchive_80016DBC("NtAppro", &spC, "ScNtcApproach_scene_data", 0);
+        lbArchive_80016DBC("NtAppro", &spC, "ScNtcApproach_scene_data", NULL);
 #if BUILD_TARGET_PC
     /* The scene arrives GameCube-packed and big-endian straight out of
      * NtAppro, like every other scene the port loads (gmpause, gmresult,

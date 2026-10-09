@@ -1340,7 +1340,7 @@ void efAsync_LoadSync(int idx)
         u8* dataBase;
         u32 cmd_off, tex_off;
         bool chk = lbArchive_80017040(&archive, lookup->ef_DAT_file, &spC,
-                                      lookup->effDataTable_name, 0);
+                                      lookup->effDataTable_name, NULL);
         dataBase = archive != NULL ? archive->data : NULL;
         /* GameCube layout: u32 cmd bank offset, u32 texture bank offset,
          * then the desc table (host EF_DAT_Entry has 8-byte fields). */
@@ -1372,7 +1372,7 @@ void efAsync_LoadSync(int idx)
         pc_ef_dataBase[idx] = dataBase;
 #else
         bool chk = lbArchive_80017040(NULL, lookup->ef_DAT_file, &spC,
-                                      lookup->effDataTable_name, 0);
+                                      lookup->effDataTable_name, NULL);
         if ((u32) spC->ef_DAT_file | (u32) spC->effDataTable_name) {
             if (chk) {
                 psInitDataBankLoad(idx, (void*) spC->ef_DAT_file,

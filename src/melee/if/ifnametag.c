@@ -197,7 +197,7 @@ void un_802FCBA0(void)
     DynamicModelDesc** x;
 
     archive = ifAll_GetArchive();
-    lbArchive_LoadSections(*archive, (void**) &x, "ScInfPnm_scene_models", 0);
+    lbArchive_LoadSections(*archive, (void**) &x, "ScInfPnm_scene_models", NULL);
 #if BUILD_TARGET_PC
     /* The archive hands back a NULL-terminated array of 32-bit
      * DynamicModelDesc offsets, unrelocated and big-endian. */

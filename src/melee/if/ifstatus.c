@@ -1026,7 +1026,7 @@ void ifStatus_802F66A4(void)
 #endif
     arch = ifAll_GetArchive();
     lbArchive_LoadSections(*arch, (void**) &num, num_models_name,
-                           (void**) &mrk, mrk_models_name, 0);
+                           (void**) &mrk, mrk_models_name, NULL);
 #if BUILD_TARGET_PC
     /* Each of these symbols is a bare 32-bit offset to a DynamicModelDesc,
      * unrelocated and big-endian like the rest of the archive. */

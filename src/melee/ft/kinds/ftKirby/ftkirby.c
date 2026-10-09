@@ -2862,7 +2862,7 @@ void ftKb_SpecialN_800EED50(s32 arg0, s32 arg1)
             if (((HSD_Archive**) &ft_80459B88)[arg0] == NULL) {
                 lbArchive_80017040(NULL, ftKb_Init_803CA9D0[arg0].filename,
                                    &((HSD_Archive**) &ft_80459B88)[arg0],
-                                   ftKb_Init_803CA9D0[arg0].name, 0);
+                                   ftKb_Init_803CA9D0[arg0].name, NULL);
 #if BUILD_TARGET_PC
                 /* the symbol is the file's own KirbyHatStruct: convert it */
                 {
@@ -2881,10 +2881,10 @@ void ftKb_SpecialN_800EED50(s32 arg0, s32 arg1)
                 if (cs->matanim_joint_name != NULL) {
                     lbArchive_80017040(NULL, costumes[arg1].dat_filename, item,
                                        cs->joint_name, &item->matanim,
-                                       cs->matanim_joint_name, 0);
+                                       cs->matanim_joint_name, NULL);
                 } else {
                     lbArchive_80017040(NULL, costumes[arg1].dat_filename, item,
-                                       cs->joint_name, 0);
+                                       cs->joint_name, NULL);
                     item->matanim = NULL;
                 }
 #if BUILD_TARGET_PC

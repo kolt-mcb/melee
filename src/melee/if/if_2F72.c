@@ -379,7 +379,7 @@ void if_802F7E24(void)
     memzero(&scinfstc_models, sizeof(scinfstc_models));
     lbArchive_LoadSections(*ifAll_GetArchive(),
                            (void**) &scinfstc_models.scene_models,
-                           lbl_803F9780, 0);
+                           lbl_803F9780, NULL);
 #if BUILD_TARGET_PC
     /* scene_models is the archive address of a slot holding a
      * DynamicModelDesc offset -- read raw it is a big-endian 32-bit value,

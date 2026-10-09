@@ -580,7 +580,7 @@ s32 mnInfo_80252758(void)
                            animjoint, layout->top_animjoint,
                            &model->matanim_joint, layout->top_matanim_joint,
                            &model->shapeanim_joint,
-                           layout->top_shapeanim_joint, 0);
+                           layout->top_shapeanim_joint, NULL);
 
     mnInfo_80251AFC();
 
