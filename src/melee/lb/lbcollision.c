@@ -43,13 +43,13 @@
  * textually so MWCC still emits the same instruction. Used by the two
  * reciprocal-square-root refinements at the end of lbColl_80006E58. */
 #if BUILD_TARGET_PC
-#define LBC_NMSUB(a, b, c) fma(-(a), (b), (c))
+#define LBC_NMSUB(a, b, c) (-fma((a), (b), -(c))) /* fnmsub: -0 on an exact zero */
 #else
 #define LBC_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
 #endif
 /* The single-precision fnmsubs, same shape. */
 #if BUILD_TARGET_PC
-#define LBC_NMSUBF(a, b, c) fmaf(-(a), (b), (c))
+#define LBC_NMSUBF(a, b, c) (-fmaf((a), (b), -(c))) /* fnmsubs: -0 on an exact zero */
 #else
 #define LBC_NMSUBF(a, b, c) (-(((a) * (b)) - (c)))
 #endif

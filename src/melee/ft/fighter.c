@@ -8,8 +8,16 @@
  * movement is that single fmadds at 8006BC7C. Rounding it twice put the
  * position one bit off the console's within four hundred frames. */
 #define FT_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*c - b): an exact-zero result comes out as -0, where
+ * fmaf(-a, c, b) gives +0. The sign matters to whatever takes an angle from
+ * it -- atan2f(-0, x<0) is -pi, atan2f(+0, x<0) is +pi -- and the DI that
+ * follows a knockback decayed to zero then rotates from the other end of the
+ * circle (random sweep seed 496993129: Mewtwo's knockback 9 ulps off, his
+ * position one ulp off, the CPUs' AI parting a few frames later). */
+#define FT_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define FT_FMA(a, b, c) ((a) * (b) + (c))
+#define FT_NMSUB(a, b, c) FT_FMA(-(a), (b), (c))
 #endif
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -267,7 +275,7 @@ void Fighter_LoadCommonData(void)
     {
         HSD_Archive* arc = NULL;
         void* raw = NULL;
-        lbArchive_80017040(&arc, "PlCo.dat", &raw, "ftLoadCommonData", 0);
+        lbArchive_80017040(&arc, "PlCo.dat", &raw, "ftLoadCommonData", NULL);
         if (pc_ptr_sane(arc) && pc_ptr_sane(arc->data) && pc_ptr_sane(raw)) {
             u8* dataBase = arc->data;
             const u32* offs = (const u32*)raw;
@@ -3232,8 +3240,8 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                         /* 8006B9C8, 8006B9E4: fnmsubs -- the decay comes
                          * off in one rounding, not two. */
                         p_kb_vel->x =
-                            FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
-                                   cosf(kb_angle), p_kb_vel->x);
+                            FT_NMSUB(p_ftCommonData->x204_knockbackFrameDecay,
+                                     cosf(kb_angle), p_kb_vel->x);
 #if BUILD_TARGET_PC
                         /* MELEE_KBDBG also prints the three numbers 8006B9E4
                          * has in f31, f1 and f2 -- the angle, its sine and the
@@ -3256,8 +3264,8 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                         }
 #endif
                         p_kb_vel->y =
-                            FT_FMA(-p_ftCommonData->x204_knockbackFrameDecay,
-                                   sinf(kb_angle), p_kb_vel->y);
+                            FT_NMSUB(p_ftCommonData->x204_knockbackFrameDecay,
+                                     sinf(kb_angle), p_kb_vel->y);
                     }
                 }
 

@@ -26,7 +26,7 @@
  * the original expression, kept textually so MWCC emits the same
  * instruction. */
 #if BUILD_TARGET_PC
-#define MP_NMSUB(a, b, c) fma(-(a), (b), (c))
+#define MP_NMSUB(a, b, c) (-fma((a), (b), -(c))) /* fnmsub: -0 on an exact zero */
 #else
 #define MP_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
 #endif

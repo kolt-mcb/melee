@@ -1634,7 +1634,7 @@ static inline f32 grMc_RandomWreckOffset(void)
  * stores the result before reading it back; libm's sqrtf is more accurate
  * than that and diverges. */
 #if BUILD_TARGET_PC
-#define MC_NMSUB3(x, g) fma(-(f64) (x), (g) * (g), 3.0)
+#define MC_NMSUB3(x, g) (-fma((f64) (x), (g) * (g), -3.0)) /* fnmsub: -0 on an exact zero */
 #else
 #define MC_NMSUB3(x, g) (3.0 - (g) * (g) * (x))
 #endif
