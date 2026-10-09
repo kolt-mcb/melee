@@ -311,6 +311,15 @@ def run_cell(name, frames, timeout, cpu, extra=()):
         info["verdict"] = "diverged"
         info["frame"] = int(m.group(1))
         info["field"] = m.group(2)
+        # The lockstep says when a console lag frame sits just before the
+        # first difference (pc_lockstep.py): the console simulated that frame
+        # without a render and its particle lists were not re-sorted, which
+        # the port cannot follow. That is the console's doing, not a port
+        # bug, and the random sweep does not stop for it.
+        lag = re.search(r"console lag frame (\d+)", out)
+        if lag:
+            info["verdict"] = "console-lag"
+            info["lag_frame"] = int(lag.group(1))
     elif IDENTICAL_RE.search(out):
         info["verdict"] = "identical"
         info["frames"] = frames

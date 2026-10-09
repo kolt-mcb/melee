@@ -81,6 +81,9 @@ def checklist_line(n, seed, cks, st, info):
     who = " vs ".join(mx.CHARS[ck][len("CKind_"):] for ck in cks)
     v = info.get("verdict", "?")
     done = v == "identical"
+    # A console lag frame is the console's doing, not the port's: the match
+    # is checked off as far as it goes, marked so it can be told apart.
+    mark = "x" if done else ("~" if v == "console-lag" else " ")
     detail = v
     if "match_frames" in info:
         detail += ", match over at frame %d" % info["match_frames"]
@@ -89,7 +92,7 @@ def checklist_line(n, seed, cks, st, info):
     if "frame" in info:
         detail += " at %d (%s)" % (info["frame"], info.get("field", "?"))
     return "- [%s] #%d seed %d, %s: %s -- %s" % (
-        "x" if done else " ", n, seed, mx.STAGES[st], who, detail)
+        mark, n, seed, mx.STAGES[st], who, detail)
 
 
 def main():
@@ -154,7 +157,7 @@ def main():
             f.write("%s  (%s)\n" % (line, datetime.datetime.now()
                                     .strftime("%Y-%m-%d %H:%M")))
         print(line, flush=True)
-        if info.get("verdict") != "identical":
+        if info.get("verdict") not in ("identical", "console-lag"):
             print("stopping for diagnosis: log in %s"
                   % os.path.join(lm.LOGS, name + ".log"))
             return 1

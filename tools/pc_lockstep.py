@@ -103,6 +103,15 @@ class Side:
         self.prev_seed = None
         self.prev_gframe = None
         self.skipped_frames = 0
+        # The console's last lag frame: a match frame it simulated without a
+        # VI field in between, announced by Dolphin as a "G" line ahead of
+        # that frame's row. Melee simulates such a frame and skips its
+        # render, so the particle lists are not re-sorted that frame, and a
+        # few frames later the same randoms go to different generators. A
+        # divergence that follows one is the console lagging, not the port
+        # being wrong (docs/random-sweep.md).
+        self.lag_pending = False
+        self.last_lag = None
         self.aux = None
 
     def greet(self):
@@ -123,6 +132,8 @@ class Side:
             # port sends "NEED" when it reaches the same site. Kept for the
             # frame loop to pair up.
             self.aux = line.strip()
+            if self.aux == "G":
+                self.lag_pending = True
             return True
         values = line[2:].split()
         if self.columns is None:
@@ -159,6 +170,9 @@ class Side:
                 gf - self.prev_gframe > 1):
             draws = "-"
             self.skipped_frames += gf - self.prev_gframe - 1
+        if gf is not None and self.lag_pending:
+            self.last_lag = gf
+            self.lag_pending = False
         if gf is not None:
             self.prev_gframe = gf
         self.row["rng_draws"] = draws
@@ -1082,6 +1096,24 @@ def run(case, frames, stop_on_divergence, headless, watch=(),
                     f, a, b = first[col]
                     print("   match frame %-5s %-14s port %-12s console %-12s"
                           % (f, col, a, b))
+                # A console lag frame shortly before the first difference
+                # explains it: the console simulated that frame without a
+                # render, so its particle lists were not re-sorted, and the
+                # randoms then went to different generators (random sweep seed
+                # 732221657 and the Ganon Castle / Captain Pura matrix cells
+                # all had one 2-4 frames earlier). The port cannot know when a
+                # GameCube would have lagged. Say so where the sweep can read
+                # it (pc_lockstep_matrix.py turns it into a verdict).
+                if len(first) == len(new) and ref.last_lag is not None:
+                    try:
+                        gap = int(first[new[0]][0]) - ref.last_lag
+                    except (TypeError, ValueError):
+                        gap = -1
+                    if 0 <= gap <= 6:
+                        print("   console lag frame %d: simulated without a "
+                              "render on the console (no particle sort); the "
+                              "difference %d frames later is expected"
+                              % (ref.last_lag, gap))
                 if stop_on_divergence:
                     print("\n   stopped on the frame it happened; both windows "
                           "are showing it.")
