@@ -12,6 +12,16 @@
 #include <melee/ft/kinds/ftCommon/ftCo_Fall.h>
 #include <melee/ft/kinds/ftCommon/ftCo_FallSpecial.h>
 #include <melee/ft/kinds/ftCommon/inlines.h>
+
+/* mv.pp.specials.x8 is four bytes on the port (ftPopo/types.h); read it as
+ * the pointer the console keeps there. */
+#if BUILD_TARGET_PC
+#include <stdint.h>
+#define PP_SPECIALS_X8(fp)                                                   \
+    ((struct ftPp_SpecialSVars_x8_t*) (uintptr_t) (fp)->mv.pp.specials.x8)
+#else
+#define PP_SPECIALS_X8(fp) ((fp)->mv.pp.specials.x8)
+#endif
 #include <melee/ft/kinds/ftNana/ftnana.h>
 #include <melee/pl/player.h>
 
@@ -69,9 +79,9 @@ void ftPp_SpecialS_8011F720(Fighter_GObj* gobj)
     HSD_GObj* temp_r3_2;
 
     fp = GET_FIGHTER(gobj);
-    if (fp->mv.pp.specials.x8 != NULL) {
-        if (fp->x2219_b0 && fp->mv.pp.specials.x8 != NULL) {
-            temp_r3_2 = fp->mv.pp.specials.x8->x4;
+    if (PP_SPECIALS_X8(fp) != NULL) {
+        if (fp->x2219_b0 && PP_SPECIALS_X8(fp) != NULL) {
+            temp_r3_2 = PP_SPECIALS_X8(fp)->x4;
             if (temp_r3_2 != NULL) {
                 var_r0 =
                     HSD_JObjGetNext(HSD_JObjGetChild(GET_JOBJ(temp_r3_2)));

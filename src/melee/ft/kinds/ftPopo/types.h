@@ -85,14 +85,26 @@ typedef struct ftIceClimberAttributes {
 } ftIceClimberAttributes;
 ASSERT_SIZE(ftIceClimberAttributes, 0x15C);
 
+struct ftPp_SpecialSVars_x8_t {
+    int x0;
+    HSD_GObj* x4;
+};
+
 union ftPp_MotionVars {
     struct ftPp_SpecialSVars {
         /* fp+2340 */ float x0;
         /* fp+2344 */ int x4;
-        /* fp+2348 */ struct ftPp_SpecialSVars_x8_t {
-            int x0;
-            HSD_GObj* x4;
-        }* x8;
+#if BUILD_TARGET_PC
+        /* Kept to the console's four bytes: an 8-byte pointer here pushes
+         * x1C to +0x20, while the state variables are read at the console's
+         * offsets by everything that shares the union -- the lockstep trace
+         * saw Popo's x1C (Squall Hammer drift, +0x1C) as 0 where the console
+         * had 0.08 (random sweep seeds 704223244 and 249890845). Nothing in
+         * the port ever stores a pointer here; PP_SPECIALS_X8 reads it. */
+        /* fp+2348 */ u32 x8;
+#else
+        /* fp+2348 */ struct ftPp_SpecialSVars_x8_t* x8;
+#endif
         /* fp+234C */ int xC;
         /* fp+2350 */ int x10;
         /* fp+2354 */ int x14;
