@@ -1385,10 +1385,13 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         art->x4_specialAttributes = w;
         break;
     }
+    case It_Kind_Ottosea:
     case It_Kind_Old_Otto: {
-        /* The octopus (Old Kongo): a pointer to {s32, f32} at x0, then
-         * scalars, with single bytes at 0x10 and 0x28. Same eight-byte-
-         * pointer shift as Birdo's above. */
+        /* The octopus (Old Kongo, and the regular item the same code runs
+         * for -- It_Kind_Ottosea, which came out of a box on Pokemon Stadium
+         * in random sweep seed 590102329 and read x0 raw): a pointer to
+         * {s32, f32} at x0, then scalars, with single bytes at 0x10 and
+         * 0x28. Same eight-byte-pointer shift as Birdo's above. */
         itOldottoseaAttributes* o;
         u32 sub;
         if (spec_off + 0x2C > a->len) {
