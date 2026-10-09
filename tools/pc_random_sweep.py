@@ -130,10 +130,19 @@ def main():
         # menu presses go through Dolphin's pipes, and a starved Dolphin (a
         # matrix sweep running alongside) can drop one. Those are retried;
         # a divergence stops the sweep at once.
+        # Pokemon Stadium's transformations start when a stage file finishes
+        # loading off the disc, and the console's disc time depends on the
+        # drive's state (8-11 frames for the same file); the port uses a
+        # fixed per-file table. Compare up to just before the first one
+        # (requested at 3759) rather than stop the sweep on that.
+        frames = a.frames
+        extra = ["--until-match-end"]
+        if mx.STAGES[st] == "PStadium":
+            frames, extra = 3700, []
         for attempt in range(1 + RETRIES):
-            info = lm.run_cell(name, a.frames, a.timeout,
+            info = lm.run_cell(name, frames, a.timeout,
                                ",".join(["9"] * a.players),
-                               extra=["--until-match-end"])
+                               extra=extra)
             if info.get("verdict") not in HARNESS_FAILURES \
                     or attempt == RETRIES:
                 break
