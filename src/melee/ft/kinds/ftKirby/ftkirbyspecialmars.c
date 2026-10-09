@@ -388,12 +388,24 @@ void ftKb_SpecialNMs_8010BBC8(Fighter_GObj* gobj)
                               0.0f, NULL);
 }
 
+/* fp+2238 read through Game & Watch's view of the union: for Kirby it is the
+ * copy kind (u.kb.hat.kind), and 0x12 is Marth. The port's ftKb_Hat opens
+ * with an 8-byte pointer, so G&W's field no longer lines up with it, and a
+ * Marth copy always took the Roy branch: its Shield Breaker loop ran Roy's
+ * subaction, whose entry effect differs (random sweep seed 284533230,
+ * rng_draws on Inishie2). ftcpuattack.c reads the same word the same way. */
+#if BUILD_TARGET_PC
+#define KB_HAT_KIND_VIA_GW(fp) ((s32) (fp)->u.kb.hat.kind)
+#else
+#define KB_HAT_KIND_VIA_GW(fp) ((fp)->u.gw.x2238_panicCharge)
+#endif
+
 void ftKb_SpecialNMs_8010BC40(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     s32 i;
 
-    if (fp->u.gw.x2238_panicCharge == 0x12) {
+    if (KB_HAT_KIND_VIA_GW(fp) == 0x12) {
         i = ftKb_MS_MsSpecialNLoop;
     } else {
         i = ftKb_MS_FeSpecialNLoop;
@@ -407,7 +419,7 @@ void ftKb_SpecialNMs_8010BC90(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     s32 i;
 
-    if (fp->u.gw.x2238_panicCharge == 0x12) {
+    if (KB_HAT_KIND_VIA_GW(fp) == 0x12) {
         i = ftKb_MS_MsSpecialAirNLoop;
     } else {
         i = ftKb_MS_FeSpecialAirNLoop;
