@@ -3231,9 +3231,24 @@ void ftKb_SpecialN_800EF69C(Fighter_GObj* gobj, int arg1, KirbyHatStruct* hat)
             jobj = bone->joint;
             dobj = (HSD_DObj*) jobj;
             if (jobj != NULL && (bone->flags_b6 || bone->flags2_b7)) {
+#if BUILD_TARGET_PC
+                /* The console reads FighterBone's second flag byte (+9) and
+                 * tests bits 1 and 2: with MWCC's MSB-first bitfields those
+                 * are flags2_b6 and flags2_b5. Here +9 is inside x4_jobj2,
+                 * an 8-byte pointer, so the raw read tested pointer bits and
+                 * took the "remove everything on this joint" branch for
+                 * Kirby's root -- freeing his own costume meshes while his
+                 * texture-animation list still held them. The next motion
+                 * change animated freed textures and corrupted the heap
+                 * (random sweep seed 998176050, Kirby losing Fox's copy on
+                 * Venom, 4371). Name the fields. */
+                if (bone->flags2_b6) {
+                    if (bone->flags2_b5) {
+#else
                 u8* b9p = &((u8*) bone)[9];
                 if ((*b9p >> 1) & 1) {
                     if ((*b9p >> 2) & 1) {
+#endif
                         dobj = fp->x203C.data[bone->xD];
                     } else {
                         dobj = fp->dobj_list.data[bone->xD];
