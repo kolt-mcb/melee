@@ -4851,19 +4851,44 @@ void pc_shc_prepare_match(int stkind)
         }
         free(text);
     }
-    /* local keys first used by one of these characters or on this stage */
-    for (i = 0; i < g_shc_rows_n; i++) {
-        const ShcRow* r = &g_shc_rows[i];
-        int hit = (r->stkind == stkind), j;
-        if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
-        if (cut || r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
-        for (j = 0; !hit && j < r->nck; j++) for (k = 0; !hit && k < nck; k++) if (r->ck[j] == ck[k]) hit = 1;
-        if (!hit) continue;
-        {
-            int rr = pc_shc_bring(r->row, 1);
-            if (pc_net_keepalive) pc_net_keepalive();
-            seen++;
-            if (rr == 1) loaded++; else if (rr == 2) compiled++;
+    /* Local keys first used on this stage or by one of these characters,
+     * likeliest first: this stage with this lineup, then this stage, then
+     * the lineup's keys from every other stage. That last set is most of
+     * it -- every key a character ever drew anywhere, 1600 for Mario and
+     * Donkey Kong on a played-in cache -- and on PowerVR, where a binary
+     * load costs ~120 ms, it made the first Classic stage a 200-second
+     * load. There it gets a budget (MELEE_SHC_PREP_OTHER_MS, default 6 s);
+     * what it leaves loads where first drawn. */
+    {
+        extern int pc_shc_sync_wanted(void);
+        int pass, other_ms;
+        const char* e = getenv("MELEE_SHC_PREP_OTHER_MS");
+        other_ms = e ? atoi(e) : (pc_shc_sync_wanted() ? 6000 : -1);
+        for (pass = 0; pass < 3; pass++) {
+            for (i = 0; i < g_shc_rows_n; i++) {
+                const ShcRow* r = &g_shc_rows[i];
+                int on_stage = (r->stkind == stkind), by_lineup = 0, j;
+                if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
+                if (cut || r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
+                for (j = 0; !by_lineup && j < r->nck; j++)
+                    for (k = 0; !by_lineup && k < nck; k++)
+                        if (r->ck[j] == ck[k]) by_lineup = 1;
+                if (pass == 0 && !(on_stage && by_lineup)) continue;
+                if (pass == 1 && !(on_stage && !by_lineup)) continue;
+                if (pass == 2) {
+                    if (on_stage || !by_lineup) continue;
+                    if (other_ms >= 0 && pc_shc_prep_over(&t0, other_ms)) {
+                        cut = 1;
+                        continue;
+                    }
+                }
+                {
+                    int rr = pc_shc_bring(r->row, 1);
+                    if (pc_net_keepalive) pc_net_keepalive();
+                    seen++;
+                    if (rr == 1) loaded++; else if (rr == 2) compiled++;
+                }
+            }
         }
     }
     memcpy(g_spec_vals, saved, sizeof(saved));
@@ -5152,7 +5177,7 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
  * low-memory killer ends the process -- on a GE8320 every match, within a
  * second of its first frame. A variant compiled on the spot costs one
  * stutter per miss (three in a Samus-vs-DK match on Onett) instead. */
-static int pc_shc_sync_wanted(void)
+int pc_shc_sync_wanted(void)
 {
     const char* e = getenv("MELEE_SHC_SYNC");
     const char* r;
