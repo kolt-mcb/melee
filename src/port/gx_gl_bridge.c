@@ -4325,6 +4325,8 @@ char* vf_resolve_path(const char* path, char* out, size_t out_size);
 
 static char g_shc_dir[512];
 static int g_shc_cur_stkind = -1; /* set for the match being loaded */
+/* A stage is loaded and not yet over: widescreen applies (pc_widescreen_stretch). */
+static int g_wide_match;
 static int g_shc_last_stkind = -1; /* the last match, for tagging its deferred keys */
 static u32 g_shc_drv;
 static int g_shc_on = -1;
@@ -4757,6 +4759,9 @@ void pc_shc_prepare_match(int stkind)
      * route's Stage_802251B4 hook noted first rather than overwrite it. */
     if (stkind < 0 || stkind >= 35) stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = stkind;
+    /* Widescreen is for the stage: stage 0 is Classic's versus splash, a
+     * 2D screen drawn for 4:3 like the menus. */
+    g_wide_match = stkind > 0;
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
     /* MELEE_SHC_PREP_MAX=n: bring at most n keys (a bisection aid for
      * drivers that fail once enough programs exist). */
@@ -4840,6 +4845,7 @@ void pc_shc_match_over(void)
     g_defer_n = 0;
     g_shc_last_stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = -1;
+    g_wide_match = 0;
 }
 
 /* Menu keys with no binary yet: one compile a frame, outside matches. */
@@ -6712,6 +6718,15 @@ static int pc_stagecheck_on(void)
     return on;
 }
 static void pc_stage_textures(void);
+/* The current viewport's horizontal squeeze: 1 / the widescreen stretch when
+ * GXSetViewport stretched it, else 1. */
+static f32 g_vp_squeeze = 1.0f;
+/* This draw is exempt: a 2D quad over the whole 4:3 frame -- a fade, the
+ * title screen's veil, a menu backdrop -- is stretched with the viewport
+ * instead, or it would end in two edges a third of the way in from the
+ * sides of the screen. */
+static int g_draw_unsqueeze;
+static u32 g_proj_type;
 static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
 {
     memset(mvp, 0, sizeof(f32) * 16);
@@ -6865,7 +6880,14 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
                 for (int k = 0; k < 4; k++)
                     mvp[i][j] += g_state.proj_matrix[i][k] * mv4[k][j];
     }
-    
+    /* Widescreen: the viewport was stretched across the window
+     * (pc_fb_rect_to_window), so the picture is narrowed by as much and keeps
+     * its shape -- the stage gets wider, nothing gets fatter. Here and not in
+     * proj_matrix, which the game reads back with GXGetProjectionv. */
+    if (g_vp_squeeze != 1.0f && !g_draw_unsqueeze) {
+        for (int j = 0; j < 4; j++) mvp[0][j] *= g_vp_squeeze;
+    }
+
     {
         /* Sample the first vertex of every batch against the clip volume. */
         f32 x=g_state.verts[0].pos[0], y=g_state.verts[0].pos[1], z=g_state.verts[0].pos[2];
@@ -7164,8 +7186,48 @@ static void pc_stage_textures(void)
  * tracking stays exactly as it was, and nothing reaches the GPU. */
 int pc_gx_discard;
 
+/* Does this orthographic draw cover the whole frame (see g_draw_unsqueeze)? */
+static int pc_draw_fills_frame(void)
+{
+    f32 (*m)[4];
+    f32 (*P)[4] = g_state.proj_matrix;
+    f32 x0 = 1e30f, x1 = -1e30f, y0 = 1e30f, y1 = -1e30f;
+    u32 i;
+    if (g_vp_squeeze == 1.0f || g_proj_type == 0 /* GX_PERSPECTIVE */ ||
+        g_state.vert_count < 3 || g_batch_pretransformed)
+    {
+        return 0;
+    }
+    m = g_state.mtx3d_active
+            ? g_state.mtx_array[g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0]
+            : g_state.mv_matrix;
+    for (i = 0; i < g_state.vert_count; i++) {
+        const f32* v = g_state.verts[i].pos;
+        f32 vx = m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2] + m[0][3];
+        f32 vy = m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2] + m[1][3];
+        f32 vz = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3];
+        f32 cx = P[0][0] * vx + P[0][1] * vy + P[0][2] * vz + P[0][3];
+        f32 cy = P[1][0] * vx + P[1][1] * vy + P[1][2] * vz + P[1][3];
+        if (cx < x0) x0 = cx;
+        if (cx > x1) x1 = cx;
+        if (cy < y0) y0 = cy;
+        if (cy > y1) y1 = cy;
+    }
+    return x0 <= -0.98f && x1 >= 0.98f && y0 <= -0.98f && y1 >= 0.98f;
+}
+
 static void bridge_upload_and_draw(void)
 {
+    if (!pc_gx_discard) {
+        /* Decided before the batch below is joined: a change either way is
+         * a new matrix generation, so the draw neither joins a batch staged
+         * the other way nor reuses its matrices. */
+        int unsq = pc_draw_fills_frame();
+        if (unsq != g_draw_unsqueeze) {
+            g_draw_unsqueeze = unsq;
+            g_gen_mtx++;
+        }
+    }
     if (pc_gx_discard) {
         /* Everything a real draw would have consumed, consumed. The state has to
          * be left as the draw would leave it or the next primitive inherits this
@@ -8460,6 +8522,7 @@ f32 pc_ires_want(void)
     }
     return k;
 }
+static f32 pc_widescreen_stretch(int win_w, int win_h, f32 fb_w, f32 fb_h);
 /* Create (or resize) the scene framebuffer and make it the default. */
 static void pc_ires_ensure(void)
 {
@@ -8472,6 +8535,14 @@ static void pc_ires_ensure(void)
     if (fbw <= 0.0f || fbh <= 0.0f) return;
     w = (int) (fbw * k + 0.5f);
     h = (int) (fbh * k + 0.5f);
+    {
+        /* Widescreen: as wide as the window's shape, so the widened
+         * picture is not squeezed back into a 4:3 target. */
+        void window_get_size(int* width, int* height);
+        int ww = 0, wh = 0;
+        window_get_size(&ww, &wh);
+        w = (int) ((f32) w * pc_widescreen_stretch(ww, wh, fbw, fbh) + 0.5f);
+    }
     if (pc_ires_fbo != 0 && w == pc_ires_w && h == pc_ires_h) return;
     if (pc_ires_fbo == 0) {
         glGenFramebuffers(1, &pc_ires_fbo);
@@ -8532,7 +8603,65 @@ void pc_ires_present(void)
     pc_ires_ensure(); /* follows a change of the GameCube framebuffer size */
 }
 
+/* Widescreen: the widest aspect the picture may be widened to, 0 for the
+ * console's 4:3 with bars at the sides. MELEE_WIDESCREEN=0 is off, 1 fills the
+ * window whatever its shape, and a number above 1 is the widest aspect
+ * (1.7778 for 16:9). On by default on Android, where every screen is wider
+ * than 4:3 and the bars were 40% of a phone's width; off on the desktop,
+ * whose screenshots the golden tests compare.
+ *
+ * Matches only; menus stay 4:3. Only the picture changes. The game's camera, its projection as the game
+ * reads it back and everything the simulation sees are the console's, so a
+ * widescreen player and a 4:3 one stay in sync; the extra width shows what
+ * is already there beside the 4:3 frame. */
+static f32 pc_widescreen_max(void)
+{
+    static f32 a = -1.0f;
+    if (a < 0.0f) {
+        const char* e = getenv("MELEE_WIDESCREEN");
+#ifdef __ANDROID__
+        a = 100.0f;
+#else
+        a = 0.0f;
+#endif
+        if (e != NULL) {
+            a = (f32) atof(e);
+            if (a == 1.0f) a = 100.0f;
+            if (a < 1.0f) a = 0.0f;
+        }
+        if (a > 0.0f) fprintf(stderr, "[WIDE] widescreen on (MELEE_WIDESCREEN=%s)\n", e != NULL ? e : "default");
+    }
+    return a;
+}
+
+/* The horizontal stretch for a window of win_w x win_h showing a fb_w x fb_h
+ * picture: >= 1, and 1 when widescreen is off or the window is no wider. */
+static f32 pc_widescreen_stretch(int win_w, int win_h, f32 fb_w, f32 fb_h)
+{
+    f32 max = pc_widescreen_max(), want;
+    /* Matches only. The menus, the title and the splash screens are 2D
+     * layouts made for 4:3 -- their backdrops and veils are planes cut to the
+     * 4:3 frame, and widened they end in visible edges. */
+    if (!g_wide_match) return 1.0f;
+    if (max <= 0.0f || win_w <= 0 || win_h <= 0 || fb_w <= 0.0f || fb_h <= 0.0f) return 1.0f;
+    want = (f32) win_w / (f32) win_h;
+    if (want > max) want = max;
+    want /= fb_w / fb_h;
+    return want > 1.0f ? want : 1.0f;
+}
+
+static f32 pc_fb_rect_map(f32 x, f32 y, f32 w, f32 h, GLint out[4], int may_widen);
+
+/* A rectangle of the GameCube framebuffer to the window's pixels. With
+ * widescreen on, a rectangle the full width of the framebuffer (the scene's
+ * viewport, the HUD's, their scissors) is stretched across the window. */
 void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
+{
+    (void) pc_fb_rect_map(x, y, w, h, out, 1);
+}
+
+/* Returns the horizontal stretch it applied (1 for none). */
+static f32 pc_fb_rect_map(f32 x, f32 y, f32 w, f32 h, GLint out[4], int may_widen)
 {
     void window_get_size(int* width, int* height);
     void pc_get_fb_size(float* w, float* h);
@@ -8540,7 +8669,7 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
     int win_w = 1280, win_h = 720;
 
     pc_get_fb_size(&fb_w, &fb_h);
-    f32 sx, sy, scale, off_x, off_y;
+    f32 sx, sy, scale, off_x, off_y, wide = 1.0f;
 
     if (g_off_active) {
         /* The shadow target is exactly the rectangle the game thinks it is
@@ -8557,7 +8686,7 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
         out[1] = (GLint) y;
         out[2] = (GLint) w;
         out[3] = (GLint) h;
-        return;
+        return 1.0f;
     }
     if (pc_ires_fbo != 0) {
         win_w = pc_ires_w;
@@ -8568,7 +8697,7 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
     if (fb_w <= 0.0f || fb_h <= 0.0f || win_w <= 0 || win_h <= 0) {
         out[0] = (GLint) x; out[1] = (GLint) y;
         out[2] = (GLint) w; out[3] = (GLint) h;
-        return;
+        return 1.0f;
     }
     sx = (f32) win_w / fb_w;
     sy = (f32) win_h / fb_h;
@@ -8593,13 +8722,20 @@ void pc_fb_rect_to_window(f32 x, f32 y, f32 w, f32 h, GLint out[4])
         }
         scale *= s_rs;
     }
-    off_x = ((f32) win_w - fb_w * scale) * 0.5f;
+    /* Only a rectangle as wide as the framebuffer is widened: a smaller one
+     * (a sub-viewport, the magnifier's) keeps its place in the 4:3 frame,
+     * where what is drawn into it is. */
+    if (may_widen && x <= 0.5f && x + w >= fb_w - 0.5f) {
+        wide = pc_widescreen_stretch(win_w, win_h, fb_w, fb_h);
+    }
+    off_x = ((f32) win_w - fb_w * scale * wide) * 0.5f;
     off_y = ((f32) win_h - fb_h * scale) * 0.5f;
 
-    out[0] = (GLint) (off_x + x * scale);
+    out[0] = (GLint) (off_x + x * scale * wide);
     out[1] = (GLint) (off_y + (fb_h - (y + h)) * scale);
-    out[2] = (GLint) (w * scale);
+    out[2] = (GLint) (w * scale * wide);
     out[3] = (GLint) (h * scale);
+    return wide;
 }
 
 void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
@@ -8613,7 +8749,7 @@ void GXSetViewport(f32 left, f32 top, f32 wd, f32 ht, f32 nearz, f32 farz)
                 ht != 0.0f ? (double) (wd / ht) : 0.0); } }
     {
         GLint r[4];
-        pc_fb_rect_to_window(left, top, wd, ht, r);
+        g_vp_squeeze = 1.0f / pc_fb_rect_map(left, top, wd, ht, r, 1);
         g_state.vp_x = (f32) r[0]; g_state.vp_y = (f32) r[1];
         g_state.vp_w = (f32) r[2]; g_state.vp_h = (f32) r[3];
         gls_viewport(r[0], r[1], (GLsizei) r[2], (GLsizei) r[3]);
@@ -12037,8 +12173,10 @@ static void pc_efb_copy(void* dest)
         unsigned long bytes = (unsigned long) dw * (unsigned long) dh * 4u;
         pc_itconv_arch_note_write(dest, bytes);
     }
-    pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
-                         (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r);
+    /* What the game copies is what it drew there: the 4:3 frame, not the
+     * widened picture around it. */
+    (void) pc_fb_rect_map((f32) g_state.tex_copy_src[0],
+                          (f32) g_state.tex_copy_src[1], (f32) sw, (f32) sh, r, 0);
     if (r[2] <= 0 || r[3] <= 0) return;
     if (pc_efb_copy_gpu(dest, r, dw, dh, g_copy_dst_fmt)) {
         pc_diag_efb_copies++;
@@ -12166,6 +12304,8 @@ static void pc_efb_copy(void* dest)
 static void pc_efb_clear_src(void)
 {
     GLint r[4];
+    /* The clear, though, covers the widened picture, or a widescreen
+     * window keeps the old frame at its sides. */
     pc_fb_rect_to_window((f32) g_state.tex_copy_src[0],
                          (f32) g_state.tex_copy_src[1],
                          (f32) g_state.tex_copy_src[2],
@@ -13107,7 +13247,6 @@ void GXGetViewportv(f32 *vp)
  * the same parameters GXSetProjection extracted (fog.c and psdisp.c both
  * read exactly that and declare 7-float buffers; copying a 4x4 here used
  * to overrun psdisp's into its inverse-view matrix). */
-static u32 g_proj_type;
 u32 g_proj_type_set(u32 t) { g_proj_type = t; return t; }
 /* The projection as GXGetProjectionv reports it, kept on the game thread
  * while the GX queue runs (pc_gxq.c): the particle and fog code read it back
