@@ -809,9 +809,19 @@ void Ground_801C0754(StageIdPair* pair)
      * prep; the title's attract demo comes through here too. */
     {
         extern void pc_shc_prepare_match(int stkind);
+        extern int pc_stkind_for_grkind(int grkind);
         int m = (int) gm_GetCurrentGameMode();
+        /* Classic's matches arrive with no stage kind, so every one of them
+         * was prepared -- and its keys filed -- as stage 0, the versus
+         * splash. That bucket grew to thousands of keys, all loaded on
+         * entering Classic: 116 s on the PowerVR tablet. Name the stage
+         * from its ground instead; the splash stays 0. */
+        int sk = (int) pair->stkind;
+        if (sk <= 0) {
+            sk = pc_stkind_for_grkind((int) pair->grkind);
+        }
         if (m != 0 /* title */ && m != 1 /* menu */ && m != 0x18 /* opening */) {
-            pc_shc_prepare_match((int) pair->stkind);
+            pc_shc_prepare_match(sk);
         }
     }
 #endif

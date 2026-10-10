@@ -4796,6 +4796,16 @@ void pc_shc_prepare_match(int stkind)
      * 2D screen drawn for 4:3 like the menus. */
     g_wide_match = stkind > 0;
     if (!pc_shc_enabled() || g_spec_n <= 0) return;
+    /* Stage 0 is Classic's versus splash: two demo fighters on a backdrop.
+     * Its bucket also holds every key Classic filed before its matches were
+     * told their stage (Ground_801C0754), over a thousand on a played-in
+     * cache, which made entering Classic a two-minute load on the PowerVR
+     * tablet. Load nothing for it; what the splash draws loads on first
+     * use. */
+    if (stkind == 0) {
+        fprintf(stderr, "[SHCACHE] match prep skipped for stage 0 (versus splash)\n");
+        return;
+    }
     /* MELEE_SHC_PREP_MAX=n: bring at most n keys (a bisection aid for
      * drivers that fail once enough programs exist). */
     {

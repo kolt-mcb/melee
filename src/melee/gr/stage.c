@@ -545,6 +545,21 @@ static StKind pc_stkind_checked(StKind stkind, const char* who)
     return St_Kind_Battle;
 }
 #define PC_STKIND(k) pc_stkind_checked((k), __func__)
+
+/* The stage kind whose ground this is, or 0. Classic, Adventure and the
+ * bonus stages load grounds directly and hand Ground_801C0754 a pair with
+ * no stage kind; the shader cache files its keys by stage kind. */
+int pc_stkind_for_grkind(int grkind)
+{
+    static const int n = (int) (sizeof(stage_id_map) / sizeof(stage_id_map[0]));
+    int i;
+    for (i = 2; i < n; i++) {
+        if ((int) stage_id_map[i].grkind == grkind) {
+            return i;
+        }
+    }
+    return 0;
+}
 #else
 #define PC_STKIND(k) (k)
 #endif
