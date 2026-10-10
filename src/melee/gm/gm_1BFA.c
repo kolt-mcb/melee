@@ -249,3 +249,40 @@ void onExitPrize(UNUSED GameModeState* state)
     gm_SetPendingGameMode(gm_GetChallengerData()->curr_mode);
     gm_SetNewGameModePending();
 }
+
+#if BUILD_TARGET_PC
+#include <melee/gm/gmscene.h>
+#include <melee/if/ifprize.h>
+#include <sysdolphin/baselib/gobj.h>
+#include <sysdolphin/baselib/gobjproc.h>
+
+/* The prize screen ("you got a trophy" / "new feature") is if/ifprize.c,
+ * which is not built: it needs the ty/ trophy system. Its OnEnter builds the
+ * display and, when the player dismisses it, ends the scene; the weak stub
+ * that stood in did neither, and the game sat on a black screen for ever.
+ * That is what followed a Classic Game Over once the 1-P score passed 10,000
+ * (trophy 268, gm_1736.c): Challenger Approach -> state_prize -> this scene.
+ * gm_ModeState_Prize_OnEnter has already recorded the unlocks by then, so end
+ * the scene on its first frame -- gm_801A4D34 clears the end flag as its loop
+ * starts, so the request cannot come from here -- and onExitPrize returns to
+ * the mode the player came from. */
+static void pc_prize_skip_proc(HSD_GObj* gobj)
+{
+    (void) gobj;
+    gm_801A4B60();
+}
+
+void ifPrize_Scene_OnEnter(void* arg0)
+{
+    HSD_GObj* g = GObj_Create(14, 0, 0);
+    (void) arg0;
+    if (g != NULL) {
+        HSD_GObj_SetupProc(g, pc_prize_skip_proc, 0);
+    }
+}
+
+void ifPrize_Scene_OnExit(void* arg0)
+{
+    (void) arg0;
+}
+#endif
