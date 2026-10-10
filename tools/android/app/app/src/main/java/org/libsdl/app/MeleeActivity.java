@@ -69,6 +69,14 @@ public class MeleeActivity extends SDLActivity {
         }
         Display.Mode cur = d.getMode();
         float want = 0.0f;
+        /* Already 60 Hz: leave the mode alone. Setting a preferred rate,
+         * even the one in force, re-applied the HDMI mode on the Beelink TV
+         * box, at launch and again when the window went away, and each time
+         * its driver reported a wired headset plugging in -- Android then
+         * took media off the Bluetooth soundbar, for every app. */
+        if (cur.getRefreshRate() > 59.0f && cur.getRefreshRate() < 61.0f) {
+            return;
+        }
         for (Display.Mode m : d.getSupportedModes()) {
             if (m.getPhysicalWidth() != cur.getPhysicalWidth() ||
                 m.getPhysicalHeight() != cur.getPhysicalHeight())
