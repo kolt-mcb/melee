@@ -1160,6 +1160,7 @@ static const char* g_vert_src =
 "out vec4 v_lit_color1;           // Per-vertex channel-1 lit color (specular)\n"
 "void main() {\n"
 "    vec3 sk_pos = a_pos, sk_nrm = a_nrm;\n"
+"#ifdef GPU_SKIN\n"
 "    if (u_skin != 0) {\n"
 "        int m = int(a_mid + 0.5) * 3;\n"
 "        vec4 p4 = vec4(a_pos, 1.0);\n"
@@ -1167,6 +1168,7 @@ static const char* g_vert_src =
 "        if (u_skin == 1)\n"
 "            sk_nrm = vec3(dot(u_nrmmtx[m].xyz, a_nrm), dot(u_nrmmtx[m + 1].xyz, a_nrm), dot(u_nrmmtx[m + 2].xyz, a_nrm));\n"
 "    }\n"
+"#endif\n"
 "    gl_Position = u_mvp * vec4(sk_pos, 1.0);\n"
 "    v_col = a_col;\n"
 "    vec2 in0 = a_uv0 * u_uv_scale;\n"
@@ -2794,6 +2796,7 @@ static const char* pc_es_header(void)
     return hdr;
 }
 
+static int pc_gpu_dl_on(void);
 static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
@@ -2810,6 +2813,9 @@ static GLuint compile_shader(GLenum type, const char* src)
         defs[0] = '\0';
         if (getenv("MELEE_TEXGEN_LEGACY") != NULL) strcat(defs, "#define TEXGEN_LEGACY 1\n");
         if (getenv("MELEE_NO_QDIV") != NULL) strcat(defs, "#define NO_QDIV 1\n");
+        /* The palette transform only where lists are drawn from GPU memory:
+         * MELEE_GPU_DL=0 compiles the shader as it was before them. */
+        if (pc_gpu_dl_on()) strcat(defs, "#define GPU_SKIN 1\n");
     }
     parts[0] = src;
     if (strncmp(src, "#version ", 9) == 0) {
@@ -3614,6 +3620,7 @@ typedef struct Prog {
     GLint glloc[VLOC_MAX];
     u32 gen[VLOC_MAX];
     u32 flushed_serial; /* g_stage_serial when this program last took the upload loop */
+    u32 last_used;      /* pc_frame_number when last selected (pc_prog_evict) */
 } Prog;
 static u32 g_stage_serial = 1;
 u32 pc_diag_prog_switch, pc_diag_uni_upload, pc_diag_flush_skip;
@@ -4403,7 +4410,7 @@ static int pc_shc_enabled(void)
         g_shc_drv = pc_shc_fnv(g_vert_src, strlen(g_vert_src), g_shc_drv);
         g_shc_drv = pc_shc_fnv(g_frag_src, strlen(g_frag_src), g_shc_drv);
         {
-            static const char* const sw[] = { "MELEE_UBO_EXCLUDE", "MELEE_UBO_PAD_HEAD", "MELEE_UBO_PAD_TAIL", "MELEE_TEXGEN_LEGACY", "MELEE_NO_QDIV" };
+            static const char* const sw[] = { "MELEE_UBO_EXCLUDE", "MELEE_UBO_PAD_HEAD", "MELEE_UBO_PAD_TAIL", "MELEE_TEXGEN_LEGACY", "MELEE_NO_QDIV", "MELEE_GPU_DL" };
             size_t k;
             for (k = 0; k < sizeof(sw) / sizeof(sw[0]); k++) {
                 const char* x = getenv(sw[k]);
@@ -4548,6 +4555,8 @@ static Prog* pc_prog_build(void);
 static u32 pc_spec_hash(void);
 static Prog* pc_prog_find(u32 h);
 static Prog* pc_prog_register(Prog* pr, u32 h, int fresh);
+static int g_prog_live;           /* GL programs alive (pc_prog_evict) */
+static int pc_prog_live_max(void);
 static int pc_shc_index_has_tagged(const Prog* pr);
 static void pc_shq_push(const GLint* row);
 
@@ -4715,6 +4724,9 @@ static int pc_shc_bring(const GLint* row, int compile_now)
     Prog* pr;
     int i;
     if (g_prog_n >= PROG_MAX - 256) return 0;
+    /* A prep stops bringing programs in at 80% of the live cap; the rest
+     * load the first time they are drawn with. */
+    if (pc_prog_live_max() > 0 && g_prog_live >= pc_prog_live_max() * 8 / 10) return 0;
     for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
     h = pc_spec_hash();
     if (pc_prog_find(h) != NULL) return 0;
@@ -5004,6 +5016,86 @@ static Prog* pc_prog_find(u32 h)
     return NULL;
 }
 
+/* A cap on live GL programs.
+ *
+ * Every linked program costs the driver memory, and on Android some of it
+ * comes in blocks the allocator (Scudo) maps one by one, with a guard page
+ * each: on the Intel TV box (Mesa) about nine mappings a program. A process
+ * may hold 65,530 mappings; the lineup's keys grow with every match played
+ * (2,179 for one four-player lineup this morning, 5,710 by noon), and the
+ * prep that brings them all in took the mapping count over the limit at
+ * match end -- malloc returned NULL and the driver died in glLinkProgram.
+ *
+ * Past MELEE_PROG_LIVE_MAX live programs (Android default 2500; 0 = no cap)
+ * the least recently used are deleted. Each keeps its table entry and key,
+ * and is loaded again from the binary cache the next time it is drawn with
+ * (pc_prog_revive). Nothing drawn in the last two frames is evicted. */
+static int g_prog_live;
+static int pc_prog_live_max(void)
+{
+    static int cap = -1;
+    if (cap < 0) {
+        const char* e = getenv("MELEE_PROG_LIVE_MAX");
+#ifdef __ANDROID__
+        cap = 2500;
+#else
+        cap = 0;
+#endif
+        if (e != NULL) cap = atoi(e);
+        if (cap < 0) cap = 0;
+        if (cap > 0 && cap < 64) cap = 64;
+    }
+    return cap;
+}
+static int pc_prog_lru_cmp(const void* a, const void* b)
+{
+    u32 x = g_progs[*(const int*) a]->last_used, y = g_progs[*(const int*) b]->last_used;
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+static void pc_prog_evict(void)
+{
+    static int* order;
+    int cap = pc_prog_live_max(), n = 0, i, target, freed = 0;
+    if (cap == 0 || g_prog_live <= cap) return;
+    if (order == NULL) order = (int*) malloc(sizeof(int) * PROG_MAX);
+    if (order == NULL) return;
+    for (i = 0; i < g_prog_n; i++) {
+        Prog* pr = g_progs[i];
+        if (pr->id == 0 || pr == g_cur_prog || pr == g_uber) continue;
+        if (pr->last_used + 2 > pc_frame_number) continue;
+        order[n++] = i;
+    }
+    qsort(order, (size_t) n, sizeof(int), pc_prog_lru_cmp);
+    target = g_prog_live - cap * 85 / 100; /* down to 85%, so this runs seldom */
+    for (i = 0; i < n && freed < target; i++) {
+        Prog* pr = g_progs[order[i]];
+        glDeleteProgram(pr->id);
+        pr->id = 0;
+        freed++;
+    }
+    g_prog_live -= freed;
+    fprintf(stderr, "[SHADER] %d programs live, cap %d: evicted the %d least recently used\n",
+            g_prog_live + freed, cap, freed);
+}
+/* Bring an evicted program back: its binary from the cache, or a build. */
+static int pc_prog_revive(Prog* pr, u32 h)
+{
+    Prog* t = pc_shc_load(h);
+    int fresh = 0;
+    if (t == NULL) { t = pc_prog_build(); fresh = 1; }
+    if (t == NULL) return 0;
+    pr->id = t->id;
+    memcpy(pr->glloc, t->glloc, sizeof(pr->glloc));
+    memset(pr->gen, 0, sizeof(pr->gen));
+    pr->flushed_serial = 0;
+    free(t);
+    if (fresh) pc_shc_store(pr, h);
+    g_prog_live++;
+    pr->last_used = pc_frame_number;
+    pc_prog_evict();
+    return 1;
+}
+
 /* Take ownership of a linked program for the current specialisation. */
 static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
 {
@@ -5015,6 +5107,12 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
     g_progs[g_prog_n] = pr;
     pc_prog_index_add(g_prog_n);
     g_prog_n++;
+    g_prog_live++;
+    /* Not used until something draws with it (pc_prog_flush stamps it): a
+     * prep brings in hundreds within one frame, and those are the first
+     * to go if they are never drawn. */
+    pr->last_used = 0;
+    pc_prog_evict();
     if (getenv("MELEE_SHADERLOG")) {
         fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x, program %u)\n", g_prog_n,
                 fresh ? "built" : "loaded", pc_frame_number, h, (unsigned) pr->id);
@@ -5152,6 +5250,7 @@ static Prog* pc_prog_select(void)
     }
     h = pc_spec_hash();
     pr = pc_prog_find(h);
+    if (pr != NULL && pr->id == 0 && !pc_prog_revive(pr, h)) return g_cur_prog;
     if (pr != NULL) { g_spec_dirty = 0; return pr; }
     if (g_prog_n >= PROG_MAX) {
         static int said;
@@ -5205,6 +5304,7 @@ static void pc_prog_flush(void)
     Prog* pr = pc_prog_select();
     int i;
     if (!pr) return;
+    pr->last_used = pc_frame_number;
     if (pr != g_cur_prog) {
         glUseProgram(pr->id);
         g_cur_prog = pr;
@@ -6757,6 +6857,7 @@ static int g_gpu_skin;
 static int g_gpu_slot_min, g_gpu_slot_max;
 static void dl_gpu_emit(void);
 static int dl_gpu_fills_frame(void);
+static int pc_gpu_dl_on(void);
 static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
 {
     memset(mvp, 0, sizeof(f32) * 16);
@@ -9659,13 +9760,42 @@ void GXColorSetColor(u8 r, u8 g, u8 b, u8 a)
 void GXSetPrimColor(u8 matalpha, u8 embalpha, u8 r, u8 g, u8 b, u8 a)
 { g_state.prim_color.r=r; g_state.prim_color.g=g; g_state.prim_color.b=b; g_state.prim_color.a=a; }
 
+/* A skinned vertex's normal, as the hardware treats it: through the normal
+ * matrix at the vertex's own matrix index (the position matrix where none was
+ * loaded). The bridge used to leave it in model space -- it transformed the
+ * previous vertex's normal at position time, and this vertex's GXNormal then
+ * overwrote it -- so skinned meshes were lit as if they never turned.
+ * MELEE_SKIN_RAWNRM=1 keeps that, for comparisons; it also governs the GPU
+ * path's u_skin. */
+static int pc_skin_rawnrm(void)
+{
+    static int raw = -1;
+    if (raw < 0) raw = getenv("MELEE_SKIN_RAWNRM") != NULL;
+    return raw;
+}
+static void pc_skin_nrm(u32 mid, const f32 in[3], f32 out[3])
+{
+    const f32 (*nm)[4];
+    if (mid >= 28) mid = 0;
+    nm = g_nrm_mtx_valid[mid] ? (const f32 (*)[4]) g_nrm_mtx_array[mid]
+                              : (const f32 (*)[4]) g_state.mtx_array[mid];
+    out[0] = nm[0][0] * in[0] + nm[0][1] * in[1] + nm[0][2] * in[2];
+    out[1] = nm[1][0] * in[0] + nm[1][1] * in[1] + nm[1][2] * in[2];
+    out[2] = nm[2][0] * in[0] + nm[2][1] * in[1] + nm[2][2] * in[2];
+}
+
 void GXNormal3f32(f32 x, f32 y, f32 z)
 {
     g_state.last_nrm[0]=x; g_state.last_nrm[1]=y; g_state.last_nrm[2]=z;
     if (g_state.vert_count > 0) {
-        g_state.verts[g_state.vert_count-1].nrm[0]=x;
-        g_state.verts[g_state.vert_count-1].nrm[1]=y;
-        g_state.verts[g_state.vert_count-1].nrm[2]=z;
+        f32* o = g_state.verts[g_state.vert_count-1].nrm;
+        o[0]=x; o[1]=y; o[2]=z;
+        /* The vertex just added was skinned: its normal goes through its
+         * normal matrix too (pc_skin_nrm). */
+        if (g_state.va_mode[0] != 0 && g_state.mtx3d_active && g_state.pos_enabled &&
+            !pc_skin_rawnrm()) {
+            pc_skin_nrm(g_state.last_mtx_idx, g_state.last_nrm, o);
+        }
     }
 }
 
@@ -10556,6 +10686,7 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
      * is the same operations in the same order. */
     u32 n = dp->nverts, i;
     const int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    const int rawnrm = pc_skin_rawnrm();
     const int mid_track = g_state.va_mode[0] != 0;
     const int pos_en = g_state.pos_enabled != 0, nrm_en = g_state.nrm_enabled != 0;
     const int clr_en = g_state.clr_enabled != 0, t0_en = g_state.tex0_enabled != 0;
@@ -10725,7 +10856,8 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
         }
         if (s->flags & DLV_NRM) {
             lnrm[0] = s->nrm[0]; lnrm[1] = s->nrm[1]; lnrm[2] = s->nrm[2];
-            v->nrm[0] = s->nrm[0]; v->nrm[1] = s->nrm[1]; v->nrm[2] = s->nrm[2];
+            if (skin && pos_en && !rawnrm) pc_skin_nrm(s->mid, s->nrm, v->nrm);
+            else { v->nrm[0] = s->nrm[0]; v->nrm[1] = s->nrm[1]; v->nrm[2] = s->nrm[2]; }
         }
         if (s->flags & DLV_T0) {
             lt0[0] = s->t0[0]; lt0[1] = s->t0[1];
@@ -10777,11 +10909,7 @@ static void dl_replay(const DlEntry* e)
                 }
             }
             if (s->flags & DLV_NRM) {
-                g_state.last_nrm[0] = s->nrm[0]; g_state.last_nrm[1] = s->nrm[1]; g_state.last_nrm[2] = s->nrm[2];
-                if (g_state.vert_count > 0) {
-                    Vertex* o = &g_state.verts[g_state.vert_count - 1];
-                    o->nrm[0] = s->nrm[0]; o->nrm[1] = s->nrm[1]; o->nrm[2] = s->nrm[2];
-                }
+                GXNormal3f32(s->nrm[0], s->nrm[1], s->nrm[2]);
             }
             if (s->flags & DLV_T0) {
                 g_state.last_tex0[0] = s->t0[0]; g_state.last_tex0[1] = s->t0[1];
@@ -10825,8 +10953,8 @@ static void dl_replay(const DlEntry* e)
  * Normals: the CPU path's skinned vertices kept their model-space normal (it
  * transformed the previous vertex's, which the next GXNormal overwrote); the
  * hardware transforms each vertex's own normal by the normal matrix at its
- * index, and so does this (u_skin 1). MELEE_GPU_SKIN_RAWNRM=1 keeps the CPU
- * path's normals, for an exact comparison against it.
+ * index, and so does this (u_skin 1). MELEE_SKIN_RAWNRM=1 keeps the old
+ * model-space normals on both paths, for an exact comparison.
  *
  * Not eligible, and replayed on the CPU as before: lists with lines or
  * points, a matrix index the palette cannot hold (one that is not one of
@@ -11198,7 +11326,7 @@ static int dl_gpu_draw(DlEntry* e)
     }
     {
         static int sk = -1;
-        if (sk < 0) sk = getenv("MELEE_GPU_SKIN_RAWNRM") != NULL ? 2 : 1;
+        if (sk < 0) sk = pc_skin_rawnrm() ? 2 : 1;
         g_gpu_skin = skin ? sk : 0;
     }
     g_gpu_entry = e;
