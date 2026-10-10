@@ -1340,8 +1340,8 @@ typedef struct itZako_ItemVars {
      * owner ground at +20 and runs the zako logic, whose x14.z (+1C) then
      * landed on that pointer -- its low word became a sound id, and the
      * ground callback on Birdo's death dereferenced 0x17b (random sweep
-     * seed 142715277, Temple). Nothing reads this field; it is only ever
-     * stored. */
+     * seed 142715277, Temple). The zako logic only stores it; the targets
+     * (itMato) read it back as their joint, through this slot. */
     /* ip+DD4 */ u32 jobj;
 #else
     /* ip+DD4 */ HSD_JObj* jobj;

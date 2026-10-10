@@ -101,7 +101,7 @@ Item_GObj* it_8027B5B0(ItemKind kind, Vec3* pos, HSD_JObj* jobj, Vec3* vel,
     if (gobj != NULL) {
         ip = GET_ITEM(gobj);
 #if BUILD_TARGET_PC
-        /* a 32-bit slot here (itCommonItems.h); the field is never read */
+        /* a 32-bit slot here (itCommonItems.h); itMato reads it back */
         ip->xDD4_itemVar.zako.jobj = (u32) (uintptr_t) jobj;
 #else
         ip->xDD4_itemVar.zako.jobj = jobj;

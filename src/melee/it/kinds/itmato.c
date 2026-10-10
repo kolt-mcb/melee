@@ -45,9 +45,20 @@ bool itMato_UnkMotion0_Anim(Item_GObj* item_gobj)
 void itMato_UnkMotion0_Phys(Item_GObj* item_gobj)
 {
     Item* it = GET_ITEM(item_gobj);
-    if (it->xDD4_itemVar.mato.x0 != NULL) {
+#if BUILD_TARGET_PC
+    /* The target's joint is stored by the zako spawner (it_8027B5B0) into
+     * zako.jobj, a four-byte slot on the port so that the zako variables
+     * keep the console's offsets. mato.x0 is the same address read as an
+     * eight-byte pointer, whose upper half is zako.idx (-1): Break the
+     * Targets dereferenced 0xffffffff........ on the first frame. Joints
+     * come from the low heap, so the slot holds the whole pointer. */
+    HSD_JObj* joint = (HSD_JObj*) (uintptr_t) it->xDD4_itemVar.zako.jobj;
+#else
+    HSD_JObj* joint = it->xDD4_itemVar.mato.x0;
+#endif
+    if (joint != NULL) {
         Vec3 pos;
-        lb_8000B1CC(it->xDD4_itemVar.mato.x0, NULL, &pos);
+        lb_8000B1CC(joint, NULL, &pos);
         it->pos = pos;
     }
 }
