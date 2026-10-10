@@ -1939,6 +1939,60 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
     if (buttons & GC_BTN_R) pad->analogR = 255;
 }
 
+/* An SDL stick pair onto a GameCube stick, the way Slippi Dolphin does it for
+ * a calibrated pad: the round gate of a modern stick stretched onto the GC's
+ * octagon, full deflection on a vertex reaching gate * 127 (Dolphin's
+ * GCPadEmu MAIN_STICK_GATE_RADIUS 0.7937 -- 101 -- and C_STICK_GATE_RADIUS
+ * 0.7221). The game clamps to radius 80, so a full cardinal is reached at 79%
+ * of the throw, as on a GC controller.
+ *
+ * This used to be axis >> 8: full deflection at 127, the game's 80 reached at
+ * 63% of the throw, and everything from a walk to a dash to a crouch crammed
+ * into the first half of the stick.
+ *
+ * A modern stick rests a few percent off centre and jitters there; the radial
+ * dead zone (MELEE_STICK_DEADZONE, a fraction of full deflection, default
+ * 0.10) is taken out of the range rather than cut from it, so just past it
+ * still reads as just past zero. */
+static void pc_pad_map_stick(int ax, int ay, double gate, s8* x, s8* y)
+{
+    static double dead = -1.0;
+    const double half_int = 3.0 * M_PI / 8.0; /* half an octagon's interior angle */
+    double fx, fy, mag, a, r;
+
+    if (dead < 0.0) {
+        const char* e = getenv("MELEE_STICK_DEADZONE");
+        dead = 0.10;
+        if (e != NULL) {
+            dead = atof(e);
+            if (dead < 0.0) dead = 0.0;
+            if (dead > 0.9) dead = 0.9;
+        }
+    }
+    /* SDL has up negative, the GameCube up positive. */
+    fx = ax / 32767.0;
+    fy = -ay / 32767.0;
+    mag = sqrt(fx * fx + fy * fy);
+    if (mag <= dead) {
+        *x = *y = 0;
+        return;
+    }
+    a = atan2(fy, fx);
+    mag = (mag - dead) / (1.0 - dead);
+    if (mag > 1.0) {
+        mag = 1.0;
+    }
+    /* The octagon's radius at this angle (Dolphin's OctagonStickGate), vertices
+     * on the cardinals and diagonals. */
+    r = fmod(a + 2.0 * M_PI, M_PI / 4.0);
+    r = gate * 127.0 * sin(half_int) / sin(M_PI - r - half_int);
+    *x = (s8) lround(cos(a) * mag * r);
+    *y = (s8) lround(sin(a) * mag * r);
+}
+
+#define PC_MAIN_STICK_GATE 0.7937125
+#define PC_C_STICK_GATE 0.7221375
+
 /* Read an SDL2 game controller (a device SDL has a button map for) into GC
  * pad format. GameCube layout: A attack, B special, X/Y jump, L/R the
  * analog shields, Z grab, Start pause. Modern pads have two shoulder
@@ -1963,18 +2017,14 @@ static void poll_controller(void* ctl, GCPadStatus* pad)
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) buttons |= GC_BTN_DPAD_L;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) buttons |= GC_BTN_DPAD_R;
 
-    /* Axes are [-32768, 32767]; the GameCube stick is an s8 with up
-     * positive. Dolphin maps a full deflection to the same 127, and the
-     * game's own clamp (HSD_PadClamp, radius 80) brings both down to what a
-     * real stick delivers -- see pc_pad_clamp_stick below. */
+    /* Axes are [-32768, 32767]; see pc_pad_map_stick. */
     sx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX);
     sy = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY);
     csx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX);
     csy = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY);
-    pad->stickX = (s8) (sx >> 8);
-    pad->stickY = (s8) (-(sy + 1) >> 8);
-    pad->subStickX = (s8) (csx >> 8);
-    pad->subStickY = (s8) (-(csy + 1) >> 8);
+    pc_pad_map_stick(sx, sy, PC_MAIN_STICK_GATE, &pad->stickX, &pad->stickY);
+    pc_pad_map_stick(csx, csy, PC_C_STICK_GATE, &pad->subStickX,
+                     &pad->subStickY);
 
     /* Triggers rest at 0 and read 32767 fully pressed. The console's L/R
      * digital bit is the click at the end of the travel. */
@@ -2064,11 +2114,9 @@ static int pc_pad_open(int i)
 
 /* The console's stick clamp, HSD_PadClampCheck3 with the values gmmain.c
  * sets (type 0, radius 80, no dead zone): the vector is scaled onto the
- * circle of radius 80 when it is outside it. A GameCube stick never
- * reports past that; an SDL axis reaches 127 on a cardinal and (127,127)
- * on a diagonal, and every stick-driven thing in the game -- the
- * character-select hand, the stage-select ring, dash and smash thresholds
- * -- ran up to twice as fast or read a diagonal as 1.6 of full. */
+ * circle of radius 80 when it is outside it. A GameCube stick reports up to
+ * about 100 on a cardinal, as pc_pad_map_stick does, and the clamp is what
+ * brings it to the game's 1.0. */
 static void pc_pad_clamp_stick(s8* x, s8* y)
 {
     const float max = 80.0f;
@@ -2106,16 +2154,13 @@ static void poll_joystick(void* joy, GCPadStatus* pad)
     /* Main stick (axes 0-1, range [-32768, 32767]) */
     int sx = SDL_JoystickGetAxis(joy, 0);
     int sy = SDL_JoystickGetAxis(joy, 1);
-    /* SDL reports up as negative; the GameCube stick reports up as
-     * positive. Without the flip, pushing down read as an up-tap (jump). */
-    pad->stickX = (s8)(sx >> 8);   /* Divide by 256 to get s8 range */
-    pad->stickY = (s8)(-(sy + 1) >> 8);
-    
+    pc_pad_map_stick(sx, sy, PC_MAIN_STICK_GATE, &pad->stickX, &pad->stickY);
+
     /* C-stick (axes 3-4) */
     int csx = SDL_JoystickGetAxis(joy, 3);
     int csy = SDL_JoystickGetAxis(joy, 4);
-    pad->subStickX = (s8)(csx >> 8);
-    pad->subStickY = (s8)(-(csy + 1) >> 8);
+    pc_pad_map_stick(csx, csy, PC_C_STICK_GATE, &pad->subStickX,
+                     &pad->subStickY);
     
     /* Analog triggers (axes 2, 5): SDL rests at -32768 and reads 32767
      * fully pressed; the old shift alone reported a resting trigger as
