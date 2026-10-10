@@ -6721,10 +6721,10 @@ static void pc_stage_textures(void);
 /* The current viewport's horizontal squeeze: 1 / the widescreen stretch when
  * GXSetViewport stretched it, else 1. */
 static f32 g_vp_squeeze = 1.0f;
-/* This draw is exempt: a 2D quad over the whole 4:3 frame -- a fade, the
- * title screen's veil, a menu backdrop -- is stretched with the viewport
- * instead, or it would end in two edges a third of the way in from the
- * sides of the screen. */
+/* This draw is exempt: something cut to the 4:3 frame -- a fade, a stage's
+ * sky plane (pc_draw_fills_frame) -- is stretched with the viewport instead,
+ * or it would end in two edges a fifth of the way in from the sides of the
+ * screen. */
 static int g_draw_unsqueeze;
 static u32 g_proj_type;
 static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
@@ -7186,15 +7186,27 @@ static void pc_stage_textures(void)
  * tracking stays exactly as it was, and nothing reaches the GPU. */
 int pc_gx_discard;
 
-/* Does this orthographic draw cover the whole frame (see g_draw_unsqueeze)? */
+/* Is this draw cut to the 4:3 frame (see g_draw_unsqueeze)? Two kinds are:
+ *
+ *   - a 2D draw over the whole frame: a fade, a veil;
+ *   - a draw whose left and right edges are the frame's own, give or take a
+ *     few percent: a stage's sky or backdrop plane hung in front of the
+ *     camera and sized to the 4:3 view (Onett, Kongo Jungle, Big Blue).
+ *     Narrowed, it ends in an edge in mid-air.
+ *
+ * A backdrop that reaches past the frame (Yoshi's Story's) is neither and is
+ * narrowed like the rest, so the extra width shows more of it. Only small
+ * draws are measured -- these are a quad or a strip of a few -- so the
+ * check stays off the cost of the hundreds of model draws a frame. */
 static int pc_draw_fills_frame(void)
 {
     f32 (*m)[4];
     f32 (*P)[4] = g_state.proj_matrix;
     f32 x0 = 1e30f, x1 = -1e30f, y0 = 1e30f, y1 = -1e30f;
+    int persp = g_proj_type == 0; /* GX_PERSPECTIVE */
     u32 i;
-    if (g_vp_squeeze == 1.0f || g_proj_type == 0 /* GX_PERSPECTIVE */ ||
-        g_state.vert_count < 3 || g_batch_pretransformed)
+    if (g_vp_squeeze == 1.0f || g_state.vert_count < 3 ||
+        g_state.vert_count > 16 || g_batch_pretransformed)
     {
         return 0;
     }
@@ -7208,12 +7220,21 @@ static int pc_draw_fills_frame(void)
         f32 vz = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3];
         f32 cx = P[0][0] * vx + P[0][1] * vy + P[0][2] * vz + P[0][3];
         f32 cy = P[1][0] * vx + P[1][1] * vy + P[1][2] * vz + P[1][3];
+        if (persp) {
+            f32 w = -vz; /* the w row GXSetProjection fills in */
+            if (w <= 1e-6f) return 0;
+            cx /= w;
+            cy /= w;
+        }
         if (cx < x0) x0 = cx;
         if (cx > x1) x1 = cx;
         if (cy < y0) y0 = cy;
         if (cy > y1) y1 = cy;
     }
-    return x0 <= -0.98f && x1 >= 0.98f && y0 <= -0.98f && y1 >= 0.98f;
+    if (!persp && x0 <= -0.98f && x1 >= 0.98f && y0 <= -0.98f && y1 >= 0.98f) {
+        return 1;
+    }
+    return x0 <= -0.97f && x0 >= -1.03f && x1 >= 0.97f && x1 <= 1.03f;
 }
 
 static void bridge_upload_and_draw(void)
