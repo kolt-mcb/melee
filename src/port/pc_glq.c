@@ -461,7 +461,12 @@ static void q_fence_poll(int block)
     int i;
     for (i = 0; i < q_npolled; i++) {
         QFence* f = q_polled[i];
-        GLenum r = (glClientWaitSync)(f->real, GL_SYNC_FLUSH_COMMANDS_BIT,
+        /* Only the blocking wait flushes. The mid-queue poll (every 64
+         * commands) asked for a flush too, and on a tiler a flush is a kick:
+         * the PowerVR tablet's render thread spent 8% of its time here and
+         * the GPU took its frame in pieces. The fence's own commands reach
+         * the GPU with the frame anyway -- the swap flushes. */
+        GLenum r = (glClientWaitSync)(f->real, block ? GL_SYNC_FLUSH_COMMANDS_BIT : 0,
                                       (block && i == 0) ? 1000000ull : 0);
         if (r == GL_ALREADY_SIGNALED || r == GL_CONDITION_SATISFIED || r == GL_WAIT_FAILED) {
             atomic_store_explicit(&f->state, 2, memory_order_release);

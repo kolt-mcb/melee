@@ -9474,7 +9474,7 @@ static void bridge_add_vertex(void)
     /* Track geometry bounds in world space (only for stage geometry, not HUD)
      * HUD overlay uses orthographic projection with tiny coordinates.
      * Stage geometry uses perspective projection with large coordinates. */
-    if (g_state.pos_enabled && g_state.view_matrix_valid) {
+    if (g_state.pos_enabled && g_state.view_matrix_valid && ENV_FLAG("MELEE_BOUNDS")) {
         f32* p = v->pos;
         /* Only track vertices that are likely stage geometry (large coords) */
         f32 mag = p[0]*p[0] + p[1]*p[1] + p[2]*p[2];
@@ -10489,7 +10489,10 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     const int mid_track = g_state.va_mode[0] != 0;
     const int pos_en = g_state.pos_enabled != 0, nrm_en = g_state.nrm_enabled != 0;
     const int clr_en = g_state.clr_enabled != 0, t0_en = g_state.tex0_enabled != 0;
-    const int t1_en = g_state.tex1_enabled != 0, view_ok = g_state.view_matrix_valid != 0;
+    /* The geometry bounds feed one log line every 600 frames (camera tuning,
+     * MELEE_BOUNDS=1); tracking them was a compare-and-branch run per vertex. */
+    const int t1_en = g_state.tex1_enabled != 0,
+              view_ok = g_state.view_matrix_valid != 0 && ENV_FLAG("MELEE_BOUNDS");
     f32 lpos[3], lnrm[3], lclr[4], lt0[2], lt1[2], bmin[3], bmax[3];
     GXColor cc = g_state.cur_color;
     u32 lmid = g_state.last_mtx_idx, bcount = g_state.bounds_count, vc = g_state.vert_count;
@@ -10507,6 +10510,9 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     memcpy(lt1, g_state.last_tex1, sizeof(lt1));
     memcpy(bmin, g_state.bounds_min, sizeof(bmin));
     memcpy(bmax, g_state.bounds_max, sizeof(bmax));
+    f32 ccf[4];
+    u32 ccf_key = 0;
+    int ccf_ok = 0;
     pc_diag_replay_verts += n;
     if (skin) pc_diag_replay_skinned += n;
     pc_stat_vadds += n;
@@ -10624,8 +10630,16 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
             v->col[0] = lclr[0]; v->col[1] = lclr[1];
             v->col[2] = lclr[2]; v->col[3] = lclr[3];
         } else {
-            v->col[0] = cc.r / 255.0f; v->col[1] = cc.g / 255.0f;
-            v->col[2] = cc.b / 255.0f; v->col[3] = cc.a / 255.0f;
+            /* Four divides a vertex on an in-order core, for a colour that
+             * changes a few times a list: converted when it changes. */
+            if (ccf_key != ((u32) cc.r | ((u32) cc.g << 8) | ((u32) cc.b << 16) | ((u32) cc.a << 24)) || !ccf_ok) {
+                ccf_key = (u32) cc.r | ((u32) cc.g << 8) | ((u32) cc.b << 16) | ((u32) cc.a << 24);
+                ccf_ok = 1;
+                ccf[0] = cc.r / 255.0f; ccf[1] = cc.g / 255.0f;
+                ccf[2] = cc.b / 255.0f; ccf[3] = cc.a / 255.0f;
+            }
+            v->col[0] = ccf[0]; v->col[1] = ccf[1];
+            v->col[2] = ccf[2]; v->col[3] = ccf[3];
         }
         if (t0_en) { v->tex0[0] = lt0[0]; v->tex0[1] = lt0[1]; }
         if (t1_en) { v->tex1[0] = lt1[0]; v->tex1[1] = lt1[1]; }

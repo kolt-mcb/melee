@@ -448,7 +448,9 @@ else:
 CFLAGS = PROF_FLAGS + " " + "-include " + str(PORT_SRC / "pc_prelude.h") + " " + ARCH_FLAGS + " -Wno-unused -Wno-builtin-declaration-mismatch -Wno-scalar-storage-order -fno-builtin-sinf -fno-builtin-cosf -fno-builtin-sqrtf -fno-builtin-sqrt -fno-builtin-atanf -fno-builtin-atan2f -fno-builtin-asinf -fno-builtin-acosf -std=gnu11 -ffp-contract=off -fexcess-precision=standard -fno-common -fshort-wchar -funsigned-char -fmerge-all-constants " + OPT + " -g" + SAN_FLAGS + " " + inc + " -D_GNU_SOURCE -DBUILD_TARGET_PC=1 -DSDL_MAIN_HANDLED -DHAS_Naked=1" + (" -DMELEE_TEX_DUMP_BUILD" if TEXDUMP else "") + (" -DBUILD_SLIPPI=1" if SLIPPI else "") + (" -DBUILD_NETPLAY=1 -I" + str(PORT_SRC / "netplay" / "enet" / "include") if NETPLAY else "") + (" -DPC_SCRIPT_INPLACE=1" if SCRIPT_INPLACE else "")
 if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
-    LDFLAGS = "-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
+    # The getenv cache (src/port/pc_getenv.c) stands in front of libc's.
+    LDFLAGS = ("-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
+               " -Wl,--wrap=getenv,--wrap=setenv,--wrap=unsetenv,--wrap=putenv")
     LIBS = ("-L" + str(_sdl_build) + " -lSDL2"
             " -L" + str(_jpeg_build) + " -ljpeg"
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")

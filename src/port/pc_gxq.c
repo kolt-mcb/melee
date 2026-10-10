@@ -48,7 +48,11 @@ static void q_parse_sync_fns(void)
         }
     }
 }
+#if defined(__ANDROID__) && defined(__aarch64__)
+void* pc_gxq_bridge_tp;
+#else
 __thread int pc_gxq_bridge_tls;
+#endif
 
 typedef struct { void (*fn)(void*); unsigned size; unsigned heap; } QHdr;
 #define Q_CAP ((size_t) 16 << 20)
@@ -252,7 +256,11 @@ static void* q_main(void* arg)
 {
     size_t tail = 0;
     (void) arg;
+#if defined(__ANDROID__) && defined(__aarch64__)
+    pc_gxq_bridge_tp = __builtin_thread_pointer();
+#else
     pc_gxq_bridge_tls = 1;
+#endif
     {
         extern void pc_glq_set_producer(void);
         pc_glq_set_producer(); /* from here on only this thread records GL */

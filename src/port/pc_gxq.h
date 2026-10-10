@@ -11,8 +11,20 @@ extern int pc_gxq_sync_all; /* MELEE_GXQ_SYNC_ALL: a diagnostic */
 /* MELEE_GXQ_SYNC_FNS=a,b,c: those wrappers synchronous (a bisection aid). */
 extern unsigned char pc_gxq_fn_sync_tab[256];
 static inline int pc_gxq_fn_sync(int i) { return pc_gxq_fn_sync_tab[i]; }
+#if defined(__ANDROID__) && defined(__aarch64__)
+/* The bridge thread's thread pointer (TPIDR_EL0), set as it starts. Every GX
+ * wrapper asks this, thousands of times a frame; an extern __thread in a
+ * shared library is a dynamic-TLS lookup through a resolver call each time
+ * (2.8% of the tablet's game thread), the register read is one instruction. */
+extern void* pc_gxq_bridge_tp;
+static inline int pc_gxq_on_bridge_thread(void)
+{
+    return __builtin_thread_pointer() == pc_gxq_bridge_tp;
+}
+#else
 extern __thread int pc_gxq_bridge_tls;
 static inline int pc_gxq_on_bridge_thread(void) { return pc_gxq_bridge_tls; }
+#endif
 
 void* pc_gxq_push(void (*fn)(void*), size_t bytes);
 void pc_gxq_commit(void);
