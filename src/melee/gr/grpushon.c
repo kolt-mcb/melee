@@ -26,6 +26,7 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define PO_FMA(a, b, c) fmaf((a), (b), (c))
+#include "port/pc_ptr.h"
 #else
 #define PO_FMA(a, b, c) ((a) * (b) + (c))
 #endif
@@ -124,9 +125,52 @@ StageData grPushOn_StageData = {
 
 void grPushOn_802182C4(bool arg) {}
 
+#if BUILD_TARGET_PC
+/* The block is raw big-endian archive data in the console's layout, and its
+ * five DynamicsDesc pointers move every later field on a 64-bit host, so
+ * Ground_GetYakumonoParam leaves it alone. Read as-is, the per-character
+ * time table at 0x10C was never matched: grPushOn_80219230 asserted and fell
+ * off its end, and the race's time limit was whatever the return register
+ * held -- 0 on x86 ("Time!" before the race began), something else on ARM.
+ * Rebuild it here. The DynamicsDesc pointers stay NULL: they only feed
+ * grPushOn_80219458, which may return NULL anyway. */
+static struct grPushon_YakumonoParam* pc_pushon_param(const u8* raw)
+{
+    static struct grPushon_YakumonoParam out;
+    static const u8* done;
+    int i;
+    if (raw == NULL || !pc_mem_readable(raw, 0x214)) {
+        return (struct grPushon_YakumonoParam*) raw;
+    }
+    if (raw == done) {
+        return &out;
+    }
+    memset(&out, 0, sizeof(out));
+    out.x0 = (s32) __builtin_bswap32(*(const u32*) (raw + 0x00));
+    out.x18 = (bool) __builtin_bswap32(*(const u32*) (raw + 0x18));
+    for (i = 0; i < 0x1E; i++) {
+        const u8* e = raw + 0x1C + 8 * i;
+        out.x1c[i].x0 = (s32) __builtin_bswap32(*(const u32*) e);
+        out.x1c[i].x4 = (s16) __builtin_bswap16(*(const u16*) (e + 4));
+        out.x1c[i].x6 = (s16) __builtin_bswap16(*(const u16*) (e + 6));
+    }
+    for (i = 0; i < 0x21; i++) {
+        const u8* e = raw + 0x10C + 8 * i;
+        out.x10c[i].key = (s32) __builtin_bswap32(*(const u32*) e);
+        out.x10c[i].value = (s32) __builtin_bswap32(*(const u32*) (e + 4));
+    }
+    done = raw;
+    return &out;
+}
+#endif
+
 void grPushOn_802182C8(void)
 {
+#if BUILD_TARGET_PC
+    yakumono_param = pc_pushon_param(Ground_GetYakumonoParam());
+#else
     yakumono_param = Ground_GetYakumonoParam();
+#endif
     stage_info.unk8C.b4 = false;
     stage_info.unk8C.b5 = true;
     grPushOn_802183E4(0);

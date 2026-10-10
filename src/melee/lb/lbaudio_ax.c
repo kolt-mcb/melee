@@ -1617,6 +1617,21 @@ static void fn_800269AC(void)
 
     PAD_STACK(8);
 
+#if BUILD_TARGET_PC
+    {
+        /* A file request completes at once here; only its callback waits for
+         * the next AX tick (synth.c). Counted as pending, such a load was
+         * "cancelled" below -- too late, it already holds its bank space --
+         * and its slot reset, so it loaded again: nr_1p three times per
+         * Classic stage, each completion then re-requesting the slot still
+         * in flight (dk.ssm three times). Bank 2 filled with duplicates
+         * until the ending's sounds overflowed it, and unloading that bank
+         * on the way back to the menu walked a corrupted list. Deliver the
+         * completions first; then only a real pending load is cancelled. */
+        extern void pc_synth_run_deferred(void);
+        pc_synth_run_deferred();
+    }
+#endif
     if (HSD_SynthSFXGetPendingLoadCount() != 0) {
         for (i = 0; i < 55; i++) {
             if (s32_arr_803BB5D0[i][1] != 5 && lbl_80433A64[i] != -1 &&
@@ -1652,6 +1667,16 @@ static void fn_80026C04(int arg0, int unused)
     int i;
     int slot;
 
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_AXTRACE")) {
+        int k;
+        fprintf(stderr, "[LBA] done arg0=%d; slots holding it:", arg0);
+        for (k = 0; k < 55; k++) {
+            if (lbl_80433A64[k] == arg0) fprintf(stderr, " %d(st=%d)", k, lbl_80433984[k]);
+        }
+        fprintf(stderr, "\n");
+    }
+#endif
     if (arg0 != -1) {
         for (i = 0; i < 55; i++) {
             if (arg0 == lbl_80433A64[i]) {
