@@ -14,6 +14,16 @@ void ftCo_800C884C(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     fp->x203C.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);
+#if BUILD_TARGET_PC
+    /* Zero it, as ftParts_80074E58 does dobj_list: ft_800C85B8 fills only
+     * the entries this model has, and ftParts_80074D7C walks the costume's
+     * visibility table through the rest. A recycled block held a stale 0x1
+     * there -- harmless as a console store to low memory, a crash here
+     * (HSD_DObjSetFlags, Team Kirby's respawns in Classic). */
+    if (fp->x203C.data != NULL) {
+        memset(fp->x203C.data, 0, (0x80 / 4) * sizeof(fp->x203C.data[0]));
+    }
+#endif
     ftPartsPObjSetDefaultClass();
     ft_800C85B8(gobj);
     ftPartsPObjClearDefaultClass();
