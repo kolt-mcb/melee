@@ -15168,6 +15168,18 @@ static int tex_map_find(const void* img, u16 w, u16 h, u8 fmt)
     return -1;
 }
 static u32 g_tex_free_hint;
+/* Slots are never freed, only evicted, so once a session has seen 1024
+ * textures every new one evicts. Eviction used to take the slot with the
+ * fewest hits ever: the menus' and earlier stages' textures, with hit counts
+ * in the hundreds of thousands, could never leave, and the stage being played
+ * evicted its own textures from the handful of low-count slots, decoding and
+ * uploading them again frame after frame. Each stage played made it worse --
+ * a Classic run fell from 600 to 60 fps headless by the fourth match. Evict
+ * the least recently used slot instead: a stamp from a counter bumped on every
+ * use, the fast path in GXLoadTexObj included. */
+static u32 g_tex_tick;
+static u32 g_tex_last_use[MAX_TEXTURES];
+static u32 g_tex_slots_used;
 
 static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
 {
@@ -15175,14 +15187,17 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
         int f = tex_map_find(img, w, h, fmt);
         if (f >= 0) {
             g_state.tex_cache_hits[f]++;
+            g_tex_last_use[f] = ++g_tex_tick;
             return (u32) f;
         }
     }
     /* Find empty slot, starting where the last search ended. */
-    for (u32 n = 0; n < MAX_TEXTURES; n++) {
+    for (u32 n = 0; g_tex_slots_used < MAX_TEXTURES && n < MAX_TEXTURES; n++) {
         u32 i = (g_tex_free_hint + n) % MAX_TEXTURES;
         if (!g_state.tex_cache_valid[i]) {
             g_tex_free_hint = i + 1;
+            g_tex_slots_used++;
+            g_tex_last_use[i] = ++g_tex_tick;
             g_state.tex_cache[i] = 0;
             g_state.tex_cache_valid[i] = TRUE;
             g_state.tex_cache_img[i] = img;
@@ -15206,7 +15221,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
     }
     for (u32 i = best + 1; i < MAX_TEXTURES; i++) {
         if (!g_tex_slot_foreign[i] &&
-            g_state.tex_cache_hits[i] < g_state.tex_cache_hits[best])
+            g_tex_tick - g_tex_last_use[i] > g_tex_tick - g_tex_last_use[best])
             best = i;
     }
     tex_map_remove(best);
@@ -15217,6 +15232,7 @@ static GLuint tex_get_slot(const void* img, u16 w, u16 h, u8 fmt)
     g_state.tex_cache_h[best] = h;
     g_state.tex_cache_fmt[best] = fmt;
     g_state.tex_cache_hits[best] = 0;
+    g_tex_last_use[best] = ++g_tex_tick;
     g_tex_slot_params[best] = ~(u64) 0;
     tex_map_insert(best);
     /* An evicted slot keeps its GL texture object but gets new image data, so
@@ -15268,6 +15284,7 @@ void GXLoadTexObj(void* texObj, u32 texEnv)
             g_bound_tex[unit] == g_state.tex_cache[sl]) {
             g_tx_calls++;
             g_tx_hit++;
+            g_tex_last_use[sl] = ++g_tex_tick;
             return;
         }
     }
