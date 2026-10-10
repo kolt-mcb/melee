@@ -95,11 +95,23 @@ void ftMaterial_800BF2B8(HSD_MObj* mobj, u32 rendermode)
     }
 
     if (!fp->x2223_b2 && (!fp->x2228_b0 || !fp->x2224_b0)) {
+#if BUILD_TARGET_PC
+        /* Both shared materials come from PlCo's joint (ftCo_800C8064,
+         * ftCo_800C8F6C) and are NULL when that joint brings no DObj -- as
+         * it did in a second Classic of one session, crashing Race to the
+         * Finish. Draw with the fighter's own material instead. */
+        if (fp->is_metal) {
+            if (ft_804D6580 != NULL) mobj = ft_804D6580;
+        } else if (fp->x2227_b3) {
+            if (ft_804D6588 != NULL) mobj = ft_804D6588;
+        }
+#else
         if (fp->is_metal) {
             mobj = ft_804D6580;
         } else if (fp->x2227_b3) {
             mobj = ft_804D6588;
         }
+#endif
     }
 
     HSD_StateInitTev();

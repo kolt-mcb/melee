@@ -192,6 +192,32 @@ static inline void ft_800852B0_Reset_ft_8045993C(ftData** list, int i)
 #endif
 }
 
+#if BUILD_TARGET_PC
+/* Forget every cached costume model. The cache is a global table the
+ * console clears in ft_800852B0, which only scenes with fighters call; the
+ * converted joint trees it points to do not outlive the scene that built
+ * them. Classic's intro makes its demo fighters without that init, so a
+ * second Classic in one session found a slot still set from the first,
+ * took it as loaded (it was readable, the memory having been reused), and
+ * built a fighter from whatever now lived there. Called at every scene
+ * start (gm_801A4BD4); a cleared slot is simply loaded again. */
+void pc_ftdata_forget_costumes(void)
+{
+    extern char etext;
+    int i, c;
+    for (i = 0; i < Ft_Kind_Max; ++i) {
+        UnkCostumeStruct* costumes = CostumeListsForeachCharacter[i].costume_list;
+        if (costumes == NULL || (uintptr_t) costumes <= (uintptr_t) &etext) {
+            continue;
+        }
+        for (c = 0; c < (s32) CostumeListsForeachCharacter[i].numCostumes; ++c) {
+            costumes[c].joint = NULL;
+            costumes[c].pad_x8 = NULL;
+        }
+    }
+}
+#endif
+
 void ft_800852B0(void)
 {
     ftData** list;

@@ -237,12 +237,15 @@ void gm_801A4BD4(void)
          * shadow, and those two dead shadows stayed on the list: every stage
          * after it multiplied its floors by two shadow textures that were
          * never rendered again -- all zeros -- and drew them black. The
-         * converted animations of the dropped fighters are released for the
-         * same reason (pc_figatree_buf). */
+         * converted animations of the dropped fighters are released, and the
+         * cached costume models forgotten, for the same reason
+         * (pc_figatree_buf, pc_ftdata_forget_costumes). */
         extern void HSD_MObjDeleteShadowTexture(HSD_TObj* tobj);
         extern void pc_figatree_release(const void* lo, unsigned long len);
+        extern void pc_ftdata_forget_costumes(void);
         HSD_MObjDeleteShadowTexture(NULL);
         pc_figatree_release(NULL, ~0UL);
+        pc_ftdata_forget_costumes();
     }
 #endif
     HSD_GObjSetInitDefaults(&gobj_init_data);
