@@ -913,6 +913,9 @@ static GLuint g_vao = 0;
 static GLuint g_shader_program = 0;
 static GLint g_proj_loc = -1;
 static GLint g_mvp_loc = -1;
+static GLint g_skin_loc = -1;    /* u_skin */
+static GLint g_pnmtx_loc = -1;   /* u_pnmtx[30] */
+static GLint g_nrmmtx_loc = -1;  /* u_nrmmtx[30] */
 static GLint g_uv_scale_loc = -1;
 /* Four generated texture coordinates and four samplers (PC_TEXN). GX has
  * eight of each; HSD numbers projection coords before UV coords, so a
@@ -1093,7 +1096,14 @@ static const char* g_vert_src =
 "layout(location = 2) in vec4 a_col;\n"
 "layout(location = 3) in vec2 a_uv0;\n"
 "layout(location = 4) in vec2 a_uv1;\n"
+"layout(location = 5) in float a_mid;  // matrix palette slot (GPU-resident display lists)\n"
 "uniform mat4 u_proj;\n"
+"// Matrix palette: PNMTX0..9 (GX matrix IDs 0, 3, .., 27) as three rows each,\n"
+"// and their normal matrices. u_skin 1 transforms position and normal by the\n"
+"// vertex's slot, 2 the position only (the CPU path's normals), 0 neither.\n"
+"uniform vec4 u_pnmtx[30];\n"
+"uniform vec4 u_nrmmtx[30];\n"
+"uniform int u_skin;\n"
 "uniform mat4 u_mvp;\n"
 "uniform mat4 u_model;\n"
 "uniform vec2 u_uv_scale;\n"
@@ -1149,7 +1159,15 @@ static const char* g_vert_src =
 "out vec4 v_lit_color;            // Per-vertex channel-0 lit color\n"
 "out vec4 v_lit_color1;           // Per-vertex channel-1 lit color (specular)\n"
 "void main() {\n"
-"    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
+"    vec3 sk_pos = a_pos, sk_nrm = a_nrm;\n"
+"    if (u_skin != 0) {\n"
+"        int m = int(a_mid + 0.5) * 3;\n"
+"        vec4 p4 = vec4(a_pos, 1.0);\n"
+"        sk_pos = vec3(dot(u_pnmtx[m], p4), dot(u_pnmtx[m + 1], p4), dot(u_pnmtx[m + 2], p4));\n"
+"        if (u_skin == 1)\n"
+"            sk_nrm = vec3(dot(u_nrmmtx[m].xyz, a_nrm), dot(u_nrmmtx[m + 1].xyz, a_nrm), dot(u_nrmmtx[m + 2].xyz, a_nrm));\n"
+"    }\n"
+"    gl_Position = u_mvp * vec4(sk_pos, 1.0);\n"
 "    v_col = a_col;\n"
 "    vec2 in0 = a_uv0 * u_uv_scale;\n"
 "    vec2 in1 = a_uv1 * u_uv_scale;\n"
@@ -1167,7 +1185,7 @@ static const char* g_vert_src =
 "#ifdef TEXGEN_LEGACY\n"
 "    vec3 tg_pos = vec3(0.0), tg_nrm = vec3(0.0);\n"
 "#else\n"
-"    vec3 tg_pos = a_pos, tg_nrm = a_nrm;\n"
+"    vec3 tg_pos = sk_pos, tg_nrm = sk_nrm;\n"
 "#endif\n"
 "    for (int i = 0; i < 4; i++) {\n"
 "        int mode = u_texgen_mode[i];\n"
@@ -1190,8 +1208,8 @@ static const char* g_vert_src =
 "        v_uv[i] = vec3(uv, proj ? q : 1.0);\n"
 "    }\n"
 "    // World-space position and normal\n"
-"    v_world_pos = (u_model * vec4(a_pos, 1.0)).xyz;\n"
-"    v_nrm = normalize(mat3(u_model) * a_nrm);\n"
+"    v_world_pos = (u_model * vec4(sk_pos, 1.0)).xyz;\n"
+"    v_nrm = normalize(mat3(u_model) * sk_nrm);\n"
 "    // Compute per-vertex diffuse lighting (GCN-style)\n"
 "    vec3 N = normalize(v_nrm);\n"
 "    vec3 diffuse_sum = vec3(0.0);\n"
@@ -3427,6 +3445,9 @@ typedef struct { GLint* var; const char* name; int count; int spec; GLint base; 
 static UniEntry g_uni_tab[] = {
     { &g_proj_loc, "u_proj", 1, 0, -1 },
     { &g_mvp_loc, "u_mvp", 1, 0, -1 },
+    { &g_skin_loc, "u_skin", 1, 0, -1 },
+    { &g_pnmtx_loc, "u_pnmtx", 30, 0, -1 },
+    { &g_nrmmtx_loc, "u_nrmmtx", 30, 0, -1 },
     { &g_uv_scale_loc, "u_uv_scale", 1, 0, -1 },
     { &g_texmtx_loc, "u_texmtx", PC_TEXN, 0, -1 },
     { &g_texmtx_enable_loc, "u_texmtx_enable", PC_TEXN, 1, -1 },
@@ -6727,6 +6748,15 @@ static f32 g_vp_squeeze = 1.0f;
  * screen. */
 static int g_draw_unsqueeze;
 static u32 g_proj_type;
+/* The display list being drawn from GPU memory (dl_gpu_draw), and its u_skin:
+ * 0 none, 1 position and normal, 2 position only. Read by the draw path and
+ * the uniform staging; NULL / 0 for every other draw. */
+struct DlEntry;
+static struct DlEntry* g_gpu_entry;
+static int g_gpu_skin;
+static int g_gpu_slot_min, g_gpu_slot_max;
+static void dl_gpu_emit(void);
+static int dl_gpu_fills_frame(void);
 static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
 {
     memset(mvp, 0, sizeof(f32) * 16);
@@ -6735,6 +6765,22 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
      * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
     if (g_proj_loc >= 0) {
         UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+    }
+    /* The matrix palette, for a display list skinned on the GPU: the same
+     * PNMTX rows (and normal matrices, or PNMTX where none was loaded) the
+     * CPU path reads per vertex. Only the slots the list uses. */
+    if (g_skin_loc >= 0) {
+        UP1I(g_skin_loc, g_gpu_skin);
+    }
+    if (g_gpu_skin && g_pnmtx_loc >= 0 && g_nrmmtx_loc >= 0) {
+        int k;
+        for (k = g_gpu_slot_min; k <= g_gpu_slot_max; k++) {
+            const f32 (*m)[4] = (const f32 (*)[4]) g_state.mtx_array[k * 3];
+            const f32 (*nm)[4] = g_nrm_mtx_valid[k * 3]
+                                     ? (const f32 (*)[4]) g_nrm_mtx_array[k * 3] : m;
+            UP4FV(g_pnmtx_loc + k * 3, 3, &m[0][0]);
+            UP4FV(g_nrmmtx_loc + k * 3, 3, &nm[0][0]);
+        }
     }
     
     /* Compute MVP = proj * modelview (all row-major, transpose at upload) */
@@ -7205,6 +7251,7 @@ static int pc_draw_fills_frame(void)
     f32 x0 = 1e30f, x1 = -1e30f, y0 = 1e30f, y1 = -1e30f;
     int persp = g_proj_type == 0; /* GX_PERSPECTIVE */
     u32 i;
+    if (g_gpu_entry != NULL) return dl_gpu_fills_frame();
     if (g_vp_squeeze == 1.0f || g_state.vert_count < 3 ||
         g_state.vert_count > 16 || g_batch_pretransformed)
     {
@@ -7373,7 +7420,10 @@ static void bridge_upload_and_draw(void)
         glGetError();
     }
     
-    u16 count = g_state.vert_count;
+    /* A display list drawn from GPU memory has no vertices here; one stands
+     * in for the count checks, and nothing below reads them before the draw
+     * is handed to dl_gpu_emit. */
+    u16 count = g_gpu_entry != NULL ? 1 : g_state.vert_count;
     if (count == 0) return;
     { static int _n=0; if(ENV_FLAG("MELEE_ZTRACE") && _n<30){_n++;
         fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
@@ -7426,7 +7476,8 @@ static void bridge_upload_and_draw(void)
      *
      * This is the difference between applying the state 4718 times a frame on
      * Venom and applying it 629 times, once per list. */
-    if ((g_batch_dl_depth > 0 || pc_xdl_on()) && g_batch_n > 0 &&
+    if (g_gpu_entry == NULL &&
+        (g_batch_dl_depth > 0 || pc_xdl_on()) && g_batch_n > 0 &&
         g_state.prim_type != GX_QUADS &&
         g_batch_pretransformed == g_batch_pre_state &&
         (pc_gl_prim_of(g_state.prim_type) == g_batch_mode ||
@@ -7459,7 +7510,7 @@ static void bridge_upload_and_draw(void)
     g_batch_gen_uni = g_gen_uni;
 #endif
     pc_sec_begin();
-    g_vbo_first = pc_vbo_first_for(g_state.verts, count);
+    if (g_gpu_entry == NULL) g_vbo_first = pc_vbo_first_for(g_state.verts, count);
     pc_sec_end(0);
 
     /* PC diag: read back the VBO's first vertex to confirm the GPU has the
@@ -7598,6 +7649,14 @@ static void bridge_upload_and_draw(void)
         g_stage_check = 0;
     }
     
+    if (g_gpu_entry != NULL) {
+        /* State applied and uniforms staged like any draw; the vertices are
+         * already on the GPU. */
+        dl_gpu_emit();
+        g_state.vert_count = 0;
+        g_batch_pretransformed = 0;
+        return;
+    }
     /* Determine GL primitive type */
     GLenum gl_prim;
     switch (g_state.prim_type) {
@@ -10183,6 +10242,17 @@ typedef struct DlEntry {
     DlVert* verts;
     u32 last_frame;
     struct DlEntry* next;
+    /* The GPU-resident copy (dl_gpu_draw): built in arena generation
+     * gpu_gen, at base vertex gpu_vbase, gpu_icount u16 indices at byte
+     * gpu_ioff of the index arena. gpu_state 0 unbuilt, 1 built, 2 not
+     * eligible (lines or points, a matrix index the palette cannot hold,
+     * attributes that differ between vertices). */
+    u32 gpu_gen;
+    u8 gpu_state;
+    u8 gpu_absent;            /* not carried: 1 normal, 2 colour, 4 tex0, 8 tex1 */
+    u8 gpu_slot_min, gpu_slot_max;
+    s32 gpu_vbase;
+    u32 gpu_ioff, gpu_icount;
 } DlEntry;
 #define DL_MAP_N 4096
 #define DL_CACHE_CAP (96u << 20)
@@ -10732,6 +10802,441 @@ static void dl_replay(const DlEntry* e)
     }
 }
 
+/* ------------------------------------------------------------------
+ * GPU-resident display lists.
+ *
+ * The decode cache above made a display list's vertices cheap to produce,
+ * but they were still produced every frame: each replay copied every vertex
+ * into the accumulator, transformed the skinned ones on the CPU (a skinned
+ * vertex picks its PNMTX by its own matrix index), and streamed them to the
+ * GPU again. In a four-player match that is ~42,000 vertices a frame, 28,000
+ * of them skinned -- 13 ms of the tablet's GX thread, the stage that set the
+ * frame rate.
+ *
+ * Here a cached list is copied once into a GPU arena -- model-space
+ * position and normal, texture coordinates, colour, the vertex's palette
+ * slot -- with its primitives turned into one u16 triangle list, and each
+ * replay is a single indexed draw. A skinned list uploads the PNMTX rows
+ * and normal matrices it indexes (u_pnmtx / u_nrmmtx) and the vertex shader
+ * does the transform the CPU did. Everything around the draw -- blend,
+ * depth, cull, scissor, uniforms, program, the uniform block -- goes through
+ * bridge_upload_and_draw like any draw, so nothing else can tell.
+ *
+ * Normals: the CPU path's skinned vertices kept their model-space normal (it
+ * transformed the previous vertex's, which the next GXNormal overwrote); the
+ * hardware transforms each vertex's own normal by the normal matrix at its
+ * index, and so does this (u_skin 1). MELEE_GPU_SKIN_RAWNRM=1 keeps the CPU
+ * path's normals, for an exact comparison against it.
+ *
+ * Not eligible, and replayed on the CPU as before: lists with lines or
+ * points, a matrix index the palette cannot hold (one that is not one of
+ * the ten PNMTX slots), vertices that do not all carry the same attributes.
+ * MELEE_GPU_DL=0 turns the whole path off.
+ *
+ * On the PowerVR tablet the CPU work a frame fell by a quarter and the frame
+ * rate hardly moved: that frame is bound by the driver now -- ~18 us a draw
+ * call, and shader variants compiled through the match -- so only lists big
+ * enough to be worth a draw of their own come here (MELEE_GPU_DL_MIN).
+ * ------------------------------------------------------------------ */
+typedef struct {
+    f32 pos[3];
+    f32 nrm[3];
+    f32 t0[2];
+    f32 t1[2];
+    u8 col[4];
+    f32 slot;
+} SVert;
+#define SV_ARENA_BYTES ((GLsizeiptr) 24 << 20) /* half a million vertices */
+#define SI_ARENA_BYTES ((GLsizeiptr) 8 << 20)
+static GLuint g_sv_buf, g_si_buf, g_svao[16];
+static unsigned char *g_sv_map, *g_si_map;
+static GLsizeiptr g_sv_top, g_si_top;
+static u32 g_sv_gen = 1;
+static int g_sv_ok = -1; /* -1 not tried, 0 unavailable, 1 ready */
+u32 pc_diag_gpu_dl_draws, pc_diag_gpu_dl_builds;
+
+static int pc_gpu_dl_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* e = getenv("MELEE_GPU_DL");
+        on = e == NULL || atoi(e) != 0;
+        fprintf(stderr, "[GPUDL] display lists %s (MELEE_GPU_DL)\n",
+                on ? "drawn from GPU memory" : "replayed on the CPU");
+    }
+    return on;
+}
+
+static void dl_gpu_arena_init(void)
+{
+    const GLbitfield f = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT_EXT | GL_MAP_COHERENT_BIT_EXT;
+    /* Persistently mapped where the ring is (ES with EXT_buffer_storage):
+     * a glBufferSubData into a buffer the GPU is reading can make a tiler's
+     * driver copy the whole buffer first. Elsewhere, or if the driver will
+     * not map them, sub-data uploads. Created through GL_ARRAY_BUFFER, the
+     * target the ring's storage is made through: the PowerVR driver would
+     * not map a GL_COPY_WRITE_BUFFER one. */
+    int persist = window_gl_es() && pc_gl_buffer_storage != NULL &&
+                  pc_gl_has_ext("GL_EXT_buffer_storage") &&
+                  getenv("MELEE_GPU_DL_SUBDATA") == NULL;
+    GLuint b[2];
+    int i;
+    g_sv_ok = 0;
+    glGenBuffers(2, b);
+    for (i = 0; i < 2; i++) {
+        GLsizeiptr cap = i == 0 ? SV_ARENA_BYTES : SI_ARENA_BYTES;
+        unsigned char* map = NULL;
+        gls_bind_vbo(b[i]);
+        if (persist) {
+            pc_gl_buffer_storage(GL_ARRAY_BUFFER, cap, NULL, f);
+            map = (unsigned char*) glMapBufferRange(GL_ARRAY_BUFFER, 0, cap, f);
+            if (map == NULL) {
+                /* Immutable storage cannot be re-specified: start over with
+                 * plain buffers. */
+                gls_bind_vbo(g_vbo);
+                glDeleteBuffers(2, b);
+                glGenBuffers(2, b);
+                fprintf(stderr, "[GPUDL] arena mapping failed; using sub-data uploads\n");
+                persist = 0;
+                g_sv_map = g_si_map = NULL;
+                i = -1;
+                continue;
+            }
+        } else {
+            glBufferData(GL_ARRAY_BUFFER, cap, NULL, GL_STATIC_DRAW);
+        }
+        if (i == 0) g_sv_map = map; else g_si_map = map;
+    }
+    gls_bind_vbo(g_vbo);
+    g_sv_buf = b[0];
+    g_si_buf = b[1];
+    g_sv_ok = 1;
+    fprintf(stderr, "[GPUDL] arenas %ld + %ld KB (%s)\n", (long) (SV_ARENA_BYTES >> 10),
+            (long) (SI_ARENA_BYTES >> 10), persist ? "persistent" : "sub-data");
+}
+
+/* One vertex array per set of attributes a list leaves out; those take the
+ * constant the CPU path would have written (dl_gpu_emit). */
+static GLuint dl_gpu_vao(int absent)
+{
+    GLuint v = g_svao[absent];
+    if (v != 0) return v;
+    glGenVertexArrays(1, &v);
+    gls_bind_vao(v);
+    gls_bind_vbo(g_sv_buf);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, pos));
+    if (!(absent & 1)) {
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, nrm));
+    }
+    if (!(absent & 2)) {
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, col));
+    }
+    if (!(absent & 4)) {
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, t0));
+    }
+    if (!(absent & 8)) {
+        glEnableVertexAttribArray(4);
+        glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, t1));
+    }
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(SVert), (void*) (uintptr_t) offsetof(SVert, slot));
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_si_buf);
+    gls_bind_vbo(g_vbo);
+    g_svao[absent] = v;
+    return v;
+}
+
+static void dl_gpu_upload(GLuint buf, unsigned char* map, GLsizeiptr off, const void* src, GLsizeiptr bytes)
+{
+    if (map != NULL) {
+        memcpy(map + off, src, (size_t) bytes);
+    } else {
+        gls_bind_vbo(buf);
+        glBufferSubData(GL_ARRAY_BUFFER, off, bytes, src);
+        gls_bind_vbo(g_vbo);
+    }
+}
+
+/* Copy a decoded list into the arenas. 0 if it is not eligible. */
+static int dl_gpu_build(DlEntry* e)
+{
+    const int has_mid = g_state.va_mode[0] != 0;
+    u32 i, k, n = e->nverts, ni = 0;
+    u8 flags;
+    int smin = 9, smax = 0;
+    SVert* sv;
+    u16* ix;
+    GLsizeiptr vbytes, ibytes;
+    if (n == 0 || n > 65535 || e->nprims == 0) return 0;
+    flags = e->verts[0].flags;
+    if (!(flags & DLV_POS)) return 0;
+    for (i = 0; i < e->nprims; i++) {
+        const DlPrim* dp = &e->prims[i];
+        switch (dp->gcn_prim) {
+        case GX_QUADS:         ni += dp->nverts / 4 * 6; break;
+        case GX_TRIANGLES:     ni += dp->nverts / 3 * 3; break;
+        case GX_TRIANGLESTRIP:
+        case GX_TRIANGLEFAN:   if (dp->nverts >= 3) ni += (dp->nverts - 2) * 3; break;
+        default:               return 0;
+        }
+    }
+    if (ni == 0) return 0;
+    for (i = 0; i < n; i++) {
+        const DlVert* d = &e->verts[i];
+        if (d->flags != flags) return 0;
+        if (has_mid) {
+            int sl;
+            if (d->mid >= 28 || d->mid % 3 != 0) return 0;
+            sl = d->mid / 3;
+            if (sl < smin) smin = sl;
+            if (sl > smax) smax = sl;
+        }
+    }
+    if (!has_mid) smin = smax = 0;
+    vbytes = (GLsizeiptr) n * (GLsizeiptr) sizeof(SVert);
+    ibytes = ((GLsizeiptr) ni * 2 + 3) & ~(GLsizeiptr) 3;
+    if (vbytes > SV_ARENA_BYTES / 4 || ibytes > SI_ARENA_BYTES / 4) return 0;
+    if (g_sv_top + vbytes > SV_ARENA_BYTES || g_si_top + ibytes > SI_ARENA_BYTES) {
+        /* Full: a new generation, and every list is copied again the next
+         * time it is drawn. The old contents may still be on their way to
+         * the GPU, so let it finish first; this happens after a great many
+         * different stages and characters, not in a match. */
+        glFinish();
+        g_sv_top = g_si_top = 0;
+        g_sv_gen++;
+        fprintf(stderr, "[GPUDL] arenas full; generation %u\n", (unsigned) g_sv_gen);
+    }
+    sv = (SVert*) malloc((size_t) vbytes);
+    ix = (u16*) malloc((size_t) ibytes);
+    if (sv == NULL || ix == NULL) { free(sv); free(ix); return 0; }
+    for (i = 0; i < n; i++) {
+        const DlVert* d = &e->verts[i];
+        SVert* o = &sv[i];
+        memcpy(o->pos, d->pos, sizeof(o->pos));
+        if (flags & DLV_NRM) memcpy(o->nrm, d->nrm, sizeof(o->nrm));
+        else { o->nrm[0] = 0.0f; o->nrm[1] = 0.0f; o->nrm[2] = 1.0f; }
+        memcpy(o->t0, d->t0, sizeof(o->t0));
+        memcpy(o->t1, d->t1, sizeof(o->t1));
+        memcpy(o->col, d->col, sizeof(o->col));
+        o->slot = has_mid ? (f32) (d->mid / 3) : 0.0f;
+    }
+    k = 0;
+    for (i = 0; i < e->nprims; i++) {
+        const DlPrim* dp = &e->prims[i];
+        u32 f = dp->first, c = dp->nverts, j;
+        switch (dp->gcn_prim) {
+        case GX_QUADS: /* each (a,b,c,d) as (a,b,c),(a,c,d), as the draw path does */
+            for (j = 0; j + 3 < c; j += 4) {
+                ix[k++] = (u16) (f + j); ix[k++] = (u16) (f + j + 1); ix[k++] = (u16) (f + j + 2);
+                ix[k++] = (u16) (f + j); ix[k++] = (u16) (f + j + 2); ix[k++] = (u16) (f + j + 3);
+            }
+            break;
+        case GX_TRIANGLES:
+            for (j = 0; j + 2 < c; j += 3) {
+                ix[k++] = (u16) (f + j); ix[k++] = (u16) (f + j + 1); ix[k++] = (u16) (f + j + 2);
+            }
+            break;
+        case GX_TRIANGLESTRIP: /* GL's strip order: odd triangles swap their first two */
+            for (j = 0; j + 2 < c; j++) {
+                if (j & 1) { ix[k++] = (u16) (f + j + 1); ix[k++] = (u16) (f + j); }
+                else       { ix[k++] = (u16) (f + j);     ix[k++] = (u16) (f + j + 1); }
+                ix[k++] = (u16) (f + j + 2);
+            }
+            break;
+        case GX_TRIANGLEFAN:
+            for (j = 1; j + 1 < c; j++) {
+                ix[k++] = (u16) f; ix[k++] = (u16) (f + j); ix[k++] = (u16) (f + j + 1);
+            }
+            break;
+        }
+    }
+    dl_gpu_upload(g_sv_buf, g_sv_map, g_sv_top, sv, vbytes);
+    dl_gpu_upload(g_si_buf, g_si_map, g_si_top, ix, (GLsizeiptr) k * 2);
+    free(sv);
+    free(ix);
+    e->gpu_vbase = (s32) (g_sv_top / (GLsizeiptr) sizeof(SVert));
+    e->gpu_ioff = (u32) g_si_top;
+    e->gpu_icount = k;
+    e->gpu_absent = (u8) (((flags & DLV_NRM) ? 0 : 1) | ((flags & DLV_CLR) ? 0 : 2) |
+                          ((flags & DLV_T0) ? 0 : 4) | ((flags & DLV_T1) ? 0 : 8));
+    e->gpu_slot_min = (u8) smin;
+    e->gpu_slot_max = (u8) smax;
+    e->gpu_gen = g_sv_gen;
+    e->gpu_state = 1;
+    g_sv_top += vbytes;
+    g_si_top += ibytes;
+    pc_diag_gpu_dl_builds++;
+    return 1;
+}
+
+/* A constant attribute, skipped when it already holds the value: a call into
+ * the driver per list was two thousand a frame. Nothing else in the bridge
+ * sets generic attribute values, so the record stays true. */
+static void dl_gpu_attrib(GLuint loc, f32 x, f32 y, f32 z, f32 w)
+{
+    static f32 cur[5][4];
+    static u8 known[5];
+    if (known[loc] && cur[loc][0] == x && cur[loc][1] == y && cur[loc][2] == z && cur[loc][3] == w) return;
+    cur[loc][0] = x; cur[loc][1] = y; cur[loc][2] = z; cur[loc][3] = w;
+    known[loc] = 1;
+    glVertexAttrib4f(loc, x, y, z, w);
+}
+
+/* The draw itself, from bridge_upload_and_draw once the state is applied
+ * and the uniforms staged. */
+static void dl_gpu_emit(void)
+{
+    const DlEntry* e = (const DlEntry*) g_gpu_entry;
+    const int absent = e->gpu_absent;
+    pc_prog_flush();
+    pc_vbo_ring_reserve(g_ubo_reserve());
+    pc_ubo_commit();
+    gls_bind_vao(dl_gpu_vao(absent));
+    /* What the CPU path writes for an attribute the list does not carry:
+     * GXBegin's (0,0,1) normal, the current colour, the last coordinates. */
+    if (absent & 1) dl_gpu_attrib(1, g_state.last_nrm[0], g_state.last_nrm[1], g_state.last_nrm[2], 1.0f);
+    if (absent & 2) dl_gpu_attrib(2, g_state.cur_color.r / 255.0f, g_state.cur_color.g / 255.0f,
+                                  g_state.cur_color.b / 255.0f, g_state.cur_color.a / 255.0f);
+    if (absent & 4) dl_gpu_attrib(3, g_state.last_tex0[0], g_state.last_tex0[1], 0.0f, 1.0f);
+    if (absent & 8) dl_gpu_attrib(4, g_state.last_tex1[0], g_state.last_tex1[1], 0.0f, 1.0f);
+    pc_gl_crumb_draw();
+    glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) e->gpu_icount, GL_UNSIGNED_SHORT,
+                             (const void*) (uintptr_t) e->gpu_ioff, e->gpu_vbase);
+    pc_gl_crumb_after();
+    pc_diag_draws++;
+    pc_diag_draw_calls++;
+    pc_diag_gpu_dl_draws++;
+    pc_stat_draws++;
+    pc_stat_verts += e->nverts;
+}
+
+/* pc_draw_fills_frame for a list drawn from the arena: the same test on its
+ * model-space positions. */
+static int dl_gpu_fills_frame(void)
+{
+    const DlEntry* e = (const DlEntry*) g_gpu_entry;
+    f32 (*m)[4];
+    f32 (*P)[4] = g_state.proj_matrix;
+    f32 x0 = 1e30f, x1 = -1e30f, y0 = 1e30f, y1 = -1e30f;
+    int persp = g_proj_type == 0;
+    u32 i;
+    if (g_vp_squeeze == 1.0f || g_gpu_skin || e->nverts < 3 || e->nverts > 16) return 0;
+    m = g_state.mtx3d_active
+            ? g_state.mtx_array[g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0]
+            : g_state.mv_matrix;
+    for (i = 0; i < e->nverts; i++) {
+        const f32* v = e->verts[i].pos;
+        f32 vx = m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2] + m[0][3];
+        f32 vy = m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2] + m[1][3];
+        f32 vz = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3];
+        f32 cx = P[0][0] * vx + P[0][1] * vy + P[0][2] * vz + P[0][3];
+        f32 cy = P[1][0] * vx + P[1][1] * vy + P[1][2] * vz + P[1][3];
+        if (persp) {
+            f32 w = -vz;
+            if (w <= 1e-6f) return 0;
+            cx /= w;
+            cy /= w;
+        }
+        if (cx < x0) x0 = cx;
+        if (cx > x1) x1 = cx;
+        if (cy < y0) y0 = cy;
+        if (cy > y1) y1 = cy;
+    }
+    if (!persp && x0 <= -0.98f && x1 >= 0.98f && y0 <= -0.98f && y1 >= 0.98f) return 1;
+    return x0 <= -0.97f && x0 >= -1.03f && x1 >= 0.97f && x1 <= 1.03f;
+}
+
+/* Draw a cached list from GPU memory. 0 when it has to be replayed on the
+ * CPU instead (not eligible, or the arenas are unavailable). */
+static int dl_gpu_draw(DlEntry* e)
+{
+    const DlVert* last;
+    const DlPrim* lp;
+    int skin;
+    if (e->gpu_state == 2 || !pc_gpu_dl_on()) return 0;
+    /* A small list is cheaper replayed: the CPU path merges consecutive
+     * lists into one draw -- skinned ones too, their vertices already in
+     * view space -- while every list drawn from the arena is a draw call of
+     * its own, with its own palette, and on the PowerVR tablet a draw call
+     * is ~18 us of driver time, the cost of transforming ~60 vertices.
+     * MELEE_GPU_DL_MIN sets the vertex count from which a list goes to the
+     * GPU. */
+    {
+        static int min_verts = -1;
+        if (min_verts < 0) {
+            const char* m = getenv("MELEE_GPU_DL_MIN");
+            /* 100: measured on the tablet (4 CPUs, Pokemon Stadium) against
+             * 0, 300 and the CPU path -- 47.0 fps against 44.9, 46.1 and
+             * 45.9, with a quarter less CPU work a frame than the CPU path. */
+            min_verts = m != NULL ? atoi(m) : 100;
+            if (min_verts < 0) min_verts = 0;
+        }
+        if ((int) e->nverts < min_verts) return 0;
+    }
+    if (!g_state.pos_enabled || g_state.va_mode[9] == 0) return 0;
+    if (g_sv_ok < 0) dl_gpu_arena_init();
+    if (g_sv_ok != 1) return 0;
+    if (e->gpu_state != 1 || e->gpu_gen != g_sv_gen) {
+        if (!dl_gpu_build(e)) {
+            e->gpu_state = 2;
+            return 0;
+        }
+    }
+    skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
+    /* Vertices still pending from direct GX calls are drawn first, as the
+     * CPU path's GXBegin would. */
+    if (g_state.vert_count > 0) bridge_upload_and_draw();
+    /* GXBegin: a format with no normal starts from (0,0,1). */
+    if (!g_state.nrm_enabled) {
+        g_state.last_nrm[0] = 0.0f;
+        g_state.last_nrm[1] = 0.0f;
+        g_state.last_nrm[2] = 1.0f;
+    }
+    {
+        static int sk = -1;
+        if (sk < 0) sk = getenv("MELEE_GPU_SKIN_RAWNRM") != NULL ? 2 : 1;
+        g_gpu_skin = skin ? sk : 0;
+    }
+    g_gpu_entry = e;
+    g_gpu_slot_min = e->gpu_slot_min;
+    g_gpu_slot_max = e->gpu_slot_max;
+    g_batch_pretransformed = skin; /* the position matrix is in the palette */
+    g_state.prim_type = GX_TRIANGLES;
+    g_gen_mtx++;                   /* u_skin and the palette differ from the last draw */
+    bridge_upload_and_draw();
+    g_gpu_entry = NULL;
+    g_gpu_skin = 0;
+    g_batch_pretransformed = 0;
+    g_gen_mtx++;
+    /* The state the replay would have left: the last primitive's format and
+     * type, and the last vertex's attributes. */
+    lp = &e->prims[e->nprims - 1];
+    last = &e->verts[e->nverts - 1];
+    if (lp->vat < 8) {
+        if (g_vf_tex0_set[lp->vat]) { g_state.tex0_comp_type = g_vf_tex0_type[lp->vat]; g_state.tex0_frac = g_vf_tex0_frac[lp->vat]; }
+        if (g_vf_pos_set[lp->vat]) { g_state.pos_comp_type = g_vf_pos_type[lp->vat]; g_state.pos_frac = g_vf_pos_frac[lp->vat]; }
+    }
+    g_state.prim_type = lp->gcn_prim;
+    g_state.batch_vtxfmt = lp->vat;
+    g_state.in_primitive = FALSE;
+    memcpy(g_state.last_pos, last->pos, sizeof(last->pos));
+    if (g_state.va_mode[0] != 0) g_state.last_mtx_idx = last->mid;
+    if (last->flags & DLV_NRM) memcpy(g_state.last_nrm, last->nrm, sizeof(last->nrm));
+    if (last->flags & DLV_CLR) {
+        g_state.cur_color.r = last->col[0]; g_state.cur_color.g = last->col[1];
+        g_state.cur_color.b = last->col[2]; g_state.cur_color.a = last->col[3];
+        g_state.last_clr[0] = last->col[0] / 255.0f; g_state.last_clr[1] = last->col[1] / 255.0f;
+        g_state.last_clr[2] = last->col[2] / 255.0f; g_state.last_clr[3] = last->col[3] / 255.0f;
+    }
+    if (last->flags & DLV_T0) { g_state.last_tex0[0] = last->t0[0]; g_state.last_tex0[1] = last->t0[1]; }
+    if (last->flags & DLV_T1) { g_state.last_tex1[0] = last->t1[0]; g_state.last_tex1[1] = last->t1[1]; }
+    return 1;
+}
+
 void GXCallDisplayList(void* list, u32 nbytes)
 {
 #if BUILD_TARGET_PC
@@ -10873,7 +11378,7 @@ void GXCallDisplayList(void* list, u32 nbytes)
         if (e != NULL) {
             e->last_frame = g_state.frame_count;
             n_draws += (int) e->nprims;
-            dl_replay(e);
+            if (!dl_gpu_draw(e)) dl_replay(e);
             goto dl_end;
         }
     }

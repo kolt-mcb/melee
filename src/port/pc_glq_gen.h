@@ -1920,6 +1920,29 @@ static inline void pcq_glUseProgram(GLuint program)
 }
 #define glUseProgram(...) PCQ_V("glUseProgram", pcq_glUseProgram(__VA_ARGS__))
 
+typedef struct { GLuint index; GLfloat x; GLfloat y; GLfloat z; GLfloat w; } pcq_a_glVertexAttrib4f;
+static void pcq_x_glVertexAttrib4f(void* p_) { pcq_a_glVertexAttrib4f* a_ = (pcq_a_glVertexAttrib4f*) p_; (glVertexAttrib4f)(a_->index, a_->x, a_->y, a_->z, a_->w); }
+static inline void pcq_glVertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w)
+{
+    pcq_a_glVertexAttrib4f* a_ = NULL;
+    if (!pc_glq_active) (glVertexAttrib4f)(index, x, y, z, w); else {
+        if (pc_glq_sync_all) { pcq_a_glVertexAttrib4f b_; b_.index = index; b_.x = x; b_.y = y; b_.z = z; b_.w = w; pc_glq_call_sync(pcq_x_glVertexAttrib4f, &b_); } else {
+        size_t o_ = sizeof(pcq_a_glVertexAttrib4f);
+        char* q_ = (char*) pc_glq_push(pcq_x_glVertexAttrib4f, pc_glq_pad(sizeof(pcq_a_glVertexAttrib4f)) + 0);
+        a_ = (pcq_a_glVertexAttrib4f*) q_;
+        o_ = pc_glq_pad(o_);
+        a_->index = index;
+        a_->x = x;
+        a_->y = y;
+        a_->z = z;
+        a_->w = w;
+        pc_glq_commit();
+        }
+    }
+    (void) a_;
+}
+#define glVertexAttrib4f(...) PCQ_V("glVertexAttrib4f", pcq_glVertexAttrib4f(__VA_ARGS__))
+
 typedef struct { GLuint index; GLint size; GLenum type; GLboolean normalized; GLsizei stride; const void * pointer; } pcq_a_glVertexAttribPointer;
 static void pcq_x_glVertexAttribPointer(void* p_) { pcq_a_glVertexAttribPointer* a_ = (pcq_a_glVertexAttribPointer*) p_; (glVertexAttribPointer)(a_->index, a_->size, a_->type, a_->normalized, a_->stride, a_->pointer); }
 static inline void pcq_glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void * pointer)
