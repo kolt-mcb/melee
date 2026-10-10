@@ -811,14 +811,18 @@ void Ground_801C0754(StageIdPair* pair)
         extern void pc_shc_prepare_match(int stkind);
         extern int pc_stkind_for_grkind(int grkind);
         int m = (int) gm_GetCurrentGameMode();
-        /* Classic's matches arrive with no stage kind, so every one of them
-         * was prepared -- and its keys filed -- as stage 0, the versus
-         * splash. That bucket grew to thousands of keys, all loaded on
-         * entering Classic: 116 s on the PowerVR tablet. Name the stage
-         * from its ground instead; the splash stays 0. */
-        int sk = (int) pair->stkind;
-        if (sk <= 0) {
-            sk = pc_stkind_for_grkind((int) pair->grkind);
+        /* Classic's matches arrive with no stage kind (0, or a stale one),
+         * so every one of them was prepared -- and its keys filed -- as
+         * stage 0, the versus splash. That bucket grew to thousands of keys,
+         * all loaded on entering Classic: 116 s on the PowerVR tablet. Name
+         * the stage from its ground instead; the splash stays 0. */
+        int sk = pc_stkind_for_grkind((int) pair->grkind);
+        /* Prefer the pair's own kind when it names this ground (stages that
+         * share one keep their identity); Classic's is 0 or stale. */
+        if ((int) pair->stkind > 0 && (int) pair->stkind < 35 &&
+            (int) Stage_8022519C(pair->stkind) == (int) pair->grkind)
+        {
+            sk = (int) pair->stkind;
         }
         if (m != 0 /* title */ && m != 1 /* menu */ && m != 0x18 /* opening */) {
             pc_shc_prepare_match(sk);
