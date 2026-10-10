@@ -10995,50 +10995,60 @@ static int pc_gpu_dl_on(void)
     return on;
 }
 
-static void dl_gpu_arena_init(void)
+/* Runs where the context is: on the render thread when the GL queue is on
+ * (pc_glq_call_sync), so its GL calls are the real ones -- pc_gl_buffer_storage
+ * is a bare function pointer, and called from the GX thread it had no context
+ * and the mapping always failed. */
+static void dl_gpu_arena_init_gl(void* arg)
 {
     const GLbitfield f = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT_EXT | GL_MAP_COHERENT_BIT_EXT;
-    /* Persistently mapped where the ring is (ES with EXT_buffer_storage):
-     * a glBufferSubData into a buffer the GPU is reading can make a tiler's
-     * driver copy the whole buffer first. Elsewhere, or if the driver will
-     * not map them, sub-data uploads. Created through GL_ARRAY_BUFFER, the
-     * target the ring's storage is made through: the PowerVR driver would
-     * not map a GL_COPY_WRITE_BUFFER one. */
-    int persist = window_gl_es() && pc_gl_buffer_storage != NULL &&
-                  pc_gl_has_ext("GL_EXT_buffer_storage") &&
-                  getenv("MELEE_GPU_DL_SUBDATA") == NULL;
+    int persist = *(int*) arg;
+    GLint prev = 0;
     GLuint b[2];
     int i;
-    g_sv_ok = 0;
-    glGenBuffers(2, b);
+    (glGetIntegerv)(GL_ARRAY_BUFFER_BINDING, &prev);
+    (glGenBuffers)(2, b);
     for (i = 0; i < 2; i++) {
         GLsizeiptr cap = i == 0 ? SV_ARENA_BYTES : SI_ARENA_BYTES;
         unsigned char* map = NULL;
-        gls_bind_vbo(b[i]);
+        (glBindBuffer)(GL_ARRAY_BUFFER, b[i]);
         if (persist) {
             pc_gl_buffer_storage(GL_ARRAY_BUFFER, cap, NULL, f);
-            map = (unsigned char*) glMapBufferRange(GL_ARRAY_BUFFER, 0, cap, f);
+            map = (unsigned char*) (glMapBufferRange)(GL_ARRAY_BUFFER, 0, cap, f);
             if (map == NULL) {
                 /* Immutable storage cannot be re-specified: start over with
                  * plain buffers. */
-                gls_bind_vbo(g_vbo);
-                glDeleteBuffers(2, b);
-                glGenBuffers(2, b);
-                fprintf(stderr, "[GPUDL] arena mapping failed; using sub-data uploads\n");
+                (glBindBuffer)(GL_ARRAY_BUFFER, (GLuint) prev);
+                (glDeleteBuffers)(2, b);
+                (glGenBuffers)(2, b);
                 persist = 0;
                 g_sv_map = g_si_map = NULL;
                 i = -1;
                 continue;
             }
         } else {
-            glBufferData(GL_ARRAY_BUFFER, cap, NULL, GL_STATIC_DRAW);
+            (glBufferData)(GL_ARRAY_BUFFER, cap, NULL, GL_STATIC_DRAW);
         }
         if (i == 0) g_sv_map = map; else g_si_map = map;
     }
-    gls_bind_vbo(g_vbo);
+    (glBindBuffer)(GL_ARRAY_BUFFER, (GLuint) prev);
     g_sv_buf = b[0];
     g_si_buf = b[1];
-    g_sv_ok = 1;
+    *(int*) arg = persist;
+}
+
+static void dl_gpu_arena_init(void)
+{
+    /* Persistently mapped where the ring is (ES with EXT_buffer_storage):
+     * a glBufferSubData into a buffer the GPU is reading can make a tiler's
+     * driver copy the whole buffer first. Elsewhere, or if the driver will
+     * not map them, sub-data uploads. */
+    int persist = window_gl_es() && pc_gl_buffer_storage != NULL &&
+                  pc_gl_has_ext("GL_EXT_buffer_storage") &&
+                  getenv("MELEE_GPU_DL_SUBDATA") == NULL;
+    if (pc_glq_active) pc_glq_call_sync(dl_gpu_arena_init_gl, &persist);
+    else dl_gpu_arena_init_gl(&persist);
+    g_sv_ok = g_sv_buf != 0 && g_si_buf != 0;
     fprintf(stderr, "[GPUDL] arenas %ld + %ld KB (%s)\n", (long) (SV_ARENA_BYTES >> 10),
             (long) (SI_ARENA_BYTES >> 10), persist ? "persistent" : "sub-data");
 }
