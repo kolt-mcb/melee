@@ -227,6 +227,24 @@ void gm_801A4BD4(void)
     gm_801A4B50(0);
 
     lb_80019880(OSSecondsToTicks(1.0F / GM_FPS));
+#if BUILD_TARGET_PC
+    {
+        /* Every object of the scene that just ended is dropped below without
+         * its destructor running, as on the console. There the heap reset
+         * that goes with it also wipes HSD's class state, including the
+         * material layer's list of shadow textures (MObjAmnesia); here
+         * nothing did. Classic's intro shows two demo fighters, each with a
+         * shadow, and those two dead shadows stayed on the list: every stage
+         * after it multiplied its floors by two shadow textures that were
+         * never rendered again -- all zeros -- and drew them black. The
+         * converted animations of the dropped fighters are released for the
+         * same reason (pc_figatree_buf). */
+        extern void HSD_MObjDeleteShadowTexture(HSD_TObj* tobj);
+        extern void pc_figatree_release(const void* lo, unsigned long len);
+        HSD_MObjDeleteShadowTexture(NULL);
+        pc_figatree_release(NULL, ~0UL);
+    }
+#endif
     HSD_GObjSetInitDefaults(&gobj_init_data);
     gobj_init_data.gproc_pri_max = 0x18;
     HSD_SObjLib_804D7960 =
