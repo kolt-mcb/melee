@@ -36,7 +36,16 @@ void ftBossLib_8015BD20(HSD_GObj* gobj)
 void ftBossLib_8015BD24(s32 arg0, float* arg1, float arg2, s32 arg3, s32 arg4,
                         s32 arg5)
 {
+#if BUILD_TARGET_PC
+    /* arg0 is the boss's CPU level, which is 0 in Classic on Very Easy. The
+     * console's divw by zero does not trap: it leaves 0 for a non-negative
+     * dividend and -1 for a negative one (as Dolphin models it). x86's idiv
+     * raises SIGFPE -- Master Hand's first idle crashed the game. */
+    s32 q = arg0 != 0 ? arg3 / arg0 : (arg3 < 0 ? -1 : 0);
+    *arg1 = (q + HSD_Randi(arg4 - arg5) + arg5) / arg2;
+#else
     *arg1 = ((arg3 / arg0) + HSD_Randi(arg4 - arg5) + arg5) / arg2;
+#endif
 }
 
 void ftBossLib_ReportGObjSlotType(HSD_GObj* gobj)

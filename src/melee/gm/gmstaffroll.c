@@ -34,6 +34,9 @@
 #include <sysdolphin/baselib/random.h>
 #include <sysdolphin/baselib/sislib.h>
 #include <sysdolphin/baselib/wobj.h>
+#if BUILD_TARGET_PC
+#include "port/pc_scene.h"
+#endif
 
 struct staffInfo_t {
     char pad_0[0x948];
@@ -58,6 +61,20 @@ typedef struct {
 } SortBufEntry;
 
 /* 4D67FC */ static SortBufEntry* staffInfoSortBuf;
+
+#if BUILD_TARGET_PC
+/* The two buffers are allocated by their console byte sizes, which hold 198
+ * staffInfo entries of 12 bytes and 199 sort entries of 60. Their pointers
+ * make both entries wider here (24 and 72 bytes), so the console sizes held
+ * about half of them and the credits wrote far past both allocations. Size
+ * them by entry count. */
+#define PC_STAFFINFO_SIZE (sizeof(struct staffInfo_t) / 12 * sizeof(*staffInfo))
+#define PC_STAFFSORT_SIZE                                                     \
+    (sizeof(struct staffInfoSortBuf_t) / 0x3C * sizeof(SortBufEntry))
+#else
+#define PC_STAFFINFO_SIZE sizeof(struct staffInfo_t)
+#define PC_STAFFSORT_SIZE sizeof(struct staffInfoSortBuf_t)
+#endif
 /* 4D6800 */ static int gm_804D6800;
 
 struct gm_804D6804_t {
@@ -1211,8 +1228,8 @@ void gm_Scene_StaffRoll_OnEnter(void* unused)
 
     efLib_Init();
     efAsync_LoadSync(0);
-    staffInfo = HSD_MemAlloc(sizeof(struct staffInfo_t));
-    staffInfoSortBuf = HSD_MemAlloc(sizeof(struct staffInfoSortBuf_t));
+    staffInfo = HSD_MemAlloc(PC_STAFFINFO_SIZE);
+    staffInfoSortBuf = HSD_MemAlloc(PC_STAFFSORT_SIZE);
     HSD_SisLib_803A62A0(0, "SdStRoll.dat", "SIS_StRollData");
     HSD_SisLib_803A611C(0, (HSD_GObj*) -1, 9, 13, 0, 18, 0, 19);
     lbAudioAx_80026F2C(28);
@@ -1221,6 +1238,38 @@ void gm_Scene_StaffRoll_OnEnter(void* unused)
     gm_804D683C = lbArchive_80016DBC(
         "GmStRoll.dat", &gm_804D6840, "ScGamRegStaffroll_scene_data",
         &gm_804D6844, "ScGamRegStaffrollNames_scene_modelset", NULL);
+#if BUILD_TARGET_PC
+    /* Both symbols are raw archive data -- a SceneDesc and a NULL-terminated
+     * array of DynamicModelDesc offsets -- and every pointer in them is a
+     * big-endian 32-bit offset. Nothing converted them, so the credits died
+     * on their first camera, right after Master Hand. */
+    {
+        HSD_Archive* arc = (HSD_Archive*) gm_804D683C;
+        if (arc != NULL && gm_804D6840 != NULL) {
+            gm_804D6840 = pc_conv_SceneDesc(gm_804D6840, arc->data);
+        }
+        /* The names modelset is exactly ten offsets with no terminator --
+         * it is the last thing in the data section -- so it cannot go
+         * through pc_conv_ModelDescArray, which reads to a NULL. */
+        if (arc != NULL && gm_804D6844 != NULL) {
+            static DynamicModelDesc* names[11];
+            int k;
+            for (k = 0; k < 10; k++) {
+                names[k] = pc_conv_ModelDescAt((const u8*) gm_804D6844 + 4 * k,
+                                               arc->data);
+                if (names[k] == NULL) {
+                    break;
+                }
+            }
+            names[k] = NULL;
+            gm_804D6844 = k == 10 ? names : NULL;
+        }
+        if (gm_804D6840 == NULL || gm_804D6844 == NULL) {
+            OSReport("[PORT WARN] staff roll: GmStRoll.dat scene data would "
+                     "not convert\n");
+        }
+    }
+#endif
     {
         gobj = GObj_Create(17, 19, 0);
         cobj = HSD_CObjLoadDesc(gm_804D6840->cameras[0].desc);
@@ -1316,7 +1365,7 @@ void gm_Scene_StaffRoll_OnEnter(void* unused)
         lbAudioAx_80023F28(lbAudioAx_8002305C(gm_801BEFB0(), !-r));
         lbBgFlash_800209F4();
         gm_804D6804.x0 = gm_804D6804.x4 = 0.0F;
-        memzero(staffInfo, sizeof(struct staffInfo_t));
+        memzero(staffInfo, PC_STAFFINFO_SIZE);
         gm_80480D58[0] = 0;
         gm_80480D58[1] = 0;
         gm_80480D58[2] = 0;

@@ -22,6 +22,9 @@
 #include <melee/mp/mplib.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/jobj.h>
+#if BUILD_TARGET_PC
+#include "port/pc_ptr.h"
+#endif
 
 ItemStateTable it_803F9378[] = {
     {
@@ -81,6 +84,21 @@ void itMasterHandLaser_Logic84_EvtUnk(Item_GObj* gobj, Item_GObj* arg1)
 
 void it_802F046C(Item_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    /* Master Hand's damage and grab states pass the laser slots of his
+     * per-motion scratch union unchecked. On the console those words alias
+     * plain ints of the other motions' views; with eight-byte pointers each
+     * slot straddles two of them, and a laser slot read 0x100000047 when he
+     * was hit in Classic -- a crash in the final battle. Touch only a live
+     * item. */
+    if (gobj != NULL &&
+        (!pc_mem_readable(gobj, sizeof(HSD_GObj)) ||
+         ((HSD_GObj*) gobj)->classifier != HSD_GOBJ_CLASS_ITEM ||
+         !pc_mem_readable(((HSD_GObj*) gobj)->user_data, sizeof(Item))))
+    {
+        return;
+    }
+#endif
     if (gobj != NULL) {
         GET_ITEM(gobj)->xDD4_itemVar.masterhandlaser.x0 = true;
     }

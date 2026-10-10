@@ -120,8 +120,17 @@ void gm_Scene_MovieEnd_OnEnter(void* arg0)
     HSD_GObjObject_80390A70(temp_r3_2, HSD_SObjLib_804D7960, NULL);
     GObj_SetupGXLink(temp_r3_2, lbMthp_8001F67C, 0xB, 0);
     temp_r3_3 = lbMthp_8001F624(temp_r3_2, 0x1C0, 0x150);
-    temp_r3_3->x10 = 96.0F;
-    temp_r3_3->x14 = 72.0F;
+#if BUILD_TARGET_PC
+    /* NULL on the desktop build: HSD_SObjLib_803A477C takes any descriptor
+     * below 16 MB for raw archive data, and this one is a static in the
+     * non-PIE image. The PC movie path never draws through the SObj
+     * (lbMthp_8001F67C), so only its placement is lost. */
+    if (temp_r3_3 != NULL)
+#endif
+    {
+        temp_r3_3->x10 = 96.0F;
+        temp_r3_3->x14 = 72.0F;
+    }
     lbAudioAx_80023F28(gm_803DB25C[gm_801BEFB0()]);
     lbAudioAx_80024E50(1);
     filename = gm_803DB1F4[gm_801BEFB0()];

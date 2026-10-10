@@ -51,6 +51,11 @@ ASSERT_SIZE(struct mnGallery_child_userdata, 8);
 
 static void float_order_helper(HSD_SObj* sobj)
 {
+#if BUILD_TARGET_PC
+    if (sobj == NULL) { /* desktop build; see gm_Scene_MovieEnd_OnEnter */
+        return;
+    }
+#endif
     sobj->x10 = 96.0f;
     sobj->x14 = 72.0f;
 }
@@ -144,8 +149,14 @@ static void mnGallery_80258BC4(struct mnGallery_804D6C88_userdata* data)
         HSD_SObj* sobj;
         sobj = lbMthp_8001F624(gobj, 0x280, 0x1E0);
         data->sobj = sobj;
-        sobj->x10 = 0.0f;
-        sobj->x14 = 0.0f;
+#if BUILD_TARGET_PC
+        /* NULL on the desktop build; see gm_Scene_MovieEnd_OnEnter. */
+        if (sobj != NULL)
+#endif
+        {
+            sobj->x10 = 0.0f;
+            sobj->x14 = 0.0f;
+        }
     }
     switch (mode) {
     case 0:

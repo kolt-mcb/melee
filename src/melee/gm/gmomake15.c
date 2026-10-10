@@ -27,8 +27,14 @@ void gm_Scene_Omake15_OnEnter(void* unused)
     HSD_GObjObject_80390A70(gobj, HSD_SObjLib_804D7960, NULL);
     GObj_SetupGXLink(gobj, lbMthp_8001F67C, 0xB, 0);
     temp_r3_2 = lbMthp_8001F624(gobj, 0x1C0, 0x150);
-    temp_r3_2->x10 = 96.0f;
-    temp_r3_2->x14 = 72.0f;
+#if BUILD_TARGET_PC
+    /* NULL on the desktop build; see gm_Scene_MovieEnd_OnEnter. */
+    if (temp_r3_2 != NULL)
+#endif
+    {
+        temp_r3_2->x10 = 96.0f;
+        temp_r3_2->x14 = 72.0f;
+    }
     lbAudioAx_80023F28(0x52);
     lbAudioAx_80024E50(1);
     lbMthp_8001F410("MvOmake15.mth", NULL, 0, 0, 0);

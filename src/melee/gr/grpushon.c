@@ -287,7 +287,14 @@ void grPushOn_802187A8(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     HSD_LObj* lobj;
 
-    gp->u.pushon.gobj = ((HSD_GObj*) HSD_GObjGXLinkHead)->next_gx;
+    /* The console reads the word at 0x10 into the GX link-head array --
+     * lwz r0, 0x10(HSD_GObjGXLinkHead) -- which is head [4] with four-byte
+     * pointers. Spelled as ((HSD_GObj*) HSD_GObjGXLinkHead)->next_gx it is
+     * offset 0x18 on a 64-bit host, head [3]: the wrong object, whose "light
+     * list" held one entry, and grPushOn_80218888 then indexed its sorted
+     * array at [2] -- uninitialised -- and crashed loading Race to the
+     * Finish. */
+    gp->u.pushon.gobj = HSD_GObjGXLinkHead[4];
     PAD_STACK(16);
     grPushOn_802190D0(gp->u.pushon.gobj);
     lobj = ((HSD_GObj*) gp->u.pushon.gobj)->hsd_obj;

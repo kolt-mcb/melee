@@ -784,9 +784,13 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
         const u8* arr = off_to_ptr(be32(r + 0x04), dataBase);
         n = 0;
         if (arr != NULL) {
+            /* ... or on a word that cannot be an offset into the archive:
+             * the staff roll's single camera is followed by unrelated data
+             * (0x1200AC01), which was converted as a second camera. */
             while (n < PC_SCENE_MAX_CAMERAS &&
                    (aend == NULL || arr + (size_t) n * 8 + 8 <= aend) &&
-                   be32(arr + (size_t) n * 8) != 0)
+                   be32(arr + (size_t) n * 8) != 0 &&
+                   (alen == 0 || be32(arr + (size_t) n * 8) < alen))
             {
                 n++;
             }
