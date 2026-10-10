@@ -246,8 +246,17 @@ def frame_is_blank(path):
 def run_port(case, outdir):
     # A leftover instance holding the window is the likeliest cause of the
     # rare start-up hang seen on this port; never pkill -f, which matches the
-    # caller's own command line.
-    subprocess.run(["pkill", "-x", "melee-pc"], capture_output=True)
+    # caller's own command line. Only instances of the binary under test: a
+    # lockstep or sweep run on the same machine has its own melee-pc
+    # processes (build/slippi), and `pkill -x melee-pc` took those down too.
+    port_real = os.path.realpath(PORT)
+    for pid in subprocess.run(["pgrep", "-x", os.path.basename(PORT)[:15]],
+                              capture_output=True, text=True).stdout.split():
+        try:
+            if os.path.realpath("/proc/%s/exe" % pid) == port_real:
+                os.kill(int(pid), 9)
+        except (OSError, ValueError):
+            pass
     # Give the previous instance time to release the window and GL context.
     # Without this, a case run straight after another scored differently from
     # the same case run alone -- and picked a different alignment offset, which
