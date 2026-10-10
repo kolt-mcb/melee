@@ -70,9 +70,42 @@ void audio_submit(const void* buffer, int num_bytes)
     if (dump) fwrite(buffer, 1, (size_t) num_bytes, dump);
     if (!g_audio_dev) return;
     /* The mixer runs a fixed number of frames per game frame (see
-     * pc_ax_pump); when the game outruns real time the queue would grow
-     * without bound, so drop what is more than half a second ahead. */
-    if (SDL_GetQueuedAudioSize(g_audio_dev) > 32000u * 4u / 2u) return;
+     * pc_ax_pump) -- it has to, the simulation reads it -- so keeping the
+     * device fed is this queue's job. It used to start empty and only drop
+     * past half a second: it sat at the edge of running dry, and every
+     * hitch (a shader load, a slow frame) or the display's clock running a
+     * little slower than the audio's was a gap, heard as crackle; or it
+     * crept up to half a second behind the picture. Now it keeps a cushion:
+     * near empty, it is topped up with silence to MELEE_AUDIO_CUSHION_MS
+     * (default 48), so a hitch costs one short silence; past
+     * MELEE_AUDIO_MAX_MS (default 150) an incoming frame is dropped, so the
+     * sound cannot drift behind the picture. */
+    {
+        static u32 cushion = 0, max_bytes = 0;
+        const u32 bytes_per_ms = 32000u * 4u / 1000u;
+        u32 queued;
+        if (max_bytes == 0) {
+            const char* c = getenv("MELEE_AUDIO_CUSHION_MS");
+            const char* m = getenv("MELEE_AUDIO_MAX_MS");
+            u32 cms = c != NULL ? (u32) atoi(c) : 48u, mms = m != NULL ? (u32) atoi(m) : 150u;
+            if (mms < cms + 20u) mms = cms + 20u;
+            cushion = cms * bytes_per_ms;
+            max_bytes = mms * bytes_per_ms;
+        }
+        queued = SDL_GetQueuedAudioSize(g_audio_dev);
+        if (queued > max_bytes) return;
+        if (cushion > 0 && queued < (u32) num_bytes) {
+            static u8 silence[48u * 128u * 4u];
+            u32 pad = cushion - queued;
+            while (pad > 0) {
+                u32 n = pad < sizeof(silence) ? pad : (u32) sizeof(silence);
+                n &= ~3u; /* whole stereo s16 frames */
+                if (n == 0) break;
+                SDL_QueueAudio(g_audio_dev, silence, n);
+                pad -= n;
+            }
+        }
+    }
     SDL_QueueAudio(g_audio_dev, buffer, num_bytes);
 }
 
