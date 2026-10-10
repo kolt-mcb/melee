@@ -1120,6 +1120,12 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
                      "attributes for item kind %d; spawn refused",
                      (int) it->kind);
             port_guard_warn(site);
+            /* Item_OnUserDataRemove frees the dynamic-bone table, which
+             * Item_802682F0 has not allocated yet: the field still holds
+             * pc_item_first_use_fill's 0x3C pattern, and freeing that
+             * crashed the trophy-snag stage in Classic (SIGBUS in
+             * HSD_ObjFree). */
+            it->xBBC_dynamicBoneTable = NULL;
             HSD_GObjFree(gobj);
             return NULL;
         }

@@ -4350,5 +4350,13 @@ void Fighter_Unload_8006DABC(void* user_data)
     HSD_ObjFree(&fighter_dobj_list_alloc_data, fp->dobj_list.data);
     HSD_ObjFree(&fighter_x2040_alloc_data, fp->x203C.data);
     HSD_ObjFree(&fighter_dat_attrs_alloc_data, fp->dat_attrs_backup);
+#if BUILD_TARGET_PC
+    {
+        /* The converted FigaTrees this fighter animates from (x590, x598)
+         * are held in per-owner slots; give them back. */
+        extern void pc_figatree_release(const void* lo, unsigned long len);
+        pc_figatree_release(fp, sizeof(Fighter));
+    }
+#endif
     HSD_ObjFree(&fighter_alloc_data, fp);
 }

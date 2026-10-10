@@ -1729,9 +1729,30 @@ struct pc_figatree_slot {
     const void* owner;
     void* buf;
     unsigned long cap;
+    unsigned long last_use;
 };
 
 static struct pc_figatree_slot pc_figatree_slots[PC_FIGATREE_SLOTS];
+static unsigned long pc_figatree_tick;
+
+/* A fighter being freed gives its slots back (Fighter_Unload_8006DABC).
+ * Nothing did before, so every fighter a session ever created kept its two
+ * slots: a Classic run creates dozens -- Team Kirby alone is a fighter per
+ * Kirby -- and once all 64 were taken the next conversion reassigned slot 0,
+ * realloc'd its buffer out from under the live fighter that still pointed
+ * into it, and that fighter's next motion change walked a freed FigaTree
+ * (lbAnim_8001E6D8 at part 244, Fountain of Dreams, Classic stage 8). The
+ * buffer stays with the slot for the next owner. */
+void pc_figatree_release(const void* lo, unsigned long len)
+{
+    int i;
+    for (i = 0; i < PC_FIGATREE_SLOTS; i++) {
+        const char* o = (const char*) pc_figatree_slots[i].owner;
+        if (o != NULL && o >= (const char*) lo && o < (const char*) lo + len) {
+            pc_figatree_slots[i].owner = NULL;
+        }
+    }
+}
 
 static void* pc_figatree_buf(const void* owner, unsigned long need)
 {
@@ -1742,20 +1763,29 @@ static void* pc_figatree_buf(const void* owner, unsigned long need)
     }
     if (i == PC_FIGATREE_SLOTS) {
         if (free_slot < 0) {
-            /* Every slot belongs to a live owner. Evicting one corrupts that
-             * owner's animation rather than merely losing this one, so say so
-             * -- the cap is the thing to raise. */
+            /* Every slot is held. With fighters releasing theirs this should
+             * not happen; if it does, take the slot converted into least
+             * recently -- an owner still animating converts on every motion
+             * change, so the stalest is the likeliest to be gone. */
             static int said;
+            int k;
             if (!said) {
                 said = 1;
                 fprintf(stderr, "[PORT WARN] pc_figatree_buf: all %d slots in "
-                                "use; evicting a live one\n",
+                                "use; evicting the least recently used\n",
                         PC_FIGATREE_SLOTS);
             }
+            free_slot = 0;
+            for (k = 1; k < PC_FIGATREE_SLOTS; k++) {
+                if (pc_figatree_slots[k].last_use < pc_figatree_slots[free_slot].last_use) {
+                    free_slot = k;
+                }
+            }
         }
-        i = free_slot >= 0 ? free_slot : 0;
+        i = free_slot;
         pc_figatree_slots[i].owner = owner;
     }
+    pc_figatree_slots[i].last_use = ++pc_figatree_tick;
     if (pc_figatree_slots[i].cap < need) {
         /* animation data the game addresses in u32: sub-4GB pool */
         extern void* pc_lowmem_realloc(void* p, size_t need);

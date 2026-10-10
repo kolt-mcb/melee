@@ -80,10 +80,12 @@ struct arch {
     unsigned nrelocs;
     unsigned gen;
     unsigned char* swapped; /* pc_script: bit per word, set at object start */
+    unsigned last_use; /* g_arch_tick at registration or the last lookup */
 };
 static struct arch g_arch[ARCH_MAX];
 static int g_arch_n;
 static unsigned g_gen;
+static unsigned g_arch_tick;
 
 static int cmp_u32(const void* a, const void* b)
 {
@@ -120,22 +122,31 @@ void pc_itconv_note_archive(HSD_Archive* arc)
         }
     }
     if (g_arch_n >= ARCH_MAX) {
-        /* Evicting here drops an archive that is probably still live, and
-         * every article pointing into it then converts to NULL: in a Classic
-         * run at the old cap of 64 that was 19 articles, and the items they
-         * belong to refuse to spawn. If this ever fires again, raise the cap
-         * rather than letting it evict. */
+        /* Full. Raising the cap was not enough: archives loaded from the
+         * low-memory fallback pool when a heap runs out are never freed, so
+         * nothing ever overlaps their ranges and they pile up -- a Classic
+         * run with two continues filled 256 by the trophy-snag stage. The
+         * oldest entry was evicted, which was the item archive itself; the
+         * stage's coins then converted to NULL and the stage crashed. Evict
+         * the entry looked up least recently instead: a dead archive is
+         * never looked up again, a live one is, and a just-registered one
+         * counts as used. */
         static unsigned evicted;
+        int victim = 0;
         evicted++;
         if (evicted <= 4 || (evicted % 50) == 0) {
             fprintf(stderr, "[PORT WARN] pc_itconv_note_archive: registry full "
-                            "(%d); evicting a live archive (%u so far)\n",
+                            "(%d); evicting the least recently used (%u so far)\n",
                     ARCH_MAX, evicted);
         }
-        free(g_arch[0].bounds);
-        free(g_arch[0].relocs);
-        memmove(&g_arch[0], &g_arch[1], sizeof(g_arch[0]) * (ARCH_MAX - 1));
-        g_arch_n = ARCH_MAX - 1;
+        for (i = 1; i < (unsigned) g_arch_n; i++) {
+            if (g_arch_tick - g_arch[i].last_use > g_arch_tick - g_arch[victim].last_use) {
+                victim = (int) i;
+            }
+        }
+        free(g_arch[victim].bounds);
+        free(g_arch[victim].relocs);
+        g_arch[victim] = g_arch[--g_arch_n];
     }
 
     cap = arc->header.nb_reloc + arc->header.nb_public + 1;
@@ -177,6 +188,7 @@ void pc_itconv_note_archive(HSD_Archive* arc)
     a->relocs = NULL;
     a->nrelocs = 0;
     a->gen = ++g_gen;
+    a->last_use = ++g_arch_tick;
 
     if (arc->header.nb_reloc != 0 && arc->reloc_info != NULL) {
         u32* r = malloc(sizeof(u32) * arc->header.nb_reloc);
@@ -228,6 +240,7 @@ static struct arch* find_arch(const void* p)
     int i;
     for (i = 0; i < g_arch_n; i++) {
         if (q >= g_arch[i].base && q < g_arch[i].base + g_arch[i].len) {
+            g_arch[i].last_use = ++g_arch_tick;
             return &g_arch[i];
         }
     }
