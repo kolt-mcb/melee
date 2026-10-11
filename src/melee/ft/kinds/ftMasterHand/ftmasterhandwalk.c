@@ -142,7 +142,7 @@ void ftMh_WalkLoop_IASA(HSD_GObj* gobj)
 void ftMh_WalkLoop_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     ft_80085134(gobj);
     fp->self_vel.x = da->x40_pos.z;
 }

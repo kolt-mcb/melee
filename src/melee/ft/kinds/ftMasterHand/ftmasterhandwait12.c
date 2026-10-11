@@ -91,7 +91,7 @@ void ftMh_Wait1_2_Anim(HSD_GObj* gobj)
 void ftMh_Wait1_2_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
+    ftMasterHand_SpecialAttrs* da = FT_EXT_ATTR(fp);
     ftMh_UpdateBossMotion(gobj, fp, da);
 }
 
