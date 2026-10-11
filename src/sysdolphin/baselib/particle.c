@@ -8431,7 +8431,14 @@ f32 hsd_8039DAD4(HSD_Generator* gen)
     }
 
     /* Billboard orientation: kind & 0x10000 */
+#if BUILD_TARGET_PC
+    /* No particle camera yet -- a generator updated before this scene's
+     * first particle draw set one (a seventh back-to-back Classic faulted
+     * on its eye position). Leave the orientation alone for the frame. */
+    if ((gen->kind & 0x10000) && psCamera != NULL && psCamera->eyepos != NULL) {
+#else
     if (gen->kind & 0x10000) {
+#endif
         HSD_ASSERT(677, psCamera);
 #if BUILD_TARGET_PC
         /* cobj+0x24 / +0xC..0x14 are the eye WObj and its position on the

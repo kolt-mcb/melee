@@ -93,15 +93,51 @@ static void ftCo_800BFF14(Fighter_GObj* gobj, CommandInfo* cmd)
     ftAction_80073108(gobj, cmd);
 }
 
+#if BUILD_TARGET_PC
+/* Only 0x15..0x17 are fighter colour commands. A script that has run into
+ * other bytes hands its interpreter anything, and an index past these
+ * three-entry tables called through whatever followed them: the tablet
+ * jumped to address 5 from Fighter colour overlays, twice in Classic
+ * (stage 31 vs Bowser, stage 32). End the overlay, and say where its
+ * script was, once. */
+static bool ft_colcmd_ok(Fighter_GObj* gobj, CommandInfo* cmd, int i)
+{
+    static int said;
+    if (i >= 0 && i < 3) {
+        return true;
+    }
+    if (!said) {
+        Fighter* fp = GET_FIGHTER(gobj);
+        said = 1;
+        fprintf(stderr,
+                "[PORT WARN] ft colour overlay: opcode %d is not a command "
+                "(fighter kind %d, script at %p); ending the overlay\n",
+                i + 0x15, fp != NULL ? (int) fp->kind : -1, (void*) cmd->u);
+    }
+    cmd->u = NULL;
+    return false;
+}
+#endif
+
 static void ft_800BFF34(Fighter_GObj* gobj, CommandInfo* cmd, int arg2)
 {
     int i = arg2 - 0x15;
+#if BUILD_TARGET_PC
+    if (!ft_colcmd_ok(gobj, cmd, i)) {
+        return;
+    }
+#endif
     ftCo_803C6AD0[i](gobj, cmd);
 }
 
 static void ft_800BFF70(Fighter_GObj* gobj, CommandInfo* cmd, int arg0)
 {
     int i = arg0 - 21;
+#if BUILD_TARGET_PC
+    if (!ft_colcmd_ok(gobj, cmd, i)) {
+        return;
+    }
+#endif
     ftCo_803C6ADC[i](gobj, cmd);
 }
 
