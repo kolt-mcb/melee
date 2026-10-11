@@ -1683,8 +1683,18 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
         }
     }
 
+    /* x5C: the metal model -- a joint tree parallel to the fighter's
+     * skeleton whose DObjs ft_800C85B8 hangs on the parts as display list 2
+     * (x203C). A metal fighter shows that list and hides the normal model
+     * (ftDrawCommon_800805C8), so with x5C left NULL every metal fighter --
+     * Classic's metal battle, the metal box -- was drawn as nothing. */
+    off = pc_be32(*(const u32*) (raw + 0x5C));
+    if (off != 0 && off < len) {
+        out->x5C = (HSD_Joint*) pc_ftconv_joint((void*) (base + off));
+    }
+
     /* Deliberately left NULL until something needs them:
-     * x1C, x24, x28, x34, x38, x44, x5C. */
+     * x1C, x24, x28, x34, x38, x44. */
 
     if (pc_ftconv_trace()) {
         fprintf(stderr,
