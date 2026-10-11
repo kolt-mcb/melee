@@ -4436,44 +4436,56 @@ static void pc_shc_path(char* out, size_t n, u32 h)
     snprintf(out, n, "%s/%08x%08x.bin", g_shc_dir, h, h2);
 }
 
-static Prog* pc_shc_load(u32 h)
+/* Read a cache file: header, the full key, then the driver's blob, which
+ * comes back malloc'd. Touches no GL and no state that changes after
+ * start-up, so the loader pool's threads call it too. */
+static int pc_shc_read_at(const char* path, const GLint* want, void** data, u32* len, u32* fmt)
 {
-    char path[640];
     FILE* f;
-    u32 hdr[4];
+    u32 hdr[4], n = 0;
     GLint* key;
-    void* data;
-    GLuint id;
-    GLint linked = 0;
     int i, ok = 1;
-
-    if (!pc_shc_enabled()) return NULL;
-    pc_shc_path(path, sizeof(path), h);
     f = fopen(path, "rb");
-    if (f == NULL) return NULL;
+    if (f == NULL) return 0;
     /* magic, driver hash, binary format, key count */
     if (fread(hdr, sizeof(hdr), 1, f) != 1 || hdr[0] != 0x3143534du ||
         hdr[1] != g_shc_drv || (int) hdr[3] != g_spec_n) {
-        fclose(f); return NULL;
+        fclose(f); return 0;
     }
     key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
     if (fread(key, sizeof(GLint), (size_t) g_spec_n, f) != (size_t) g_spec_n) ok = 0;
     for (i = 0; ok && i < g_spec_n; i++) {
-        if (key[i] != g_spec_canon[g_spec_slots[i]]) ok = 0;
+        if (key[i] != want[i]) ok = 0;
     }
     free(key);
-    {
-        u32 len = 0;
-        if (!ok || fread(&len, sizeof(len), 1, f) != 1 || len == 0 || len > (64u << 20)) {
-            fclose(f); return NULL;
-        }
-        data = malloc(len);
-        if (fread(data, 1, len, f) != len) { free(data); fclose(f); return NULL; }
-        fclose(f);
-        id = glCreateProgram();
-        glProgramBinary(id, (GLenum) hdr[2], data, (GLsizei) len);
-        free(data);
+    if (!ok || fread(&n, sizeof(n), 1, f) != 1 || n == 0 || n > (64u << 20)) {
+        fclose(f); return 0;
     }
+    *data = malloc(n);
+    if (fread(*data, 1, n, f) != n) { free(*data); fclose(f); return 0; }
+    fclose(f);
+    *len = n;
+    *fmt = hdr[2];
+    return 1;
+}
+
+static Prog* pc_shc_load(u32 h)
+{
+    char path[640];
+    GLint want[VLOC_MAX];
+    void* data;
+    u32 len, fmt;
+    GLuint id;
+    GLint linked = 0;
+    int i;
+
+    if (!pc_shc_enabled()) return NULL;
+    pc_shc_path(path, sizeof(path), h);
+    for (i = 0; i < g_spec_n; i++) want[i] = g_spec_canon[g_spec_slots[i]];
+    if (!pc_shc_read_at(path, want, &data, &len, &fmt)) return NULL;
+    id = glCreateProgram();
+    glProgramBinary(id, (GLenum) fmt, data, (GLsizei) len);
+    free(data);
     glGetProgramiv(id, GL_LINK_STATUS, &linked);
     if (!linked) {
         /* the driver rejected its own binary: drop the file, compile fresh */
@@ -4483,6 +4495,67 @@ static Prog* pc_shc_load(u32 h)
     }
     g_shc_loaded++;
     return pc_prog_finish(id);
+}
+
+/* Parallel loading (pc_shc_pool.c). A warm-up or match prep runs twice:
+ * first as a plan, where pc_shc_bring only lists the keys it would load,
+ * in order; the pool's threads then load those binaries side by side on
+ * contexts of their own; then the real pass, where pc_shc_bring takes each
+ * finished program instead of loading it. On PowerVR a binary load is
+ * ~87 ms of driver work, and one at a time that was 28 s of start-up. */
+int pc_shc_pool_available(void);
+int pc_shc_pool_load(const u32* hashes, int n, int n_free, int budget_ms, void (*tick)(void));
+int pc_shc_pool_take(u32 h, unsigned* id);
+int pc_shc_pool_leftovers(unsigned* out, int max);
+
+#define SHC_PLAN_MAX 4096
+static int g_plan_on, g_plan_n;
+static int g_plan_strict; /* the real pass after a pool load: load nothing it did not plan */
+static u32 g_plan_h[SHC_PLAN_MAX];
+static char* g_plan_path[SHC_PLAN_MAX];
+static GLint* g_plan_key; /* SHC_PLAN_MAX x g_spec_n */
+
+/* pc_shc_bring in a plan: list the key unless it is listed already. */
+static void pc_shc_plan_add(u32 h)
+{
+    char path[640];
+    int i;
+    if (g_plan_n >= SHC_PLAN_MAX) return;
+    for (i = 0; i < g_plan_n; i++) if (g_plan_h[i] == h) return;
+    if (g_plan_key == NULL) {
+        g_plan_key = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n * SHC_PLAN_MAX);
+        if (g_plan_key == NULL) return;
+    }
+    pc_shc_path(path, sizeof(path), h);
+    g_plan_path[g_plan_n] = strdup(path);
+    for (i = 0; i < g_spec_n; i++)
+        g_plan_key[(size_t) g_plan_n * (size_t) g_spec_n + (size_t) i] = g_spec_canon[g_spec_slots[i]];
+    g_plan_h[g_plan_n++] = h;
+}
+
+int pc_shc_plan_read(int i, void** data, u32* len, u32* fmt)
+{
+    if (i < 0 || i >= g_plan_n || g_plan_path[i] == NULL) return 0;
+    return pc_shc_read_at(g_plan_path[i], g_plan_key + (size_t) i * (size_t) g_spec_n, data, len, fmt);
+}
+
+/* Load the plan; returns the pool's count, or -1 with no pool. */
+static int pc_shc_plan_load(int n_free, int budget_ms, void (*tick)(void))
+{
+    int got = pc_shc_pool_load(g_plan_h, g_plan_n, n_free, budget_ms, tick);
+    int i;
+    for (i = 0; i < g_plan_n; i++) { free(g_plan_path[i]); g_plan_path[i] = NULL; }
+    g_plan_n = 0;
+    return got;
+}
+
+/* After the real pass: delete what was loaded but not taken. */
+static void pc_shc_plan_done(void)
+{
+    static unsigned left[SHC_PLAN_MAX];
+    int i, n = pc_shc_pool_leftovers(left, SHC_PLAN_MAX);
+    for (i = 0; i < n; i++) glDeleteProgram(left[i]);
+    if (n > 0) fprintf(stderr, "[SHCACHE] %d preloaded programs went unused\n", n);
 }
 
 static void pc_shc_index_append(const Prog* pr);
@@ -4723,14 +4796,23 @@ static int pc_shc_bring(const GLint* row, int compile_now)
     u32 h;
     Prog* pr;
     int i;
-    if (g_prog_n >= PROG_MAX - 256) return 0;
+    int planned = g_plan_on ? g_plan_n : 0;
+    if (g_prog_n + planned >= PROG_MAX - 256) return 0;
     /* A prep stops bringing programs in at 80% of the live cap; the rest
      * load the first time they are drawn with. */
-    if (pc_prog_live_max() > 0 && g_prog_live >= pc_prog_live_max() * 8 / 10) return 0;
+    if (pc_prog_live_max() > 0 && g_prog_live + planned >= pc_prog_live_max() * 8 / 10) return 0;
     for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
     h = pc_spec_hash();
     if (pc_prog_find(h) != NULL) return 0;
-    pr = pc_shc_load(h);
+    if (g_plan_on) { pc_shc_plan_add(h); return 0; }
+    {
+        unsigned pid = 0;
+        int st = pc_shc_pool_take(h, &pid);
+        if (st == 0) return 0; /* the pool's budget ran out before it */
+        if (st < 0 && g_plan_strict) return 0; /* a cap left it out of the plan */
+        if (st == 1) { g_shc_loaded++; pr = pc_prog_finish(pid); }
+        else pr = pc_shc_load(h);
+    }
     if (pr != NULL) { pc_prog_register(pr, h, 0); return 1; }
     if (!compile_now) { pc_shq_push(row); return 0; }
     pr = pc_prog_build();
@@ -4752,11 +4834,19 @@ static void pc_shc_warm(void)
     text = pc_shq_read_file(path);
     if (text) { pc_shc_index_add_text(text); free(text); }
     memcpy(saved, g_spec_vals, sizeof(saved));
+    if (pc_shc_pool_available()) {
+        g_plan_on = 1;
+        for (i = 0; i < g_shc_rows_n; i++)
+            if (g_shc_rows[i].menu == 1) pc_shc_bring(g_shc_rows[i].row, 0);
+        g_plan_on = 0;
+        pc_shc_plan_load(g_plan_n, -1, NULL);
+    }
     for (i = 0; i < g_shc_rows_n; i++) {
         if (g_shc_rows[i].menu != 1) continue;
         menu++;
         if (pc_shc_bring(g_shc_rows[i].row, 0) == 1) loaded++;
     }
+    pc_shc_plan_done();
     memcpy(g_spec_vals, saved, sizeof(saved));
     g_spec_dirty = 1;
     g_cur_prog = NULL;
@@ -4780,8 +4870,10 @@ void pc_shc_prepare_match(int stkind)
     GLint saved[VLOC_MAX];
     GLint* row;
     int ck[4], nck, i, k;
-    int loaded = 0, compiled = 0, seen = 0, prep_max, prep_ms, cut = 0;
-    struct timespec t0, t1;
+    int loaded = 0, compiled = 0, seen = 0, prep_max, prep_ms, other_ms, cut = 0;
+    int round, pooled = -1;
+    double pool_ms = 0;
+    struct timespec t0, t1, t_start;
     static const char* const common_name = "common.txt";
     /* Netplay, when compiled in: the peer must keep hearing from us. */
     extern void pc_net_keepalive(void) __attribute__((weak));
@@ -4822,11 +4914,30 @@ void pc_shc_prepare_match(int stkind)
         const char* net = getenv("MELEE_NET");
         prep_ms = e ? atoi(e) : (net != NULL && *net ? 3000 : -1);
     }
+    /* Local keys first used on this stage or by one of these characters,
+     * likeliest first: this stage with this lineup, then this stage, then
+     * the lineup's keys from every other stage. That last set is most of
+     * it -- every key a character ever drew anywhere, 1600 for Mario and
+     * Donkey Kong on a played-in cache -- and on PowerVR, where a binary
+     * load costs ~87 ms, it made the first Classic stage a 200-second
+     * load. There it gets a budget (MELEE_SHC_PREP_OTHER_MS, default 6 s);
+     * what it leaves loads where first drawn. */
+    {
+        extern int pc_shc_sync_wanted(void);
+        const char* e = getenv("MELEE_SHC_PREP_OTHER_MS");
+        other_ms = e ? atoi(e) : (pc_shc_sync_wanted() ? 6000 : -1);
+    }
     clock_gettime(CLOCK_MONOTONIC, &t0);
+    t_start = t0;
     nck = pc_lineup_chars(ck);
     row = (GLint*) malloc(sizeof(GLint) * (size_t) g_spec_n);
     memcpy(saved, g_spec_vals, sizeof(saved));
 
+    /* With the loader pool: round 0 plans, the pool loads, round 1 takes. */
+    for (round = pc_shc_pool_available() ? 0 : 1; round < 2; round++) {
+    int plan = round == 0, n_free = -1, pass;
+    g_plan_on = plan;
+    loaded = compiled = seen = cut = 0;
     /* seed sets: common, each character, the stage */
     for (k = -1; k <= nck; k++) {
         char name[64];
@@ -4840,7 +4951,7 @@ void pc_shc_prepare_match(int stkind)
         for (p = text; *p; ) {
             const char* nl = strchr(p, '\n');
             size_t len = nl ? (size_t) (nl - p) : strlen(p);
-            if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
+            if (!plan && !cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
             if (len > 0 && !cut && (prep_max < 0 || seen < prep_max) && pc_shc_parse_line(p, len, row, NULL)) {
                 int r = pc_shc_bring(row, 1);
                 if (pc_net_keepalive) pc_net_keepalive();
@@ -4851,24 +4962,14 @@ void pc_shc_prepare_match(int stkind)
         }
         free(text);
     }
-    /* Local keys first used on this stage or by one of these characters,
-     * likeliest first: this stage with this lineup, then this stage, then
-     * the lineup's keys from every other stage. That last set is most of
-     * it -- every key a character ever drew anywhere, 1600 for Mario and
-     * Donkey Kong on a played-in cache -- and on PowerVR, where a binary
-     * load costs ~120 ms, it made the first Classic stage a 200-second
-     * load. There it gets a budget (MELEE_SHC_PREP_OTHER_MS, default 6 s);
-     * what it leaves loads where first drawn. */
+    /* local keys, in the three passes described above */
     {
-        extern int pc_shc_sync_wanted(void);
-        int pass, other_ms;
-        const char* e = getenv("MELEE_SHC_PREP_OTHER_MS");
-        other_ms = e ? atoi(e) : (pc_shc_sync_wanted() ? 6000 : -1);
         for (pass = 0; pass < 3; pass++) {
+            if (plan && pass == 2) n_free = g_plan_n;
             for (i = 0; i < g_shc_rows_n; i++) {
                 const ShcRow* r = &g_shc_rows[i];
                 int on_stage = (r->stkind == stkind), by_lineup = 0, j;
-                if (!cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
+                if (!plan && !cut && prep_ms >= 0 && pc_shc_prep_over(&t0, prep_ms)) cut = 1;
                 if (cut || r->menu || (prep_max >= 0 && seen >= prep_max)) continue;
                 for (j = 0; !by_lineup && j < r->nck; j++)
                     for (k = 0; !by_lineup && k < nck; k++)
@@ -4877,7 +4978,7 @@ void pc_shc_prepare_match(int stkind)
                 if (pass == 1 && !(on_stage && !by_lineup)) continue;
                 if (pass == 2) {
                     if (on_stage || !by_lineup) continue;
-                    if (other_ms >= 0 && pc_shc_prep_over(&t0, other_ms)) {
+                    if (!plan && other_ms >= 0 && pc_shc_prep_over(&t0, other_ms)) {
                         cut = 1;
                         continue;
                     }
@@ -4891,6 +4992,31 @@ void pc_shc_prepare_match(int stkind)
             }
         }
     }
+    if (plan) {
+        /* The same budgets, now over the pool's load: with MELEE_SHC_PREP_MS
+         * every job has it; else only the other-stage pass has one. */
+        int budget = -1;
+        double el;
+        g_plan_on = 0;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        el = (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+        if (prep_ms >= 0) {
+            n_free = 0;
+            budget = prep_ms - (int) el;
+        } else {
+            if (n_free < 0) n_free = g_plan_n;
+            if (other_ms >= 0) budget = other_ms - (int) el;
+        }
+        if (budget < 0 && (prep_ms >= 0 || other_ms >= 0)) budget = 0;
+        pooled = pc_shc_plan_load(n_free, budget, pc_net_keepalive);
+        g_plan_strict = pooled >= 0;
+        /* the real round takes what loaded and has its budget to itself */
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        pool_ms = (t0.tv_sec - t1.tv_sec) * 1e3 + (t0.tv_nsec - t1.tv_nsec) / 1e6;
+    }
+    }
+    g_plan_strict = 0;
+    pc_shc_plan_done();
     memcpy(g_spec_vals, saved, sizeof(saved));
     g_spec_dirty = 1;
     g_cur_prog = NULL;
@@ -4898,8 +5024,9 @@ void pc_shc_prepare_match(int stkind)
     clock_gettime(CLOCK_MONOTONIC, &t1);
     fprintf(stderr, "[SHCACHE] match prep (stage %d, chars", stkind);
     for (k = 0; k < nck; k++) fprintf(stderr, " %d", ck[k]);
-    fprintf(stderr, "): %d keys, %d loaded, %d compiled, in %.0f ms%s\n", seen, loaded, compiled,
-            (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6,
+    fprintf(stderr, "): %d keys, %d loaded (%d in parallel, %.0f ms), %d compiled, in %.0f ms%s\n", seen,
+            loaded, pooled < 0 ? 0 : pooled, pool_ms, compiled,
+            (t1.tv_sec - t_start.tv_sec) * 1e3 + (t1.tv_nsec - t_start.tv_nsec) / 1e6,
             cut ? " (budget reached; the rest load at first use)" : "");
 }
 
