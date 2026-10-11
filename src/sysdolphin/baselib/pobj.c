@@ -344,7 +344,6 @@ static s32 PObjLoad(HSD_PObj* pobj, HSD_PObjDesc* desc)
 HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
 {
 #if BUILD_TARGET_PC
-    static int pobj_class_initialized = 0;
     if (pobjdesc != NULL) {
         HSD_PObj* pobj;
         /* PC port: guard against GCN-packed PObjDesc with garbage fields. */
@@ -352,10 +351,10 @@ HSD_PObj* HSD_PObjLoadDesc(HSD_PObjDesc* pobjdesc)
             port_guard_warn("pobj.c:323");
             return NULL;
         }
-        /* PC port: bypass hsdNew to avoid GCN class info corruption. */
-        if (!pobj_class_initialized) {
+        /* PC port: bypass hsdNew to avoid GCN class info corruption.
+         * Keyed on the class's own flag, as in HSD_DObjLoadDesc. */
+        if (!(HSD_CLASS_INFO(&hsdPObj)->head.flags & 1)) {
             PObjInfoInit();
-            pobj_class_initialized = 1;
         }
         pobj = (HSD_PObj*)hsdAllocMemPiece(sizeof(HSD_PObj));
         if (pobj != NULL) {

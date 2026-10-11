@@ -229,7 +229,6 @@ static int DObjLoad(HSD_DObj* dobj, HSD_DObjDesc* desc)
 HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
 {
 #if BUILD_TARGET_PC
-    static int dobj_class_initialized = 0;
     HSD_DObj* dobj;
 
     if (desc == NULL) {
@@ -256,10 +255,13 @@ HSD_DObj* HSD_DObjLoadDesc(HSD_DObjDesc* desc)
         return NULL;
     }
 
-    /* PC port: bypass hsdNew to avoid GCN class info corruption. */
-    if (!dobj_class_initialized) {
+    /* PC port: bypass hsdNew to avoid GCN class info corruption. The
+     * class's own flag says whether it is set up, not a flag of ours: a
+     * scene's hsdForgetClassLibrary (MELEE_HEAP_RESET) clears the class,
+     * parent link included, and a DObj made here afterwards then died on
+     * its release (HSD_PARENT_INFO(&hsdDObj) was NULL). */
+    if (!(HSD_CLASS_INFO(&hsdDObj)->head.flags & 1)) {
         DObjInfoInit();
-        dobj_class_initialized = 1;
     }
     dobj = (HSD_DObj*)hsdAllocMemPiece(sizeof(HSD_DObj));
     if (dobj != NULL) {
