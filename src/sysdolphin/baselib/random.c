@@ -122,6 +122,16 @@ s32 HSD_Randi(s32 max_val)
 
 void _HSD_RandForgetMemory(void* low, void* high)
 {
+#if BUILD_TARGET_PC
+    /* as in _HSD_RObjForgetMemory: the port's heaps are not ranges */
+    {
+        extern int pc_lowmem_heap_of(const void* p);
+        extern int HSD_GetHeap(void);
+        if (HSD_RandSeedPtr != &seed && pc_lowmem_heap_of(HSD_RandSeedPtr) == HSD_GetHeap()) {
+            HSD_RandSeedPtr = &seed;
+        }
+    }
+#endif
     if (low <= (void*) HSD_RandSeedPtr && (void*) HSD_RandSeedPtr < high) {
         HSD_RandSeedPtr = &seed;
     }

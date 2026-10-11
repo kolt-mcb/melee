@@ -34,6 +34,14 @@
 #include <sysdolphin/baselib/tobj.h>
 #include <sysdolphin/baselib/wobj.h>
 
+#if BUILD_TARGET_PC
+/* Converted data outlives the scene that asked for it (a fighter's trees
+ * are memoised across scenes), so it is not allocated in the scene's heap.
+ * See pc_heap_persist. */
+void* pc_lbheap_persistent(int heap_id, size_t size);
+#define lbHeap_80015BD0(heap_id, size) pc_lbheap_persistent((heap_id), (size))
+#endif
+
 /* 1C6228 */ static void grDatFiles_801C6228(UnkStageDat*);
 /* 1C62B4 */ static UnkArchiveStruct* grDatFiles_801C62B4(void);
 

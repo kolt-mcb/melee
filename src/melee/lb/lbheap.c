@@ -131,6 +131,30 @@ void lbHeap_80015900(void)
     {
         static int pc_heaps_created = 0;
         if (pc_heaps_created) {
+            /* The main heap is the exception: the console replaces it on
+             * every scene entry, which is how everything a scene allocated
+             * through HSD is freed -- objects, joints, archives loaded to
+             * heap 0. Skipping that leaked ~400 MB a Classic run and ran the
+             * pool dry in the third. Replace it here as HSD_CreateMainHeap
+             * does there (its forget callbacks included); its bounds are
+             * bookkeeping on PC (OSDestroyHeap frees by heap id). */
+            struct Heap* mh = &lbHeap_80431FA0.heap_array[0];
+            struct Heap* ah = &lbHeap_80431FA0.heap_array[1];
+            extern int pc_heap_reset_enabled(void);
+            if (mh->status == LbHeapStatus_Create && mh->type == 0) {
+                mh->id = HSD_CreateMainHeap(NULL, NULL);
+            }
+            /* So is the ARAM heap, which on PC was made once and filled:
+             * after that every file meant for it overflowed into the pool
+             * and none of those were freed (54 MB a Classic run). Hand its
+             * handles back and make it again, as the code below does. */
+            if (pc_heap_reset_enabled() && ah->status == LbHeapStatus_Create &&
+                ah->type == 3 && lbHeap_80431FA0.aram_hi != 0)
+            {
+                lbMemory_800155A4();
+                ah->handle = lbMemory_800154D4((void*) (uintptr_t) lbHeap_80431FA0.aram_lo,
+                                               (void*) (uintptr_t) lbHeap_80431FA0.aram_hi);
+            }
             return;
         }
         pc_heaps_created = 1;
@@ -241,6 +265,24 @@ void lbHeap_80015900(void)
     }
 }
 
+#if BUILD_TARGET_PC
+/* lbHeap_80015BD0 for converted asset data, which outlives the scene: see
+ * pc_heap_persist. */
+void* pc_lbheap_persistent(int heap_id, size_t size)
+{
+    extern void pc_heap_persist(int delta);
+    void* p;
+    pc_heap_persist(1);
+    {
+        extern void pc_lowmem_set_site(const void* site);
+        pc_lowmem_set_site(__builtin_return_address(0));
+    }
+    p = lbHeap_80015BD0(heap_id, size);
+    pc_heap_persist(-1);
+    return p;
+}
+#endif
+
 LbHeapStatus lbHeap_80015BB8(int arg0)
 {
     return lbHeap_80431FA0.heap_array[arg0].status;
@@ -256,6 +298,12 @@ void* lbHeap_80015BD0(int heap_id, size_t size)
         if (p->type == 0) {
             int cur_heap = HSD_GetHeap();
             HSD_SetHeap(p->id);
+#if BUILD_TARGET_PC
+            {
+                extern void pc_lowmem_set_site(const void* site);
+                pc_lowmem_set_site(__builtin_return_address(0));
+            }
+#endif
             result = HSD_MemAlloc(size);
             HSD_SetHeap(cur_heap);
         } else {
@@ -270,8 +318,15 @@ void* lbHeap_80015BD0(int heap_id, size_t size)
                          heap_id, (int) size);
                 OSRestoreInterrupts(enabled);
                 {
-                    /* Must stay sub-4GB: callers store these in u32 fields. */
+                    /* Must stay sub-4GB: callers store these in u32 fields.
+                     * The heap that overflowed is replaced with the scene
+                     * (MELEE_HEAP_RESET), so the overflow goes with it. */
                     extern void* pc_lowmem_malloc(size_t size);
+                    extern void* pc_lowmem_malloc_scene(size_t size);
+                    extern int pc_heap_reset_enabled(void);
+                    if (pc_heap_reset_enabled() && p->transient != 0) {
+                        return pc_lowmem_malloc_scene(size);
+                    }
                     return pc_lowmem_malloc(size);
                 }
             }
@@ -336,6 +391,19 @@ void lbHeap_80015CA8(int arg0, void* arg1)
         HSD_Free(arg1);
         HSD_SetHeap(cur_heap);
     } else {
+#if BUILD_TARGET_PC
+        /* An allocation that fell back to the pool when this heap ran out
+         * (lbHeap_80015BD0) is the pool's to free; lbMemory does not know
+         * it and only logged, so every one leaked -- 54 MB a Classic run,
+         * archives that overflow the ARAM heap. */
+        extern int pc_lowmem_is_block(const void* p);
+        extern void pc_lowmem_free(void* p);
+        if (pc_lowmem_is_block(arg1)) {
+            pc_lowmem_free(arg1);
+            OSRestoreInterrupts(enabled);
+            return;
+        }
+#endif
         lbMemFreeToHeap(p->handle, arg1);
     }
     OSRestoreInterrupts(enabled);

@@ -513,6 +513,18 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
         return NULL;
     }
     base = pc_ef_dataBase[bank];
+    {
+        /* A replaced main heap (MELEE_HEAP_RESET) frees the banks loaded
+         * into it, and the next scene's bank can land at the same base:
+         * the base alone no longer tells a stale cache from a live one. */
+        extern unsigned pc_heap_generation(void);
+        static unsigned gen;
+        if (gen != pc_heap_generation()) {
+            int b;
+            gen = pc_heap_generation();
+            for (b = 0; b < 50; b++) pc_ef_cache_base[b] = NULL;
+        }
+    }
     if (pc_ef_cache[bank] == NULL || pc_ef_cache_base[bank] != base) {
         if (pc_ef_cache[bank] == NULL) {
             pc_ef_cache[bank] = pc_ef_cache_tbl[bank];
@@ -529,7 +541,10 @@ static EF_EffectDesc* pc_ef_desc(int gfx_id)
     }
     raw = (const u8*) efAsync_DatEntries[bank].data + id * 0x14;
     /* From the game heap, not the host's: see the note on pc_ef_cache_tbl. */
-    d = lbHeap_80015BD0(0, sizeof(EF_EffectDesc));
+    {
+        extern void* pc_lbheap_persistent(int heap_id, size_t size);
+        d = pc_lbheap_persistent(0, sizeof(EF_EffectDesc));
+    }
     if (d == NULL) {
         return NULL;
     }

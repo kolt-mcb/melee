@@ -202,6 +202,8 @@ __attribute__((weak)) void* HSD_MemAlloc(s32 size) { return malloc(size); }
 /* The game stores these in u32 fields: sub-4GB pool, not malloc. */
 void* HSD_MemAlign(s32 align, s32 size) {
     extern void* pc_lowmem_memalign(size_t align, size_t size);
+    extern void pc_lowmem_set_site(const void* site);
+    pc_lowmem_set_site(__builtin_return_address(0));
     return pc_lowmem_memalign((size_t) (align > 0 ? align : 32), (size_t) size);
 }
 __attribute__((weak)) void HSD_Free(void* ptr) { free(ptr); }

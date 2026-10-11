@@ -225,6 +225,10 @@ void gm_801A4014(GameMode* mode)
                 (unsigned) state_machine.routing.curr_mode,
                 (unsigned) state_machine.routing.curr_state_id, (void*) state,
                 (unsigned) info->scene_kind, (void*) scene);
+        {
+            extern void pc_lowmem_report(void);
+            pc_lowmem_report();
+        }
         fflush(stderr);
     }
     /* PC port: an unknown scene_kind makes gm_FindGameSceneHandler return

@@ -1050,6 +1050,18 @@ void HSD_RObjSetConstraintObj(HSD_RObj* robj, void* o)
 
 void _HSD_RObjForgetMemory(void* low, void* high)
 {
+#if BUILD_TARGET_PC
+    /* The port's heaps are not address ranges: ask the pool which heap the
+     * buffer came from. The main heap is about to be destroyed. */
+    {
+        extern int pc_lowmem_heap_of(const void* p);
+        extern int HSD_GetHeap(void);
+        if (arg_buf != 0 && pc_lowmem_heap_of((void*) arg_buf) == HSD_GetHeap()) {
+            low = (void*) arg_buf;
+            high = (void*) ((u8*) arg_buf + 1);
+        }
+    }
+#endif
     if (low <= (void*) arg_buf && (void*) arg_buf < high) {
         arg_buf = 0U;
         arg_buf_size = 0U;

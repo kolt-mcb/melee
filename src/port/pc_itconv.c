@@ -234,6 +234,23 @@ static int arch_is_ptr(const struct arch* a, u32 off)
     return 0;
 }
 
+/* A destroyed heap took these archives with it (OSDestroyHeap). */
+void pc_itconv_purge_freed(void)
+{
+    extern int pc_heap_freed_contains(const void* p);
+    unsigned i = 0;
+    while (i < (unsigned) g_arch_n) {
+        struct arch* e = &g_arch[i];
+        if (pc_heap_freed_contains(e->base)) {
+            free(e->bounds);
+            free(e->relocs);
+            *e = g_arch[--g_arch_n];
+        } else {
+            i++;
+        }
+    }
+}
+
 static struct arch* find_arch(const void* p)
 {
     const u8* q = p;
@@ -1804,7 +1821,9 @@ static u32 pc_colanim_zero[256]; /* a colanim script of all-zero words */
 static Article* pc_tab[3][N_MAX];
 static u32 pc_tab_raw[3][N_MAX];
 static const int pc_tab_n[3] = { N_COMMON, N_CHAR, N_POKE };
-static const struct arch* pc_tab_arch;
+/* The ItCo the tables above index, by base: a registry entry moves when
+ * another is removed, so a pointer to one can come to name another. */
+static const u8* pc_tab_base;
 
 int pc_itconv_public(HSD_Archive* arc, const void* raw, it_804D6D20_t* out)
 {
@@ -1853,7 +1872,7 @@ int pc_itconv_public(HSD_Archive* arc, const void* raw, it_804D6D20_t* out)
     out->x4 = pc_tab[0];
     out->x8 = pc_tab[1];
     out->xC = pc_tab[2];
-    pc_tab_arch = a;
+    pc_tab_base = a->base;
 
     /* x10: seven scalars for the zako/enemy spawner. */
     o = be32(src + 0x10);
@@ -1923,7 +1942,9 @@ Article* pc_itconv_table_get(Article** table, int idx)
     if (idx >= pc_tab_n[t] || idx >= N_MAX) {
         return NULL;
     }
-    if (table[idx] == NULL && pc_tab_raw[t][idx] != 0 && pc_tab_arch != NULL) {
+    if (table[idx] == NULL && pc_tab_raw[t][idx] != 0 && pc_tab_base != NULL &&
+        find_arch(pc_tab_base) != NULL)
+    {
         int kind = idx;
         if (t == 1) {
             kind += (int) It_Kind_Kuriboh;
@@ -1931,7 +1952,7 @@ Article* pc_itconv_table_get(Article** table, int idx)
             kind += (int) It_PKind_Start;
         }
         table[idx] =
-            pc_itconv_article_kind(pc_tab_arch->base + pc_tab_raw[t][idx],
+            pc_itconv_article_kind(pc_tab_base + pc_tab_raw[t][idx],
                                    kind);
         if (itconv_trace()) {
             fprintf(stderr,

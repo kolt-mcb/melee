@@ -109,8 +109,11 @@ static int pc_ftconv_trace(void)
 static struct {
     const u8* base;
     unsigned long len;
+    unsigned long last_use; /* pc_ftconv_arch_tick when noted or matched */
 } pc_ftconv_arch[PC_FTCONV_ARCHIVES];
 static int pc_ftconv_arch_n;
+static unsigned long pc_ftconv_arch_tick;
+#define PC_FTCONV_ARCH_USED(i) (pc_ftconv_arch[i].last_use = ++pc_ftconv_arch_tick)
 
 void pc_ftconv_note_archive(const u8* base, unsigned long len)
 {
@@ -130,6 +133,7 @@ void pc_ftconv_note_archive(const u8* base, unsigned long len)
     for (i = 0; i < pc_ftconv_arch_n; i++) {
         if (pc_ftconv_arch[i].base == base) {
             if (len > pc_ftconv_arch[i].len) pc_ftconv_arch[i].len = len;
+            PC_FTCONV_ARCH_USED(i);
             return;
         }
     }
@@ -147,24 +151,42 @@ void pc_ftconv_note_archive(const u8* base, unsigned long len)
             i++;
         }
     }
+    /* Dropping a registration is not a small loss: the lookup below
+     * matches an address against every known archive, so an unregistered
+     * archive's pointers fall to whatever *stale* entry still spans that
+     * memory -- and then a fighter's joint tree is converted against
+     * another character's base. That is what happened on the tablet:
+     * Marth's tree was read through Captain Falcon's archive and came out
+     * with 62 joints instead of 89. Entries leave only when a new archive
+     * overlaps them, though, and freed archives whose memory went to
+     * something else never are: the table filled during a second Classic
+     * and the third crashed on an unconverted fighter. So when it is full,
+     * the entry noted or matched longest ago gives way -- a freed archive
+     * is never matched again. */
     if (pc_ftconv_arch_n < PC_FTCONV_ARCHIVES) {
-        pc_ftconv_arch[pc_ftconv_arch_n].base = base;
-        pc_ftconv_arch[pc_ftconv_arch_n].len = len;
-        pc_ftconv_arch_n++;
+        i = pc_ftconv_arch_n++;
     } else {
-        /* Dropping a registration is not a small loss: the lookup below
-         * matches an address against every known archive, so an unregistered
-         * archive's pointers fall to whatever *stale* entry still spans that
-         * memory -- and then a fighter's joint tree is converted against
-         * another character's base. That is what happened on the tablet:
-         * Marth's tree was read through Captain Falcon's archive and came
-         * out with 62 joints instead of 89. */
-        static int said;
-        if (!said) {
-            said = 1;
-            fprintf(stderr, "[FTCONV] archive table full at %d entries; "
-                            "%p (%lu bytes) is not registered\n",
-                    PC_FTCONV_ARCHIVES, (const void*) base, len);
+        int k;
+        i = 0;
+        for (k = 1; k < PC_FTCONV_ARCHIVES; k++) {
+            if (pc_ftconv_arch[k].last_use < pc_ftconv_arch[i].last_use) i = k;
+        }
+    }
+    pc_ftconv_arch[i].base = base;
+    pc_ftconv_arch[i].len = len;
+    PC_FTCONV_ARCH_USED(i);
+}
+
+/* A destroyed heap took these archives with it (OSDestroyHeap). */
+void pc_ftconv_purge_freed(void)
+{
+    extern int pc_heap_freed_contains(const void* p);
+    int i = 0;
+    while (i < pc_ftconv_arch_n) {
+        if (pc_heap_freed_contains(pc_ftconv_arch[i].base)) {
+            pc_ftconv_arch[i] = pc_ftconv_arch[--pc_ftconv_arch_n];
+        } else {
+            i++;
         }
     }
 }
@@ -175,17 +197,40 @@ static FtPartsVisLookup* pc_conv_VisLookup(const u8* raw, const u8* base,
                                            unsigned long len, u32 model_num);
 void* pc_ftconv_vislookup(void* raw, unsigned model_num);
 
-#define PC_FTCONV_JOINT_CACHE 32
+/* What a memoised tree was converted from: the archive's header (file
+ * size, relocation table and root counts) and the joint's own first bytes.
+ * Archives are freed and others loaded at the same address -- a second
+ * Classic loads the same fighters into memory the first one used for
+ * others -- and a cache keyed only on the address handed back the old
+ * fighter's tree, its display lists in memory now holding something else. */
+static u32 pc_ftconv_joint_print(const u8* base, const u8* p)
+{
+    u32 h = 2166136261u;
+    int i;
+    for (i = 0; i < 32; i++) h = (h ^ base[i]) * 16777619u;
+    for (i = 0; i < 64; i++) h = (h ^ p[i]) * 16777619u;
+    return h;
+}
+
+#define PC_FTCONV_JOINT_CACHE 128
 void* pc_ftconv_joint(void* raw)
 {
-    static struct { void* raw; void* conv; } cache[PC_FTCONV_JOINT_CACHE];
+    static struct {
+        void* raw;
+        void* conv;
+        const u8* base;
+        u32 print;
+        unsigned long last_use;
+    } cache[PC_FTCONV_JOINT_CACHE];
     static int cache_n;
+    static unsigned long tick;
     const u8* p = (const u8*) raw;
-    int i;
+    int i, hit = -1;
 
     if (raw == NULL) return NULL;
+    tick++;
     for (i = 0; i < cache_n; i++) {
-        if (cache[i].raw == raw) return cache[i].conv;
+        if (cache[i].raw == raw) { hit = i; break; }
     }
     /* The tightest containing archive, not the first one found: a stale
      * entry left by a freed archive can still span this address, and it is
@@ -203,6 +248,19 @@ void* pc_ftconv_joint(void* raw)
             }
         }
         i = best;
+        if (i >= 0) PC_FTCONV_ARCH_USED(i);
+    }
+    if (hit >= 0) {
+        if (i >= 0 && cache[hit].base == pc_ftconv_arch[i].base &&
+            cache[hit].print == pc_ftconv_joint_print(pc_ftconv_arch[i].base, p))
+        {
+            cache[hit].last_use = tick;
+            return cache[hit].conv;
+        }
+        if (pc_ftconv_trace()) {
+            fprintf(stderr, "[FTCONV] joint %p: cached tree is from an archive "
+                            "since replaced; converting again\n", raw);
+        }
     }
     if (i >= 0) {
         {
@@ -232,10 +290,20 @@ void* pc_ftconv_joint(void* raw)
                 }
             }
             grDatFiles_ResolvePObjJoints();
-            if (cache_n < PC_FTCONV_JOINT_CACHE) {
-                cache[cache_n].raw = raw;
-                cache[cache_n].conv = conv;
-                cache_n++;
+            {
+                int slot = hit;
+                if (slot < 0 && cache_n < PC_FTCONV_JOINT_CACHE) slot = cache_n++;
+                if (slot < 0) {
+                    int k;
+                    slot = 0;
+                    for (k = 1; k < cache_n; k++)
+                        if (cache[k].last_use < cache[slot].last_use) slot = k;
+                }
+                cache[slot].raw = raw;
+                cache[slot].conv = conv;
+                cache[slot].base = b;
+                cache[slot].print = pc_ftconv_joint_print(b, p);
+                cache[slot].last_use = tick;
             }
             if (pc_ftconv_trace()) {
                 fprintf(stderr, "[FTCONV] joint %p -> %p (base %p)\n", raw,
@@ -281,6 +349,7 @@ void* pc_ftconv_joint_at(void* raw_table, int index)
                 raw_table);
         return NULL;
     }
+    PC_FTCONV_ARCH_USED(best);
     {
         const u8* b = pc_ftconv_arch[best].base;
         u32 off = pc_be32(((const u32*) p)[index]);
@@ -515,6 +584,7 @@ void* pc_ftconv_vislookup(void* raw, unsigned model_num)
         unsigned long len = pc_ftconv_arch[i].len;
         if (p > b && (unsigned long) (p - b) < len) {
             void* conv = pc_conv_VisLookup(p, b, len, model_num);
+            PC_FTCONV_ARCH_USED(i);
             if (cache_n < 8) {
                 cache[cache_n].raw = raw;
                 cache[cache_n].conv = conv;
@@ -597,6 +667,7 @@ void* pc_ftconv_samus_gbeam(void* raw)
         if (!(p > b && (unsigned long) (p - b) < len)) {
             continue;
         }
+        PC_FTCONV_ARCH_USED(i);
         for (t = 0; t < cache_n; t++) {
             if (cache[t].raw == raw && cache[t].base == b &&
                 cache[t].len == len)
@@ -1936,6 +2007,7 @@ void* pc_script_target(const void* cur, u32 off)
         if (p < base || p >= base + len) {
             continue;
         }
+        PC_FTCONV_ARCH_USED(i);
         if (off >= len) {
             return NULL;
         }

@@ -88,9 +88,14 @@ static void* off_to_ptr(u32 off, u8* dataBase)
     return off_to_ptr_bounded(off, dataBase, arch_len_of(dataBase));
 }
 
+/* Conversions are kept (the caches below hand them out again), so they are
+ * not allocated in the scene's heap; the caches empty at each heap
+ * replacement instead, as a raw address in a freed archive can be another
+ * archive's next scene (pc_scene_caches_fresh). */
 static void* scene_alloc(unsigned long size)
 {
-    void* p = lbHeap_80015BD0(0, size);
+    extern void* pc_lbheap_persistent(int heap_id, size_t size);
+    void* p = pc_lbheap_persistent(0, size);
     if (p != NULL) {
         memset(p, 0, (size_t) size);
     }
@@ -407,6 +412,24 @@ static struct {
     DynamicModelDesc* conv;
 } pc_model_cache[PC_MODEL_CACHE];
 static int pc_model_cache_n;
+static int pc_modelarr_cache_n;
+
+/* The caches here are keyed by raw address (or offset) into archives the
+ * scene's heap held, and a replaced heap's addresses come back as other
+ * archives: empty them whenever the heap is replaced. */
+static void pc_scene_caches_fresh(void)
+{
+    extern unsigned pc_heap_generation(void);
+    extern int pc_scene_cache_reset(void);
+    static unsigned gen;
+    unsigned g = pc_heap_generation();
+    if (g != gen) {
+        gen = g;
+        pc_model_cache_n = 0;
+        pc_modelarr_cache_n = 0;
+        pc_scene_cache_reset();
+    }
+}
 
 static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
 {
@@ -418,6 +441,7 @@ static DynamicModelDesc* conv_model(u32 off, u8* dataBase)
     if (r == NULL) {
         return NULL;
     }
+    pc_scene_caches_fresh();
     for (i = 0; i < pc_model_cache_n; i++) {
         if (pc_model_cache[i].off == off) {
             return pc_model_cache[i].conv;
@@ -533,7 +557,7 @@ DynamicModelDesc** pc_conv_ModelDescArray(const void* arrBase, u8* dataBase)
         const void* raw;
         DynamicModelDesc** conv;
     } cache[16];
-    static int cache_n;
+#define cache_n pc_modelarr_cache_n
     const u8* arr = arrBase;
     DynamicModelDesc** out;
     int n, i;
@@ -541,6 +565,7 @@ DynamicModelDesc** pc_conv_ModelDescArray(const void* arrBase, u8* dataBase)
     if (!pc_ptr_sane(arrBase) || !pc_ptr_sane(dataBase)) {
         return NULL;
     }
+    pc_scene_caches_fresh();
     for (i = 0; i < cache_n; i++) {
         if (cache[i].raw == arrBase) {
             return cache[i].conv;
@@ -565,6 +590,7 @@ DynamicModelDesc** pc_conv_ModelDescArray(const void* arrBase, u8* dataBase)
     }
     return out;
 }
+#undef cache_n
 
 DynamicModelDesc* pc_conv_ModelDescAt(const void* slot, u8* dataBase)
 {
@@ -596,6 +622,11 @@ static struct {
     SceneDesc* conv;
 } pc_scene_cache[PC_SCENE_CACHE];
 static int pc_scene_cache_n;
+int pc_scene_cache_reset(void)
+{
+    pc_scene_cache_n = 0;
+    return 0;
+}
 
 /* HSD_FogDesc: {u32 type; HSD_FogAdjDesc* fogadjdesc; f32 start; f32 end;
  * GXColor color} -- 0x14 on GameCube, and the only pointer is fogadjdesc.
@@ -746,6 +777,7 @@ SceneDesc* pc_conv_SceneDesc(const void* raw, u8* dataBase)
     if (!pc_ptr_sane(raw) || !pc_ptr_sane(dataBase)) {
         return NULL;
     }
+    pc_scene_caches_fresh();
     for (i = 0; i < pc_scene_cache_n; i++) {
         if (pc_scene_cache[i].raw == raw) {
             return pc_scene_cache[i].conv;

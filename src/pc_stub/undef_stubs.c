@@ -952,11 +952,6 @@ __attribute__((weak)) void HSD_CObjSetUpVector(int a0, int a1) { PC_STUB_HIT("HS
 __attribute__((weak)) void HSD_CObjSetViewport(int a0, int a1) { PC_STUB_HIT("HSD_CObjSetViewport");}
 __attribute__((weak)) void HSD_CObjSetupViewingMtx(int a0) { PC_STUB_HIT("HSD_CObjSetupViewingMtx");}
 __attribute__((weak)) void HSD_ClearVtxDesc(void) { PC_STUB_HIT("HSD_ClearVtxDesc");}
-__attribute__((weak)) int HSD_CreateMainHeap(void* lo, void* hi)
-{
-    (void)lo; (void)hi;
-    return 0; /* default heap handle */
-}
 __attribute__((weak)) void HSD_DObjAddAnimAll(int a0, int a1, int a2) { PC_STUB_HIT("HSD_DObjAddAnimAll");}
 __attribute__((weak)) void HSD_DObjClearFlags(int a0, int a1) { PC_STUB_HIT("HSD_DObjClearFlags");}
 __attribute__((weak)) int HSD_DObjGetFlags(int a0) { PC_STUB_HIT("HSD_DObjGetFlags"); return 0; }
@@ -1211,7 +1206,6 @@ __attribute__((weak)) void HSD_GObj_LObjCallback(int a0, int a1) { PC_STUB_HIT("
 __attribute__((weak)) int HSD_GObj_SetupProc(int a0, int a1, int a2) { PC_STUB_HIT("HSD_GObj_SetupProc"); return 0; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
-__attribute__((weak)) int HSD_GetHeap(void) { return 0; } /* default heap */
 /* Proper HSD_GetNextArena: returns arena_lo/hi pointers set up by
  * the heap allocation system. Replaces the old no-op stub that had
  * wrong signature (void instead of void**, void**) which caused
@@ -2762,7 +2756,6 @@ __attribute__((weak)) void HSD_SObjLib_803A54EC(int a0, int a1) { PC_STUB_HIT("H
 __attribute__((weak)) void HSD_SObjLib_803A55DC(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_SObjLib_803A55DC");}
 __attribute__((weak)) u8 HSD_SObjLib_804D7960;
 __attribute__((weak)) void HSD_SetEraseColor(int a0, int a1, int a2, int a3) { PC_STUB_HIT("HSD_SetEraseColor");}
-__attribute__((weak)) void HSD_SetHeap(int handle) { PC_STUB_HIT("HSD_SetHeap"); (void)handle; }
 /* REMOVED: strong impl in gx_gl_bridge.c */
 
 __attribute__((weak)) void HSD_SetMaterialColor(int a0, int a1, int a2, float a3) { PC_STUB_HIT("HSD_SetMaterialColor");}
@@ -2867,8 +2860,6 @@ __attribute__((weak)) void NessFloatMath_PKThunder2(void) { PC_STUB_HIT("NessFlo
 __attribute__((weak)) int OSCheckActiveThreads(void) { PC_STUB_HIT("OSCheckActiveThreads"); return 0; }
 __attribute__((weak)) size_t OSCheckHeap(void* heap) { PC_STUB_HIT("OSCheckHeap"); (void)heap; return SIZE_MAX; }
 __attribute__((weak)) void OSCreateAlarm(int a0) { PC_STUB_HIT("OSCreateAlarm");}
-__attribute__((weak)) int OSCreateHeap(int a0, int a1) { PC_STUB_HIT("OSCreateHeap"); return 0; }
-__attribute__((weak)) void OSDestroyHeap(int a0) { PC_STUB_HIT("OSDestroyHeap");}
 __attribute__((weak)) int OSGetProgressiveMode(void) { PC_STUB_HIT("OSGetProgressiveMode"); return 0; }
 __attribute__((weak)) int OSGetResetCode(void) { PC_STUB_HIT("OSGetResetCode"); return 0; }
 __attribute__((weak)) void OSSetErrorHandler(void) { PC_STUB_HIT("OSSetErrorHandler");}
@@ -5200,6 +5191,7 @@ void pc_lowmem_full_extent(void** base, unsigned long* size,
  * A bump allocator, so the live extent is [base, base+used). */
 static unsigned char* g_conv_base = NULL;
 static unsigned long g_conv_used = 0;
+static unsigned long g_conv_cap;
 
 void pc_lowmem_conv_extent(void** base, unsigned long* used)
 {
@@ -5221,6 +5213,7 @@ void* pc_lowmem_alloc(unsigned long size)
         cap = 96UL * 1024UL * 1024UL;
         base = (unsigned char*) pc_lowmem_carve(cap);
         if (base == NULL) return NULL;
+        g_conv_cap = cap;
         used = 0;
     }
     size = (size + 31UL) & ~31UL;
@@ -5244,12 +5237,84 @@ struct pc_lm_hdr {
     u32 magic;
     u32 cls;
     u32 size;
-    u32 pad0;
+    u32 heap; /* OSAllocFromHeap's heap, 0 for the rest */
     struct pc_lm_hdr* next;
-    u64 pad1;
+    u64 site; /* who allocated it (pc_lowmem_report's MELEE_LOWMEM_SITES) */
 };
+/* The allocation site a wrapper (OSAllocFromHeap, HSD_MemAlign) passes for
+ * its caller; otherwise pc_lowmem_malloc's own return address. */
+static const void* g_lm_site;
+void pc_lowmem_set_site(const void* site)
+{
+    if (g_lm_site == NULL) g_lm_site = site;
+}
+static u32 g_lm_heap; /* the heap OSAllocFromHeap is serving, for the header */
 static struct pc_lm_hdr* g_lm_free[PC_LM_NCLASS];
 static unsigned long g_lm_live, g_lm_fallback;
+
+/* Pool usage, for the scene log: a long session's growth shows here. */
+void pc_lowmem_report(void)
+{
+    fprintf(stderr, "[MEM] pool: heap %lu MB, carved %lu MB, free %lu MB; "
+                    "%lu live blocks, %lu malloc fallbacks; converters %lu of %lu MB\n",
+            (unsigned long) (g_low_mem_used >> 20),
+            (unsigned long) ((g_low_mem_size - g_low_mem_top) >> 20),
+            (unsigned long) ((g_low_mem_top - g_low_mem_used) >> 20), g_lm_live,
+            g_lm_fallback, g_conv_used >> 20, g_conv_cap >> 20);
+    /* MELEE_LOWMEM_SITES=1: the live blocks by allocation site, largest
+     * first. The bottom of the pool is a run of blocks with headers, freed
+     * ones keeping their class, so it can be walked end to end. Sites are
+     * image-relative: addr2line -e <binary> <off> (+0x400000 when non-PIE). */
+    if (getenv("MELEE_LOWMEM_SITES") != NULL && g_low_mem_base != NULL) {
+        enum { NS = 1024 };
+        static struct { u64 site; unsigned long n, bytes; } t[NS];
+        size_t off = 0;
+        int k, j;
+        memset(t, 0, sizeof(t));
+        while (off + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
+            struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + off);
+            if (h->cls < 5 || h->cls >= PC_LM_NCLASS) break;
+            if (h->magic == PC_LM_MAGIC) {
+                unsigned slot = (unsigned) ((h->site >> 2) * 2654435761u) % NS;
+                while (t[slot].n != 0 && t[slot].site != h->site) slot = (slot + 1) % NS;
+                t[slot].site = h->site;
+                t[slot].n++;
+                t[slot].bytes += (unsigned long) 1 << h->cls;
+            }
+            off += (size_t) 1 << h->cls;
+        }
+        {
+            unsigned long cn[PC_LM_NCLASS], cb[PC_LM_NCLASS];
+            size_t o2 = 0;
+            memset(cn, 0, sizeof(cn));
+            memset(cb, 0, sizeof(cb));
+            while (o2 + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
+                struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + o2);
+                if (h->cls < 5 || h->cls >= PC_LM_NCLASS) break;
+                if (h->magic == PC_LM_MAGIC) { cn[h->cls]++; cb[h->cls] += (unsigned long) 1 << h->cls; }
+                o2 += (size_t) 1 << h->cls;
+            }
+            for (k = 5; k < PC_LM_NCLASS; k++)
+                if (cb[k] >= (1UL << 20))
+                    fprintf(stderr, "[MEM]   class %lu B: %lu blocks, %lu MB\n", 1UL << k, cn[k], cb[k] >> 20);
+        }
+        for (k = 0; k < 16; k++) {
+            int best = -1;
+            for (j = 0; j < NS; j++)
+                if (t[j].n != 0 && (best < 0 || t[j].bytes > t[best].bytes)) best = j;
+            if (best < 0) break;
+            {
+                Dl_info di;
+                unsigned long a = (unsigned long) t[best].site;
+                if (dladdr((void*) (uintptr_t) a, &di) && di.dli_fbase)
+                    a -= (unsigned long) (uintptr_t) di.dli_fbase;
+                fprintf(stderr, "[MEM]   site +0x%lx: %lu blocks, %lu KB\n", a, t[best].n,
+                        t[best].bytes >> 10);
+            }
+            t[best].n = 0;
+        }
+    }
+}
 
 /* The allocator's own bookkeeping, for the rollback snapshot.
  *
@@ -5330,6 +5395,10 @@ void* pc_lowmem_malloc(size_t size)
     h->cls = c;
     h->size = (u32) size;
     h->next = NULL;
+    h->site = (u64) (uintptr_t) (g_lm_site != NULL ? g_lm_site : __builtin_return_address(0));
+    g_lm_site = NULL;
+    h->heap = g_lm_heap;
+    g_lm_heap = 0;
     g_lm_live++;
     return h + 1;
 }
@@ -5401,6 +5470,17 @@ static void pc_lowmem_free_from(void* p, const void* caller)
     g_lm_live--;
 }
 
+/* Whether p is a live block of the general allocator (not a carve, not
+ * another allocator's pointer into a carved region). */
+int pc_lowmem_is_block(const void* p)
+{
+    const unsigned char* q = (const unsigned char*) p;
+    if (g_low_mem_base == NULL || q < g_low_mem_base + sizeof(struct pc_lm_hdr) ||
+        q >= g_low_mem_base + g_low_mem_used)
+        return 0;
+    return ((const struct pc_lm_hdr*) p - 1)->magic == PC_LM_MAGIC;
+}
+
 void pc_lowmem_free(void* p)
 {
     pc_lowmem_free_from(p, __builtin_return_address(0));
@@ -5440,6 +5520,7 @@ void* pc_lowmem_realloc(void* p, size_t need)
  * the header is not reachable from the aligned pointer). */
 void* pc_lowmem_memalign(size_t align, size_t size)
 {
+    pc_lowmem_set_site(__builtin_return_address(0));
     if (align <= 32) return pc_lowmem_malloc(size);
     {
         unsigned char* p = (unsigned char*) pc_lowmem_malloc(size + align);
@@ -5448,10 +5529,248 @@ void* pc_lowmem_memalign(size_t align, size_t size)
     }
 }
 
+/* OS heaps over the pool.
+ *
+ * The game frees most of what it allocates by destroying the heap it came
+ * from: HSD_CreateMainHeap destroys and recreates the main heap on every
+ * major scene change, and the lbHeap views come and go with the scenes that
+ * own them. These were stubs, OSAllocFromHeap ignored its heap, and so
+ * nothing those heaps held was ever handed back -- 400 MB a Classic run,
+ * 214,000 blocks from HSD_MemAlloc alone, and the 1 GB pool ran dry in the
+ * third run. Now a heap is an id stamped into each block's header, and
+ * destroying it frees every block that still carries the id. */
+static int g_heap_next = 1;
+
+__attribute__((weak)) int OSCreateHeap(int lo, int hi)
+{
+    (void) lo; (void) hi;
+    if (g_heap_next <= 0) g_heap_next = 1; /* -1 means "none" to lbHeap */
+    return g_heap_next++;
+}
+
+/* Which heap the pool block holding p came from (0: none, or not a block
+ * of this allocator). Walks the pool: for scene changes, not hot paths. */
+int pc_lowmem_heap_of(const void* p)
+{
+    size_t off = 0;
+    const unsigned char* q = (const unsigned char*) p;
+    if (g_low_mem_base == NULL || q < g_low_mem_base || q >= g_low_mem_base + g_low_mem_used)
+        return 0;
+    while (off + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
+        struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + off);
+        size_t blk;
+        if (h->cls < 5 || h->cls >= PC_LM_NCLASS) return 0;
+        blk = (size_t) 1 << h->cls;
+        if (q < g_low_mem_base + off + blk)
+            return h->magic == PC_LM_MAGIC ? (int) h->heap : 0;
+        off += blk;
+    }
+    return 0;
+}
+
+/* The blocks the heap being destroyed held, 512 bytes and up (archives
+ * are never smaller), in address order: the walk is. The port's archive
+ * registries ask pc_heap_freed_contains about their bases and drop the
+ * archives that went with the heap -- before anything is allocated into
+ * that memory again, so no stale entry ever claims a new archive's
+ * pointers. */
+static struct { const unsigned char* lo; const unsigned char* hi; }* g_freed;
+static size_t g_freed_n, g_freed_cap;
+
+int pc_heap_freed_contains(const void* p)
+{
+    const unsigned char* q = (const unsigned char*) p;
+    size_t lo = 0, hi = g_freed_n;
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (q < g_freed[mid].lo) hi = mid;
+        else if (q >= g_freed[mid].hi) lo = mid + 1;
+        else return 1;
+    }
+    return 0;
+}
+
+/* For a debugger: the pool block holding p -- live or freed, its heap and
+ * who allocated it ("call pc_lowmem_debug_block(ptr)" in gdb). */
+void pc_lowmem_debug_block(const void* p)
+{
+    size_t off = 0;
+    const unsigned char* q = (const unsigned char*) p;
+    if (g_low_mem_base == NULL || q < g_low_mem_base || q >= g_low_mem_base + g_low_mem_used) {
+        fprintf(stderr, "[MEM] %p: not in the pool's general region\n", p);
+        return;
+    }
+    while (off + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
+        struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + off);
+        size_t blk;
+        if (h->cls < 5 || h->cls >= PC_LM_NCLASS) break;
+        blk = (size_t) 1 << h->cls;
+        if (q < g_low_mem_base + off + blk) {
+            Dl_info di;
+            unsigned long a = (unsigned long) h->site;
+            if (dladdr((void*) (uintptr_t) a, &di) && di.dli_fbase)
+                a -= (unsigned long) (uintptr_t) di.dli_fbase;
+            fprintf(stderr, "[MEM] %p: block %p +%ld, %s, heap %u, size %u, site +0x%lx\n", p,
+                    (void*) (h + 1), (long) (q - (const unsigned char*) (h + 1)),
+                    h->magic == PC_LM_MAGIC ? "live" : h->magic == PC_LM_FREED ? "FREED" : "?",
+                    (unsigned) h->heap, (unsigned) h->size, a);
+            return;
+        }
+        off += blk;
+    }
+}
+
+__attribute__((weak)) void OSDestroyHeap(int id)
+{
+    extern void pc_ftconv_purge_freed(void);
+    extern void pc_itconv_purge_freed(void);
+    size_t off = 0;
+    unsigned long n = 0, bytes = 0;
+    if (id <= 0 || g_low_mem_base == NULL) return;
+    g_freed_n = 0;
+    while (off + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
+        struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + off);
+        size_t blk;
+        if (h->cls < 5 || h->cls >= PC_LM_NCLASS) break;
+        blk = (size_t) 1 << h->cls;
+        if (h->magic == PC_LM_MAGIC && h->heap == (u32) id) {
+            if (blk >= 512) {
+                if (g_freed_n == g_freed_cap) {
+                    size_t cap = g_freed_cap ? g_freed_cap * 2 : 4096;
+                    void* nf = realloc(g_freed, cap * sizeof(*g_freed));
+                    if (nf != NULL) { g_freed = nf; g_freed_cap = cap; }
+                }
+                if (g_freed_n < g_freed_cap) {
+                    g_freed[g_freed_n].lo = (const unsigned char*) (h + 1);
+                    g_freed[g_freed_n].hi = (const unsigned char*) h + blk;
+                    g_freed_n++;
+                }
+            }
+            pc_lowmem_free_from(h + 1, __builtin_return_address(0));
+            n++;
+            bytes += blk;
+        }
+        off += blk;
+    }
+    pc_ftconv_purge_freed();
+    pc_itconv_purge_freed();
+    g_freed_n = 0;
+    if (getenv("MELEE_SCENELOG") != NULL && n > 0)
+        fprintf(stderr, "[MEM] heap %d destroyed: %lu blocks, %lu KB freed\n", id, n, bytes >> 10);
+}
+
+/* Converted asset data outlives the scene that converted it: the port's
+ * converters memoise their output (a fighter's joint trees, its ftData)
+ * for as long as the source archive is loaded, which for a fighter is
+ * across scenes. While this is nonzero, heap allocations are permanent
+ * (heap 0) whichever heap they name. pc_lbheap_persistent wraps it. */
+static int g_heap_persist;
+void pc_heap_persist(int delta)
+{
+    g_heap_persist += delta;
+}
+
 __attribute__((weak)) void* OSAllocFromHeap(void* heap, size_t size)
 {
-    (void) heap;
+    pc_lowmem_set_site(__builtin_return_address(0));
+    g_lm_heap = g_heap_persist > 0 ? 0 : (u32) (uintptr_t) heap;
     return pc_lowmem_malloc(size);
+}
+
+/* HSD's main heap (initialize.c, which the PC build does not compile).
+ *
+ * Every scene entry replaces it (lbHeap_80015900): the class library and
+ * object pools forget their memory, the heap is destroyed with everything
+ * the scene allocated in it, and a new one is made. These were stubs --
+ * one heap, never destroyed -- and a Classic run leaked 400 MB through
+ * them. The first call (the first scene) keeps what start-up allocated, as
+ * that went to heap 0 before any main heap existed.
+ *
+ * Opt-in for now (MELEE_HEAP_RESET=1): parts of the port still assume a
+ * scene's archives outlive it -- effect and item conversions read a freed
+ * ItCo/effect bank after the first replacement -- and until those are
+ * found the default stays the old never-free heap. */
+static int g_hsd_heap;
+static unsigned g_hsd_heap_gen;
+
+int HSD_GetHeap(void) { return g_hsd_heap; }
+
+int pc_heap_reset_enabled(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_HEAP_RESET") != NULL;
+    return on;
+}
+
+/* pc_lowmem_malloc for a heap that lives as long as the scene's main heap
+ * (a transient lbHeap that overflowed): freed with it. */
+void* pc_lowmem_malloc_scene(size_t size)
+{
+    g_lm_heap = (u32) g_hsd_heap;
+    return pc_lowmem_malloc(size);
+}
+void HSD_SetHeap(int handle) { g_hsd_heap = handle; }
+
+/* Bumped at every main-heap replacement: port caches holding scene memory
+ * compare it to drop their entries. */
+unsigned pc_heap_generation(void) { return g_hsd_heap_gen; }
+
+int HSD_CreateMainHeap(void* lo, void* hi)
+{
+    extern void hsdForgetClassLibrary(const char* library_name);
+    extern void HSD_ListInitAllocData(void);
+    extern void HSD_AObjInitAllocData(void);
+    extern void HSD_FObjInitAllocData(void);
+    extern void HSD_IDInitAllocData(void);
+    extern void HSD_VecInitAllocData(void);
+    extern void HSD_MtxInitAllocData(void);
+    extern void HSD_RObjInitAllocData(void);
+    extern void HSD_RenderInitAllocData(void);
+    extern void HSD_ShadowInitAllocData(void);
+    extern void HSD_ZListInitAllocData(void);
+    extern void _HSD_AObjForgetMemory(void* lo, void* hi);
+    extern void _HSD_DispForgetMemory(void* lo, void* hi);
+    extern void _HSD_IDForgetMemory(void* lo, void* hi);
+    extern void _HSD_ObjAllocForgetMemory(void* lo, void* hi);
+    extern void _HSD_RandForgetMemory(void* lo, void* hi);
+    extern void _HSD_RObjForgetMemory(void* lo, void* hi);
+    extern void HSD_ObjSetHeap(uintptr_t size, void* ptr);
+    extern void* g_heap_base;
+    extern size_t g_heap_size;
+    int keep = !pc_heap_reset_enabled();
+    (void) lo; (void) hi;
+    if (g_hsd_heap == 0) {
+        g_hsd_heap = OSCreateHeap(0, 0);
+        return g_hsd_heap;
+    }
+    if (keep) return g_hsd_heap;
+    /* HSD_CreateMainHeap's order: classes, pools, then the callbacks that
+     * drop pointers into the old heap (RObj and Rand ask the pool which
+     * heap a pointer is in, as HSD_GetHeap still names the old one). */
+    hsdForgetClassLibrary("sysdolphin_base_library");
+    HSD_ListInitAllocData();
+    HSD_AObjInitAllocData();
+    HSD_FObjInitAllocData();
+    HSD_IDInitAllocData();
+    HSD_VecInitAllocData();
+    HSD_MtxInitAllocData();
+    HSD_RObjInitAllocData();
+    HSD_RenderInitAllocData();
+    HSD_ShadowInitAllocData();
+    HSD_ZListInitAllocData();
+    _HSD_AObjForgetMemory(NULL, NULL);
+    _HSD_DispForgetMemory(NULL, NULL);
+    _HSD_IDForgetMemory(NULL, NULL);
+    _HSD_ObjAllocForgetMemory(NULL, NULL);
+    _HSD_RandForgetMemory(NULL, NULL);
+    _HSD_RObjForgetMemory(NULL, NULL);
+    OSDestroyHeap(g_hsd_heap);
+    g_hsd_heap = OSCreateHeap(0, 0);
+    g_hsd_heap_gen++;
+    /* The object pools' carve starts over, as the console's pools start
+     * over in the new heap. */
+    if (g_heap_base != NULL) HSD_ObjSetHeap(g_heap_size, g_heap_base);
+    return g_hsd_heap;
 }
 __attribute__((weak)) void OSFreeToHeap(void* heap, void* ptr)
 {
