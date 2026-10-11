@@ -190,6 +190,24 @@ bool lb_80014258(Fighter_GObj* gobj, void* arg1, FtCmd2 cmd)
         if (!Command_Execute((CommandInfo*) co, opcode)) {
             if (opcode < 0x15U) {
                 u32 idx = opcode - 0xA;
+#if BUILD_TARGET_PC
+                /* Below 0xA is Command_Execute's, and one it turned down
+                 * underflows idx into a call through whatever lies far past
+                 * the table: the tablet jumped to address 5 from Fighter
+                 * colour overlays in a Classic stage. End the overlay. */
+                if (idx >= 11 || lb_803BA248[idx] == NULL) {
+                    static int said;
+                    if (!said) {
+                        said = 1;
+                        fprintf(stderr, "[PORT WARN] lb_80014258: colour overlay "
+                                        "opcode %u at %p is not a command; "
+                                        "ending the overlay\n",
+                                (unsigned) opcode, (void*) co->x8_ptr1);
+                    }
+                    co->x8_ptr1 = NULL;
+                    break;
+                }
+#endif
                 if (lb_803BA248[idx](co)) {
                     return true;
                 }
