@@ -335,6 +335,18 @@ void onEnterDebugVs(GameModeState* state)
                 }
             }
         }
+        /* MELEE_BOOT_METAL=<mask>: the slots in the bit mask play metal, as
+         * Classic's metal battle does -- the way to put a metal fighter in a
+         * debug match. */
+        {
+            const char* m = getenv("MELEE_BOOT_METAL");
+            if (m != NULL) {
+                int mask = (int) strtol(m, NULL, 0);
+                for (i = 0; i < Gm_Player_NumMax; i++) {
+                    start->players[i].vs_metal = (mask >> i) & 1;
+                }
+            }
+        }
         if (pc_boot_players <= 2) {
             start->players[2].slot_type = Gm_PKind_NA;
             start->players[3].slot_type = Gm_PKind_NA;

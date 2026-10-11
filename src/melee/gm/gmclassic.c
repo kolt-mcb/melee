@@ -802,6 +802,26 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
+#if BUILD_TARGET_PC
+    /* MELEE_1P_METAL_CKIND=<CharacterKind>: the metal round's opponent, for
+     * reproducing one particular metal battle -- the pick is otherwise a
+     * shuffle of the single-opponent pool. */
+    {
+        const char* e = getenv("MELEE_1P_METAL_CKIND");
+        if (e != NULL) {
+            int ck = atoi(e), k;
+            for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+                if (ptr->x1 != 4) continue;
+                for (k = 0; k < 39 && scene_matchups->x0CC[k].x00 != 328; k++) {
+                    if (scene_matchups->x0CC[k].x02[0] == ck) {
+                        ptr->xC = &scene_matchups->x0CC[k];
+                        break;
+                    }
+                }
+            }
+        }
+    }
+#endif
     for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 == 0x80) {
             u8 x2val = ptr->x2;
