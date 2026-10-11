@@ -107,7 +107,8 @@ extern SIS* HSD_SisLib_804D1124[5];
 #if BUILD_TARGET_PC
 /* Convert an archive's SIS_* public block (big-endian table of archive
  * offsets) into a host table for HSD_SisLib_804D1124[font_idx]. */
-SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase);
+SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
+                    unsigned long len);
 #endif
 extern u8 lbl_8040C8C0[0x240];
 extern u8 HSD_SisLib_8040C680[0x240];

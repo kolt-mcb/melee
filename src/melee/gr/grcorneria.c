@@ -2718,7 +2718,8 @@ void grCorneria_801E277C(Ground_GObj* gobj, struct grSmashTaunt_GroundVars* gv)
              * text layer walks it. */
             HSD_SisLib_804D1124[1] = pc_sis_convert(
                 1, HSD_SisLib_804D1124[1],
-                ((HSD_Archive*) archive->unk0)->data);
+                ((HSD_Archive*) archive->unk0)->data,
+                ((HSD_Archive*) archive->unk0)->header.data_size);
 #endif
             text =
                 HSD_SisLib_803A5ACC(1, 0, 140.0f, 380.0f, 0.0f, 288.0f, 96.0f);

@@ -692,8 +692,14 @@ int HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
 #if BUILD_TARGET_PC
 /* One converted SIS table per font slot. The entry count is not recorded
  * anywhere, so convert until a slot stops being readable or its contents stop
- * looking like offsets into this archive. */
-#define PC_SIS_MAX_ENTRIES 256
+ * looking like offsets into this archive.
+ *
+ * Each entry is two message pointers, and the staff roll's table is long:
+ * at 256 entries its later names indexed past this font's table into the
+ * next font's, whose pointers led into an archive a previous scene had
+ * loaded and freed. Hence 2048, and offsets checked against the archive's
+ * length rather than only against what is mapped (all of the pool is). */
+#define PC_SIS_MAX_ENTRIES 2048
 static SIS pc_sis_tables[5][PC_SIS_MAX_ENTRIES];
 
 static u32 pc_sis_be32(const void* p)
@@ -703,7 +709,8 @@ static u32 pc_sis_be32(const void* p)
            (u32) b[3];
 }
 
-SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase)
+SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
+                    unsigned long len)
 {
     const u8* src = raw;
     u8* base = dataBase;
@@ -721,6 +728,9 @@ SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase)
         }
         k = pc_sis_be32(e + 0);
         t = pc_sis_be32(e + 4);
+        if (len != 0 && (k >= len || t >= len)) {
+            break; /* past the table: these words are not offsets */
+        }
         pc_sis_tables[font_idx][i].kerning =
             (k != 0 && pc_mem_readable(base + k, 2))
                 ? (TextKerning*) (base + k)
@@ -757,7 +767,10 @@ void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
         sis = pc_sis_convert(font_idx, sis,
                              HSD_SisLib_804D1110[font_idx] != NULL
                                  ? HSD_SisLib_804D1110[font_idx]->data
-                                 : NULL);
+                                 : NULL,
+                             HSD_SisLib_804D1110[font_idx] != NULL
+                                 ? HSD_SisLib_804D1110[font_idx]->header.data_size
+                                 : 0);
 #endif
         HSD_SisLib_804D1124[font_idx] = sis;
         if (sis == NULL) {

@@ -1220,7 +1220,8 @@ HSD_GObj* grStadium_801D2BEC(void)
         HSD_ArchiveGetPublicAddress(archive->unk0, "SIS_GrPStadiumData");
 #if BUILD_TARGET_PC
     HSD_SisLib_804D1124[1] = pc_sis_convert(
-        1, HSD_SisLib_804D1124[1], ((HSD_Archive*) archive->unk0)->data);
+        1, HSD_SisLib_804D1124[1], ((HSD_Archive*) archive->unk0)->data,
+        ((HSD_Archive*) archive->unk0)->header.data_size);
 #endif
     text->win_static_p =
         HSD_SisLib_803A5ACC(1, 0, 0.0F, 0.0F, 0.0F, 250.0F, 160.0F);
