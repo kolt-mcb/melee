@@ -479,10 +479,16 @@ static void render_present_tail(int frame)
          * second clock would only add beat-frequency stutter. MELEE_UNCAP=1
          * disables it for throughput measurement. */
         {
-            static int s_pace = -1;
+            static int s_pace = -1, s_pace_hz;
             static struct timespec s_next;
+            /* Decided again when the panel changes rate: a phone moves
+             * between 60 and 120 Hz underneath the app. */
+            if (s_pace >= 0 && window_refresh_hz() != s_pace_hz) {
+                s_pace = -1;
+            }
             if (s_pace < 0) {
                 int hz = window_refresh_hz();
+                s_pace_hz = hz;
                 /* Only a 60 Hz vsync is allowed to be the sole clock.
                  * A swap interval of 2 on a 120 Hz panel looks like it
                  * should pace at 60, and window_present_hz() says so, but
@@ -642,6 +648,18 @@ static void render_present_tail(int frame)
          * until tools/pc_lockstep.py has compared this frame against the same
          * frame on the console and released it. */
         pc_trace_sync_wait();
+        /* Android's panel changes refresh rate underneath the app, and the
+         * swap interval was chosen once at startup; re-pick it from the rate
+         * the display really has. Once a second: on Android the query is a
+         * JNI call. This sat inside the MELEE_FPS report, so in ordinary
+         * play it never ran. */
+        {
+            static unsigned s_sync_n;
+            if (++s_sync_n >= 60) {
+                s_sync_n = 0;
+                (void) window_sync_swap_interval();
+            }
+        }
         if (s_fps) {
             struct timespec after;
             clock_gettime(CLOCK_MONOTONIC, &after);

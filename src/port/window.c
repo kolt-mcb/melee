@@ -33,13 +33,79 @@ int window_gl_es(void)
 #endif
 }
 
-int window_refresh_hz(void)
+/* The rate the last window_sync_swap_interval found (0: not asked yet). */
+static int g_live_hz;
+
+#if defined(__ANDROID__)
+#include <jni.h>
+/* The panel's rate now, from Display.getRefreshRate(); 0 if it cannot be
+ * had. SDL's display mode is no use for this: SDL fills it in when the
+ * surface is created and never again, and a Pixel 9 switches 120 -> 60 Hz a
+ * second after launch (MeleeActivity asks for 60). The swap interval of 2
+ * chosen at 120 Hz then held at 60 Hz -- 30-35 fps on screen through every
+ * match, with the game's own counter reading 60. */
+static int window_android_hz(void)
+{
+    JNIEnv* env = (JNIEnv*) SDL_AndroidGetJNIEnv();
+    jobject act = (jobject) SDL_AndroidGetActivity();
+    jobject wm = NULL, disp = NULL;
+    jclass cls = NULL;
+    jmethodID m;
+    float r = 0.0f;
+    if (env == NULL || act == NULL) {
+        return 0;
+    }
+    cls = (*env)->GetObjectClass(env, act);
+    m = (*env)->GetMethodID(env, cls, "getWindowManager", "()Landroid/view/WindowManager;");
+    (*env)->DeleteLocalRef(env, cls);
+    if (m != NULL) wm = (*env)->CallObjectMethod(env, act, m);
+    if (wm != NULL && !(*env)->ExceptionCheck(env)) {
+        cls = (*env)->GetObjectClass(env, wm);
+        m = (*env)->GetMethodID(env, cls, "getDefaultDisplay", "()Landroid/view/Display;");
+        (*env)->DeleteLocalRef(env, cls);
+        if (m != NULL) disp = (*env)->CallObjectMethod(env, wm, m);
+    }
+    if (disp != NULL && !(*env)->ExceptionCheck(env)) {
+        cls = (*env)->GetObjectClass(env, disp);
+        m = (*env)->GetMethodID(env, cls, "getRefreshRate", "()F");
+        (*env)->DeleteLocalRef(env, cls);
+        if (m != NULL) r = (*env)->CallFloatMethod(env, disp, m);
+    }
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        r = 0.0f;
+    }
+    if (disp != NULL) (*env)->DeleteLocalRef(env, disp);
+    if (wm != NULL) (*env)->DeleteLocalRef(env, wm);
+    (*env)->DeleteLocalRef(env, act);
+    return (int) (r + 0.5f);
+}
+#endif
+
+/* The panel's refresh rate, asked of the system (on Android a JNI call). */
+static int window_query_hz(void)
 {
     SDL_DisplayMode m;
+#if defined(__ANDROID__)
+    int hz = window_android_hz();
+    if (hz > 0) {
+        return hz;
+    }
+#endif
     if (!g_sdl_window || SDL_GetWindowDisplayMode(g_sdl_window, &m) != 0) {
         return 0;
     }
     return m.refresh_rate;
+}
+
+/* As of the last check (window_sync_swap_interval, once a second); cheap
+ * enough for every frame. */
+int window_refresh_hz(void)
+{
+    if (g_live_hz > 0) {
+        return g_live_hz;
+    }
+    return window_query_hz();
 }
 
 int window_vsync_on(void)
@@ -86,7 +152,10 @@ int window_sync_swap_interval(void)
     if (!g_vsync_on || g_sdl_window == NULL) {
         return g_swap_interval;
     }
-    hz = window_refresh_hz();
+    hz = window_query_hz();
+    if (hz > 0) {
+        g_live_hz = hz;
+    }
     forced = getenv("MELEE_SWAP_INTERVAL");
     if (forced != NULL) {
         want = atoi(forced);
