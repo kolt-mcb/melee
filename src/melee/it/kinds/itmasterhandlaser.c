@@ -90,11 +90,14 @@ void it_802F046C(Item_GObj* gobj)
      * plain ints of the other motions' views; with eight-byte pointers each
      * slot straddles two of them, and a laser slot read 0x100000047 when he
      * was hit in Classic -- a crash in the final battle. Touch only a live
-     * item. */
+     * item: a GObj is always in the game's pool (pc_mem_readable asks
+     * only whether an address is mapped, and under ASan the sanitizer's
+     * own reservations answered yes for 0xffffffff). */
+    extern int pc_lowmem_contains(const void* p);
     if (gobj != NULL &&
-        (!pc_mem_readable(gobj, sizeof(HSD_GObj)) ||
+        (!pc_lowmem_contains(gobj) ||
          ((HSD_GObj*) gobj)->classifier != HSD_GOBJ_CLASS_ITEM ||
-         !pc_mem_readable(((HSD_GObj*) gobj)->user_data, sizeof(Item))))
+         !pc_lowmem_contains(((HSD_GObj*) gobj)->user_data)))
     {
         return;
     }
