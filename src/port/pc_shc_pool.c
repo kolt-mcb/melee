@@ -41,6 +41,7 @@ extern int pc_glq_active;
 
 #define POOL_MAX_WORKERS 6
 #define POOL_MAX_JOBS 4096
+#define POOL_MAX_UNIS 128
 
 static EGLDisplay g_dpy = EGL_NO_DISPLAY;
 static EGLContext g_share = EGL_NO_CONTEXT;
@@ -58,6 +59,15 @@ static signed char g_job_st[POOL_MAX_JOBS]; /* PC_SHC_POOL_* */
 static int g_job_n, g_job_next, g_job_done, g_job_free;
 static long long g_deadline_ns; /* jobs past g_job_free not started by then are skipped */
 static int g_ready; /* workers that made their context current */
+/* What the caller would ask of each program once it has it: the uniform
+ * block's binding and every uniform's location. Each of those is a round
+ * trip to the render thread from the caller's side -- 42 a program, 3.1 s
+ * of a 3.4 s match prep on the Pixel 9 -- and nothing on a worker's own
+ * context. */
+static const char* const* g_uni_names;
+static int g_uni_n;
+static const char* g_ubo_block;
+static int* g_job_loc; /* POOL_MAX_JOBS x g_uni_n */
 
 static long long now_ns(void)
 {
@@ -112,7 +122,15 @@ static void* worker(void* arg)
                         glDeleteProgram(id);
                         id = 0;
                     } else {
+                        int j;
                         st = 1;
+                        if (g_ubo_block != NULL) {
+                            GLuint bi = glGetUniformBlockIndex(id, g_ubo_block);
+                            if (bi != GL_INVALID_INDEX) glUniformBlockBinding(id, bi, 0);
+                        }
+                        for (j = 0; j < g_uni_n; j++)
+                            g_job_loc[(size_t) i * (size_t) g_uni_n + (size_t) j] =
+                                glGetUniformLocation(id, g_uni_names[j]);
                     }
                     free(data);
                 }
@@ -191,6 +209,22 @@ int pc_shc_pool_available(void)
     return pool_start();
 }
 
+/* The uniforms to look up for every program the next loads bring in, and
+ * the uniform block to bind to point 0 (NULL for none). The names must
+ * stay valid. Returns 0 if there are too many to look up here. */
+int pc_shc_pool_set_uniforms(const char* const* names, int n, const char* block)
+{
+    if (n < 0 || n > POOL_MAX_UNIS) return 0;
+    if (g_job_loc == NULL) g_job_loc = (int*) malloc(sizeof(int) * POOL_MAX_JOBS * POOL_MAX_UNIS);
+    if (g_job_loc == NULL) return 0;
+    pthread_mutex_lock(&g_mu);
+    g_uni_names = names;
+    g_uni_n = n;
+    g_ubo_block = block;
+    pthread_mutex_unlock(&g_mu);
+    return 1;
+}
+
 /* Load the plan's n binaries in parallel. The first n_free always load;
  * the rest are skipped if not started within budget_ms (<0: no budget).
  * Blocks until every job is finished or skipped, calling tick (if any)
@@ -232,9 +266,10 @@ int pc_shc_pool_load(const u32* hashes, int n, int n_free, int budget_ms, void (
 }
 
 /* What the last load did with this key: PC_SHC_POOL_LOADED hands over its
- * program (once; *id), _FAILED means no usable binary, _SKIPPED means the
- * budget ran out first, -1 that it was not in the plan. */
-int pc_shc_pool_take(u32 h, unsigned* id)
+ * program (once; *id) and, if locs is not NULL, its uniform locations in
+ * pc_shc_pool_set_uniforms's order; _FAILED means no usable binary,
+ * _SKIPPED means the budget ran out first, -1 that it was not in the plan. */
+int pc_shc_pool_take(u32 h, unsigned* id, int* locs)
 {
     int i, st = -1;
     pthread_mutex_lock(&g_mu);
@@ -245,6 +280,8 @@ int pc_shc_pool_take(u32 h, unsigned* id)
             if (g_job_id[i] == 0) { st = -1; continue; } /* already taken */
             *id = g_job_id[i];
             g_job_id[i] = 0;
+            if (locs != NULL && g_uni_n > 0)
+                memcpy(locs, g_job_loc + (size_t) i * (size_t) g_uni_n, sizeof(int) * (size_t) g_uni_n);
         }
         break;
     }
@@ -278,9 +315,14 @@ int pc_shc_pool_load(const u32* hashes, int n, int n_free, int budget_ms, void (
     (void) hashes; (void) n; (void) n_free; (void) budget_ms; (void) tick;
     return -1;
 }
-int pc_shc_pool_take(u32 h, unsigned* id)
+int pc_shc_pool_set_uniforms(const char* const* names, int n, const char* block)
 {
-    (void) h; (void) id;
+    (void) names; (void) n; (void) block;
+    return 0;
+}
+int pc_shc_pool_take(u32 h, unsigned* id, int* locs)
+{
+    (void) h; (void) id; (void) locs;
     return -1;
 }
 int pc_shc_pool_leftovers(unsigned* out, int max)

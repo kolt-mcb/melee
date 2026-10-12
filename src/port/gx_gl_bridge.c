@@ -4323,6 +4323,26 @@ static Prog* pc_prog_finish(GLuint id)
     return pr;
 }
 
+/* pc_prog_finish for a program the pool loaded: it has bound the uniform
+ * block and looked up the locations already (locs, in g_uni_tab order
+ * without the specialised entries). */
+static Prog* pc_prog_finish_pooled(GLuint id, const int* locs)
+{
+    Prog* pr = (Prog*) calloc(1, sizeof(Prog));
+    int i, j = 0, k;
+    pr->id = id;
+    for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
+    for (i = 0; i < UNI_TAB_N; i++) {
+        const UniEntry* ent = &g_uni_tab[i];
+        GLint gl;
+        if (ent->spec) continue;
+        gl = locs[j++];
+        if (gl < 0) continue;
+        for (k = 0; k < ent->count; k++) pr->glloc[ent->base + k] = gl + k;
+    }
+    return pr;
+}
+
 /* Program binary cache.
  *
  * A match compiles a few hundred distinct shader variants, and it compiles
@@ -4505,7 +4525,8 @@ static Prog* pc_shc_load(u32 h)
  * ~87 ms of driver work, and one at a time that was 28 s of start-up. */
 int pc_shc_pool_available(void);
 int pc_shc_pool_load(const u32* hashes, int n, int n_free, int budget_ms, void (*tick)(void));
-int pc_shc_pool_take(u32 h, unsigned* id);
+int pc_shc_pool_take(u32 h, unsigned* id, int* locs);
+int pc_shc_pool_set_uniforms(const char* const* names, int n, const char* block);
 int pc_shc_pool_leftovers(unsigned* out, int max);
 
 #define SHC_PLAN_MAX 4096
@@ -4539,11 +4560,28 @@ int pc_shc_plan_read(int i, void** data, u32* len, u32* fmt)
     return pc_shc_read_at(g_plan_path[i], g_plan_key + (size_t) i * (size_t) g_spec_n, data, len, fmt);
 }
 
+/* The uniforms the pool looks up for each program it loads: the
+ * non-specialised entries of g_uni_tab, in order (pc_prog_finish_pooled). */
+static const char* g_pool_uni_names[UNI_TAB_N];
+static int g_pool_locs_ok;
+
 /* Load the plan; returns the pool's count, or -1 with no pool. */
 static int pc_shc_plan_load(int n_free, int budget_ms, void (*tick)(void))
 {
-    int got = pc_shc_pool_load(g_plan_h, g_plan_n, n_free, budget_ms, tick);
-    int i;
+    int got, i, n = 0;
+    for (i = 0; i < UNI_TAB_N; i++)
+        if (!g_uni_tab[i].spec) g_pool_uni_names[n++] = g_uni_tab[i].name;
+    /* MELEE_SHC_POOL_UNIS=0: the workers only load; the render thread does
+     * the lookups as before (a bisection aid). */
+    {
+        const char* e = getenv("MELEE_SHC_POOL_UNIS");
+        if (e != NULL && atoi(e) == 0) n = 0;
+    }
+    g_pool_locs_ok = n > 0 && pc_shc_pool_set_uniforms(g_pool_uni_names, n, g_ubo_ok ? "PcUniforms" : NULL);
+    /* Nothing queued for the render thread (a prep's eviction is up to
+     * 1,400 deletes) runs while the workers create on their contexts. */
+    if (g_plan_n > 0) glFinish();
+    got = pc_shc_pool_load(g_plan_h, g_plan_n, n_free, budget_ms, tick);
     for (i = 0; i < g_plan_n; i++) { free(g_plan_path[i]); g_plan_path[i] = NULL; }
     g_plan_n = 0;
     return got;
@@ -4629,6 +4667,9 @@ static u32 pc_spec_hash(void);
 static Prog* pc_prog_find(u32 h);
 static Prog* pc_prog_register(Prog* pr, u32 h, int fresh);
 static int g_prog_live;           /* GL programs alive (pc_prog_evict) */
+static void pc_prog_evict_to(const Prog* keep, int live);
+static void pc_prog_evict(const Prog* keep);
+static void pc_prog_adopt(Prog* pr, Prog* t);
 static int pc_prog_live_max(void);
 static int pc_shc_index_has_tagged(const Prog* pr);
 static void pc_shq_push(const GLint* row);
@@ -4795,6 +4836,7 @@ static int pc_shc_bring(const GLint* row, int compile_now)
 {
     u32 h;
     Prog* pr;
+    Prog* old;
     int i;
     int planned = g_plan_on ? g_plan_n : 0;
     if (g_prog_n + planned >= PROG_MAX - 256) return 0;
@@ -4803,17 +4845,31 @@ static int pc_shc_bring(const GLint* row, int compile_now)
     if (pc_prog_live_max() > 0 && g_prog_live + planned >= pc_prog_live_max() * 8 / 10) return 0;
     for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
     h = pc_spec_hash();
-    if (pc_prog_find(h) != NULL) return 0;
+    /* An evicted program keeps its entry with id 0: bring it back here too,
+     * rather than at its first draw in the middle of the match. */
+    old = pc_prog_find(h);
+    if (old != NULL && old->id != 0) return 0;
     if (g_plan_on) { pc_shc_plan_add(h); return 0; }
     {
+        static int locs[UNI_TAB_N];
         unsigned pid = 0;
-        int st = pc_shc_pool_take(h, &pid);
+        int st = pc_shc_pool_take(h, &pid, g_pool_locs_ok ? locs : NULL);
         if (st == 0) return 0; /* the pool's budget ran out before it */
         if (st < 0 && g_plan_strict) return 0; /* a cap left it out of the plan */
-        if (st == 1) { g_shc_loaded++; pr = pc_prog_finish(pid); }
+        if (st == 1) {
+            g_shc_loaded++;
+            pr = g_pool_locs_ok ? pc_prog_finish_pooled(pid, locs) : pc_prog_finish(pid);
+        }
         else pr = pc_shc_load(h);
     }
+    if (pr != NULL && old != NULL) {
+        pc_prog_adopt(old, pr);
+        old->last_used = 0; /* as a newly registered one: not yet drawn */
+        pc_prog_evict(old);
+        return 1;
+    }
     if (pr != NULL) { pc_prog_register(pr, h, 0); return 1; }
+    if (old != NULL) return 0; /* revived at its first draw */
     if (!compile_now) { pc_shq_push(row); return 0; }
     pr = pc_prog_build();
     if (pr != NULL) { pc_prog_register(pr, h, 1); return 2; }
@@ -4903,6 +4959,12 @@ void pc_shc_prepare_match(int stkind)
         fprintf(stderr, "[SHCACHE] match prep skipped for stage 0 (versus splash)\n");
         return;
     }
+    /* The prep stops at 80% of the live cap, and after one match the
+     * programs left from it and the menus are most of that: every later
+     * Classic match prepared nothing and loaded its programs mid-match.
+     * Make room first; what goes is the least recently drawn, and what
+     * this lineup needs of it comes straight back from the cache. */
+    if (pc_prog_live_max() > 0) pc_prog_evict_to(NULL, pc_prog_live_max() * 3 / 10);
     /* MELEE_SHC_PREP_MAX=n: bring at most n keys (a bisection aid for
      * drivers that fail once enough programs exist). */
     {
@@ -5219,21 +5281,31 @@ static int pc_prog_lru_cmp(const void* a, const void* b)
     u32 x = g_progs[*(const int*) a]->last_used, y = g_progs[*(const int*) b]->last_used;
     return x < y ? -1 : x > y ? 1 : 0;
 }
-static void pc_prog_evict(void)
+/* keep: the program being brought in, which is not evicted -- a new one
+ * has last_used 0 and would otherwise go first, leaving its caller to draw
+ * with program 0. */
+static void pc_prog_evict(const Prog* keep)
+{
+    int cap = pc_prog_live_max();
+    if (cap == 0 || g_prog_live <= cap) return;
+    pc_prog_evict_to(keep, cap * 85 / 100); /* down to 85%, so this runs seldom */
+}
+/* Delete least recently used programs until at most `live` remain. */
+static void pc_prog_evict_to(const Prog* keep, int live)
 {
     static int* order;
     int cap = pc_prog_live_max(), n = 0, i, target, freed = 0;
-    if (cap == 0 || g_prog_live <= cap) return;
+    if (g_prog_live <= live) return;
     if (order == NULL) order = (int*) malloc(sizeof(int) * PROG_MAX);
     if (order == NULL) return;
     for (i = 0; i < g_prog_n; i++) {
         Prog* pr = g_progs[i];
-        if (pr->id == 0 || pr == g_cur_prog || pr == g_uber) continue;
+        if (pr->id == 0 || pr == keep || pr == g_cur_prog || pr == g_uber) continue;
         if (pr->last_used + 2 > pc_frame_number) continue;
         order[n++] = i;
     }
     qsort(order, (size_t) n, sizeof(int), pc_prog_lru_cmp);
-    target = g_prog_live - cap * 85 / 100; /* down to 85%, so this runs seldom */
+    target = g_prog_live - live;
     for (i = 0; i < n && freed < target; i++) {
         Prog* pr = g_progs[order[i]];
         glDeleteProgram(pr->id);
@@ -5244,6 +5316,16 @@ static void pc_prog_evict(void)
     fprintf(stderr, "[SHADER] %d programs live, cap %d: evicted the %d least recently used\n",
             g_prog_live + freed, cap, freed);
 }
+/* Give an evicted entry the program t just loaded or built (t is freed). */
+static void pc_prog_adopt(Prog* pr, Prog* t)
+{
+    pr->id = t->id;
+    memcpy(pr->glloc, t->glloc, sizeof(pr->glloc));
+    memset(pr->gen, 0, sizeof(pr->gen));
+    pr->flushed_serial = 0;
+    free(t);
+    g_prog_live++;
+}
 /* Bring an evicted program back: its binary from the cache, or a build. */
 static int pc_prog_revive(Prog* pr, u32 h)
 {
@@ -5251,15 +5333,10 @@ static int pc_prog_revive(Prog* pr, u32 h)
     int fresh = 0;
     if (t == NULL) { t = pc_prog_build(); fresh = 1; }
     if (t == NULL) return 0;
-    pr->id = t->id;
-    memcpy(pr->glloc, t->glloc, sizeof(pr->glloc));
-    memset(pr->gen, 0, sizeof(pr->gen));
-    pr->flushed_serial = 0;
-    free(t);
+    pc_prog_adopt(pr, t);
     if (fresh) pc_shc_store(pr, h);
-    g_prog_live++;
     pr->last_used = pc_frame_number;
-    pc_prog_evict();
+    pc_prog_evict(pr);
     return 1;
 }
 
@@ -5279,7 +5356,7 @@ static Prog* pc_prog_register(Prog* pr, u32 h, int fresh)
      * prep brings in hundreds within one frame, and those are the first
      * to go if they are never drawn. */
     pr->last_used = 0;
-    pc_prog_evict();
+    pc_prog_evict(pr);
     if (getenv("MELEE_SHADERLOG")) {
         fprintf(stderr, "[SHADER] variant %d %s (frame %u, hash %08x, program %u)\n", g_prog_n,
                 fresh ? "built" : "loaded", pc_frame_number, h, (unsigned) pr->id);
