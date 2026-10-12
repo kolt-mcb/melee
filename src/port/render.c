@@ -682,14 +682,25 @@ static void render_present_tail(int frame)
                     static u64 q_fence; static u32 q_fw, q_ft;
                     static u64 q_game, q_hash, q_efb, q_read, q_s0, q_s1, q_s2, q_s3;
                     static u32 q_draws, q_up, q_mip, q_hashes, q_efbc;
-                    if (s_prev.tv_sec != 0 && wall_ns > 100e6) {
+                    static u64 q_io; static u32 q_ioo;
+                    extern unsigned int gm_GetFrameCount(void);
+                    extern unsigned long long pc_diag_io_ns; extern unsigned pc_diag_io_opens;
+                    /* MELEE_HITCH_MS=n: frames over n ms get this line (default
+                     * 100; 30 catches a dropped frame at 60 Hz). */
+                    static double s_hitch_ns = -1.0;
+                    if (s_hitch_ns < 0.0) {
+                        const char* e = getenv("MELEE_HITCH_MS");
+                        s_hitch_ns = (e != NULL && atof(e) > 0.0) ? atof(e) * 1e6 : 100e6;
+                    }
+                    if (s_prev.tv_sec != 0 && wall_ns > s_hitch_ns) {
                         fprintf(stderr,
-                            "[HITCHDET] %.0f ms frame: outside present %.1f ms | "
+                            "[HITCHDET] %.0f ms frame (gframe %u): io %.1f ms (%u opens) | outside present %.1f ms | "
                             "draws %u hash %u (%.1f ms) upload %u mipgen %u "
                             "efb %u (read %.1f pack %.1f) | vbo %.1f state %.1f "
                             "unif %.1f draw %.1f ms | fence %.1f ms "
                             "(%u waits, %u timeouts)\n",
-                            wall_ns / 1e6,
+                            wall_ns / 1e6, (unsigned) gm_GetFrameCount(),
+                            (double) (pc_diag_io_ns - q_io) / 1e6, pc_diag_io_opens - q_ioo,
                             (double) (pc_diag_game_ns - q_game) / 1e6,
                             pc_diag_draws - q_draws, pc_diag_hashes - q_hashes,
                             (double) (pc_diag_hash_ns - q_hash) / 1e6,
@@ -714,6 +725,7 @@ static void render_present_tail(int frame)
                     q_efbc = pc_diag_efb_copies;
                     q_fence = pc_diag_fence_ns;
                     q_fw = pc_diag_fence_waits; q_ft = pc_diag_fence_timeouts;
+                    q_io = pc_diag_io_ns; q_ioo = pc_diag_io_opens;
                 }
                 if (s_prev.tv_sec != 0) {
                     if (wall_ns > s_worst_ns) s_worst_ns = wall_ns;
