@@ -71,7 +71,9 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:theme="@style/AppTheme"
-        android:hardwareAccelerated="true" >
+        android:hardwareAccelerated="true"
+        android:memtagMode="sync"
+        android:gwpAsanMode="always" >
 
         <!-- SDL hints, applied by SDLActivity as environment variables
              before the native library starts. window.c sets both as well
