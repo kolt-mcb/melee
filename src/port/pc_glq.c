@@ -687,7 +687,14 @@ static void q_take_exec(void* p)
  * big.LITTLE phone the scheduler put the new render thread on a 1.5 GHz
  * little core and it took three times as long as the same GL work inline;
  * both threads belong on the big cluster. MELEE_GL_THREAD_ANYCPU=1 leaves
- * placement to the scheduler. */
+ * placement to the scheduler.
+ *
+ * Three threads are pinned (game, bridge, render), so the set takes the next
+ * cluster down too until it holds at least that many CPUs. The Pixel 9's
+ * Tensor G4 has a single 3.1 GHz core over three at 2.6 GHz: all three
+ * threads on the one core ran the character select at 43 fps, and at a
+ * steady 60 when the scheduler was left to place them. */
+#define Q_PINNED_THREADS 3
 static int q_fast_cpus(cpu_set_t* set)
 {
     long best = 0, f[64];
@@ -705,8 +712,14 @@ static int q_fast_cpus(cpu_set_t* set)
         if (f[i] > best) best = f[i];
     }
     if (best == 0) return 0;
-    for (i = 0; i < 64; i++) {
-        if (f[i] == best) { CPU_SET(i, set); n++; }
+    for (;;) {
+        long next = 0;
+        for (i = 0; i < 64; i++) {
+            if (f[i] == best) { CPU_SET(i, set); n++; }
+            else if (f[i] < best && f[i] > next) next = f[i];
+        }
+        if (n >= Q_PINNED_THREADS || next == 0) break;
+        best = next;
     }
     return n;
 }
