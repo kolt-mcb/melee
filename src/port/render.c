@@ -824,14 +824,6 @@ static void render_present_tail(int frame)
                 pc_diag_hash_bytes = pc_diag_hash_ns = 0;
                 pc_diag_efb_ns = pc_diag_efb_read_ns = 0;
                 pc_diag_efb_copies = 0;
-                /* Android's panel changes refresh rate underneath the app, and
-                 * the swap interval was chosen once at startup; re-pick it from
-                 * the rate the display really has. Once a second, off the frame
-                 * path: on Android the query is a JNI call. */
-                {
-                    int iv = window_sync_swap_interval();
-                    (void) iv;
-                }
                 /* A sixty-frame average reads 60 fps straight through a
                  * dropped frame every couple of seconds, which is the thing
                  * actually felt as lag. */
