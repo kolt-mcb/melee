@@ -82,6 +82,14 @@ Vec3 const grPushOn_803B844C = { 0 };
 Vec3 const grPushOn_803B8458 = { 0.0f, 100.0f, 0.0f };
 Vec3 const grPushOn_803B8464 = { 0.0f, 100.0f, 0.0f };
 float grPushOn_804D4934 = 16.0f;
+#if BUILD_TARGET_PC
+/* grPushOn_803E7B74 is a point light whose parameters pointer names this
+ * lone float: the console reads ref_br from it and ref_dist and dist_func
+ * from the string "lobj.h" that follows it in .sdata (1.16e27 and
+ * 0x2e680000). The same three values, from a struct of their own. */
+static const HSD_LightPointDesc grPushOn_804D4934_point = { 16.0f, 1.1575920726323576e+27f,
+                                                            0x2e680000 };
+#endif
 
 StageCallbacks grPushOn_StageCallbacks[] = {
     {
@@ -237,7 +245,11 @@ HSD_LightDesc grPushOn_803E7B74 = {
     { 0xFF, 0xFF, 0xFF, 0xFF },
     NULL,
     NULL,
+#if BUILD_TARGET_PC
+    { (void*) &grPushOn_804D4934_point },
+#else
     { &grPushOn_804D4934 },
+#endif
 };
 
 void grPushOn_802184CC(Ground_GObj* gobj)
