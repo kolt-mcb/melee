@@ -4863,6 +4863,10 @@ static int pc_shc_prep_over(const struct timespec* t0, int ms)
     return (t.tv_sec - t0->tv_sec) * 1e3 + (t.tv_nsec - t0->tv_nsec) / 1e6 >= ms;
 }
 
+/* Counts match preps, so render.c can tell the match counter's return to
+ * zero at a match's end from its reset at the start of the next one. */
+unsigned pc_shc_prep_serial;
+
 /* The loading screen: bring in every key this lineup will draw. */
 void pc_shc_prepare_match(int stkind)
 {
@@ -4884,6 +4888,7 @@ void pc_shc_prepare_match(int stkind)
      * route's Stage_802251B4 hook noted first rather than overwrite it. */
     if (stkind < 0 || stkind >= 35) stkind = g_shc_cur_stkind;
     g_shc_cur_stkind = stkind;
+    pc_shc_prep_serial++;
     /* Widescreen is for the stage: stage 0 is Classic's versus splash, a
      * 2D screen drawn for 4:3 like the menus. */
     g_wide_match = stkind > 0;

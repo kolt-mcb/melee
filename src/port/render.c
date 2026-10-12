@@ -578,13 +578,21 @@ static void render_present_tail(int frame)
             extern void pc_shc_pump(long long budget_ns);
             extern void pc_shc_match_over(void);
             extern int pc_shc_in_match(void);
-            static unsigned int s_prev_gframe;
+            extern unsigned pc_shc_prep_serial;
+            static unsigned int s_prev_gframe, s_count_serial;
             unsigned int gf = gm_GetFrameCount();
             int mode = gm_GetCurrentGameMode();
             /* A match is over when its frame counter returns to zero -- or,
              * for the modes whose counter never moves (Classic), when the
-             * game is back at the title or the menu. */
-            if ((s_prev_gframe != 0 && gf == 0) || ((mode == 0 || mode == 1) && pc_shc_in_match())) {
+             * game is back at the title or the menu. Between Classic's
+             * matches the counter keeps the last match's count through the
+             * splash and is reset only as the next match starts, after that
+             * match's prep: a prep since the count began makes the zero
+             * that match's start, not an end. Taken for an end, it turned
+             * widescreen off for every Classic match after the first. */
+            if (s_prev_gframe == 0 && gf != 0) s_count_serial = pc_shc_prep_serial;
+            if ((s_prev_gframe != 0 && gf == 0 && s_count_serial == pc_shc_prep_serial) ||
+                ((mode == 0 || mode == 1) && pc_shc_in_match())) {
                 pc_shc_match_over();
             }
             s_prev_gframe = gf;
