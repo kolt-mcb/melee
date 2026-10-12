@@ -850,6 +850,24 @@ static void* q_main(void* arg)
     return NULL;
 }
 
+/* Everything recorded so far, drawn: the bridge thread has consumed the GX
+ * queue and the render thread the GL queue. For the game thread, before it
+ * frees memory the queues still point into. A scene's heap is destroyed as
+ * the next scene loads (MELEE_HEAP_RESET), and its blocks are reused at
+ * once; the bridge, a frame behind, was still reading display lists and
+ * textures out of them -- on the Pixel 9 that ended in a corrupted heap
+ * chunk a few matches into Classic. */
+void pc_glq_quiesce(void)
+{
+    extern void pc_gxq_drain(void);
+    pc_gxq_drain();
+    if (!pc_glq_active) return;
+    /* The bridge thread is idle now: this thread may record the sync. */
+    q_producer_swap_in();
+    pc_glq_call_sync(q_nop, NULL);
+    q_producer_swap_out();
+}
+
 /* The app going to the background: SDL is about to back the context up on
  * the game thread, so give it back to the game thread now. Runs inside the
  * event pump (an event watch), on the game thread. */

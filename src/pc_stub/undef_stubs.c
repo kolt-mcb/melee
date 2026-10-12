@@ -5624,9 +5624,12 @@ __attribute__((weak)) void OSDestroyHeap(int id)
 {
     extern void pc_ftconv_purge_freed(void);
     extern void pc_itconv_purge_freed(void);
+    extern void pc_glq_quiesce(void) __attribute__((weak));
     size_t off = 0;
     unsigned long n = 0, bytes = 0;
     if (id <= 0 || g_low_mem_base == NULL) return;
+    /* The bridge and render threads may still be drawing from this heap. */
+    if (pc_glq_quiesce) pc_glq_quiesce();
     g_freed_n = 0;
     while (off + sizeof(struct pc_lm_hdr) <= g_low_mem_used) {
         struct pc_lm_hdr* h = (struct pc_lm_hdr*) (g_low_mem_base + off);

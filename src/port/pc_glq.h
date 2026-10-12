@@ -34,6 +34,8 @@ void pc_glq_swap(void* sdl_window);
 int pc_glq_set_swap_interval(int interval);
 /* Run everything queued, then return. */
 void pc_glq_drain(void);
+/* Both queues, GX and GL, run dry: call before freeing memory they read. */
+void pc_glq_quiesce(void);
 void pc_glq_wait_report(unsigned frames);
 
 /* Crash breadcrumb (main.c prints it) and MELEE_GLTIME. */
