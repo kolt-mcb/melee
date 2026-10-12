@@ -575,6 +575,11 @@ HSD_LObj* grPushOn_80218ED4(HSD_GObj* gobj)
 }
 
 float grPushOn_804D4948 = 16.0f;
+#if BUILD_TARGET_PC
+/* As grPushOn_804D4934_point: the console reads ref_dist and dist_func
+ * from the zero word and the "jobj.h" string that follow this float. */
+static const HSD_LightPointDesc grPushOn_804D4948_point = { 16.0f, 0.0f, 0x6a6f626a };
+#endif
 
 HSD_LightDesc grPushOn_803E7B90 = {
     NULL,
@@ -584,7 +589,11 @@ HSD_LightDesc grPushOn_803E7B90 = {
     { 0xFF, 0xFF, 0xFF, 0xFF },
     NULL,
     NULL,
+#if BUILD_TARGET_PC
+    { (void*) &grPushOn_804D4948_point },
+#else
     { &grPushOn_804D4948 },
+#endif
 };
 
 static struct grPushOn_LightConfig light_configs[9] = {
