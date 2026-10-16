@@ -1992,6 +1992,25 @@ static void gls_viewport(GLint x, GLint y, GLsizei w, GLsizei h)
     pc_diag_gl_calls++;
     glViewport(x, y, w, h);
 }
+/* The current viewport and scissor box, from the mirror when it knows them.
+ * glGetIntegerv for these is a JS call into WebGL on the web, and the shadow
+ * target asked for both on every shadow: 20% of a frame's CPU on Onett. */
+static void gls_get_viewport(GLint out[4])
+{
+    if (!(g_gls.known & GLS_VP)) {
+        glGetIntegerv(GL_VIEWPORT, g_gls.vp);
+        g_gls.known |= GLS_VP;
+    }
+    memcpy(out, g_gls.vp, sizeof(g_gls.vp));
+}
+static void gls_get_scissor(GLint out[4])
+{
+    if (!(g_gls.known & GLS_SRECT)) {
+        glGetIntegerv(GL_SCISSOR_BOX, g_gls.srect);
+        g_gls.known |= GLS_SRECT;
+    }
+    memcpy(out, g_gls.srect, sizeof(g_gls.srect));
+}
 static void gls_bind_vao(GLuint v)
 {
     if ((g_gls.known & GLS_VAO) && g_gls.vao == v) { pc_diag_gl_skips++; return; }
@@ -2455,6 +2474,13 @@ static void pc_vbo_ring_reserve(GLintptr bytes)
         g_vbo_lap++;
     }
 }
+#ifdef __EMSCRIPTEN__
+static int pc_web_multidraw(void);
+/* emscripten's WEBGL_multi_draw entry point (library_webgl.js); its header,
+ * webgl/webgl1_ext.h, clashes with the GLES3 ones this file includes. */
+void glMultiDrawArraysWEBGL(GLenum mode, const GLint* firsts,
+                            const GLsizei* counts, GLsizei drawcount);
+#endif
 static void pc_batch_flush(void)
 {
     int i;
@@ -2540,6 +2566,15 @@ static void pc_batch_flush(void)
                           g_batch_n);
     }
 #endif
+#ifdef __EMSCRIPTEN__
+    else if (pc_web_multidraw()) {
+        pc_gl_crumb_draw();
+        glMultiDrawArraysWEBGL(g_batch_mode, g_batch_first, g_batch_count,
+                               g_batch_n);
+        pc_gl_crumb_after();
+        pc_diag_draw_calls++;
+    }
+#endif
     else {
         /* No multi-draw here: OpenGL ES and WebGL2 have none, and the
          * Android and wasm targets build this file against a GLES shim. The
@@ -2615,6 +2650,25 @@ static int pc_xdl_on(void)
     if (on < 0) { const char* e = getenv("MELEE_XDL"); on = !(e && e[0] == '0'); }
     return on;
 }
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+/* WebGL2 has no glMultiDrawArrays, but every desktop browser ships
+ * WEBGL_multi_draw. Without it a batch of N primitives was N draw calls --
+ * Onett with four fighters issued ~1,400 of them for 478 batches, each a JS
+ * call with WebGL's validation behind it. */
+static int pc_web_multidraw(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_NO_MULTIDRAW") == NULL &&
+             emscripten_webgl_enable_WEBGL_multi_draw(
+                 emscripten_webgl_get_current_context());
+        fprintf(stderr, "[GL] WEBGL_multi_draw: %s\n", on ? "yes" : "no");
+    }
+    return on;
+}
+#endif
+
 static int pc_indexed_on(void)
 {
 #if defined(__EMSCRIPTEN__)
@@ -2797,6 +2851,8 @@ static const char* pc_es_header(void)
 }
 
 static int pc_gpu_dl_on(void);
+static int g_shader_nowait;
+
 static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
@@ -2835,6 +2891,11 @@ static GLuint compile_shader(GLenum type, const char* src)
     }
     glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
+    /* A parallel compile (pc_web_prog_begin) must not ask: the status query
+     * is what waits for the compile. Its link status says the same later. */
+    if (g_shader_nowait) {
+        return s;
+    }
     GLint ok;
     glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
     if (!ok) {
@@ -5206,6 +5267,122 @@ static Prog* pc_prog_build(void)
     return pc_prog_finish(id);
 }
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+/* Shader variants compiled in parallel (KHR_parallel_shader_compile).
+ *
+ * A variant met mid-match is deferred: the base program draws it until it
+ * exists. The valve then compiled deferred variants on the game thread, and
+ * in a browser that is the worst place for it -- the link status query
+ * waits for the GPU process to finish the compile, so a stage's first
+ * seconds ran at 4 fps (Fountain of Dreams: getProgramParameter 38% of the
+ * CPU). Here the compile and link are only started, the browser does them in
+ * parallel, and each frame asks COMPLETION_STATUS_KHR -- which never waits --
+ * and registers what has finished. */
+#define PC_PAR_MAX 24
+static struct {
+    GLuint id;
+    u32 hash;
+    GLint row[VLOC_MAX];
+} *g_par;
+static int g_par_n;
+
+static int pc_web_parallel(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        on = getenv("MELEE_NO_PARALLEL_SHADERS") == NULL &&
+             emscripten_webgl_enable_extension(
+                 emscripten_webgl_get_current_context(),
+                 "KHR_parallel_shader_compile");
+        fprintf(stderr, "[SHADER] parallel compile: %s\n", on ? "yes" : "no");
+    }
+    return on;
+}
+
+static int pc_par_has(u32 h)
+{
+    int i;
+    for (i = 0; i < g_par_n; i++) if (g_par[i].hash == h) return 1;
+    return 0;
+}
+
+/* Start building the variant for the current specialisation state. */
+static void pc_web_prog_begin(u32 h)
+{
+    char* vsrc;
+    char* fsrc;
+    GLuint vs, fs, id;
+    int i;
+    if (g_par_n >= PC_PAR_MAX) return;
+    if (g_par == NULL) {
+        g_par = calloc(PC_PAR_MAX, sizeof(*g_par));
+        if (g_par == NULL) return;
+    }
+    vsrc = pc_spec_source(g_vert_src);
+    fsrc = pc_spec_source(g_frag_src);
+    g_shader_nowait = 1;
+    vs = compile_shader(GL_VERTEX_SHADER, vsrc);
+    fs = compile_shader(GL_FRAGMENT_SHADER, fsrc);
+    g_shader_nowait = 0;
+    free(vsrc); free(fsrc);
+    id = glCreateProgram();
+    glAttachShader(id, vs);
+    glAttachShader(id, fs);
+    glBindAttribLocation(id, 0, "a_pos");
+    glBindAttribLocation(id, 1, "a_nrm");
+    glBindAttribLocation(id, 2, "a_col");
+    glBindAttribLocation(id, 3, "a_uv0");
+    glBindAttribLocation(id, 4, "a_uv1");
+    glLinkProgram(id);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    g_par[g_par_n].id = id;
+    g_par[g_par_n].hash = h;
+    for (i = 0; i < g_spec_n; i++) g_par[g_par_n].row[i] = g_spec_canon[g_spec_slots[i]];
+    g_par_n++;
+}
+
+static int pc_defer_has(u32 h);
+static void pc_defer_drop(u32 h);
+
+/* Register every parallel build that has finished. Once a frame. */
+void pc_web_prog_poll(void)
+{
+    GLint saved[VLOC_MAX];
+    int i = 0, k;
+    if (g_par_n == 0) return;
+    memcpy(saved, g_spec_vals, sizeof(saved));
+    while (i < g_par_n) {
+        GLint done = 0, linked = 0;
+        glGetProgramiv(g_par[i].id, 0x91B1 /* GL_COMPLETION_STATUS_KHR */, &done);
+        if (!done) { i++; continue; }
+        glGetProgramiv(g_par[i].id, GL_LINK_STATUS, &linked);
+        if (!linked) {
+            GLchar log[512];
+            glGetProgramInfoLog(g_par[i].id, sizeof(log), NULL, log);
+            PORT_LOG_ERROR("shader variant link failed: %s", log);
+            glDeleteProgram(g_par[i].id);
+        } else {
+            for (k = 0; k < g_spec_n; k++) g_spec_vals[g_spec_slots[k]] = g_par[i].row[k];
+            if (pc_spec_hash() == g_par[i].hash && pc_prog_find(g_par[i].hash) == NULL) {
+                Prog* pr = pc_prog_finish(g_par[i].id);
+                if (pr != NULL) pc_prog_register(pr, g_par[i].hash, 1);
+            } else {
+                glDeleteProgram(g_par[i].id);
+            }
+        }
+        pc_defer_drop(g_par[i].hash);
+        g_par[i] = g_par[--g_par_n];
+    }
+    memcpy(g_spec_vals, saved, sizeof(saved));
+    g_spec_dirty = 1;
+    g_cur_prog = NULL;
+}
+#else
+void pc_web_prog_poll(void) {}
+#endif
+
 static u32 pc_spec_hash(void)
 {
     u32 h = 2166136261u;
@@ -5438,6 +5615,23 @@ int pc_shc_compile_one_deferred(void)
     memcpy(saved, g_spec_vals, sizeof(saved));
     for (i = 0; i < g_spec_n; i++) g_spec_vals[g_spec_slots[i]] = row[i];
     h = pc_spec_hash();
+#ifdef __EMSCRIPTEN__
+    if (pc_web_parallel()) {
+        /* Only started; pc_web_prog_poll registers it and takes it out of
+         * the deferred set when the browser has finished it. */
+        if (g_par_n >= PC_PAR_MAX) {
+            memcpy(g_spec_vals, saved, sizeof(saved));
+            g_spec_dirty = 1;
+            return 0;
+        }
+        if (pc_prog_find(h) == NULL && !pc_par_has(h)) pc_web_prog_begin(h);
+        g_shq_i++;
+        memcpy(g_spec_vals, saved, sizeof(saved));
+        g_spec_dirty = 1;
+        g_cur_prog = NULL;
+        return 1;
+    }
+#endif
     if (pc_prog_find(h) == NULL) {
         pr = pc_shc_load(h);
         if (pr != NULL) {
@@ -5473,6 +5667,14 @@ int pc_shc_in_match(void)
 int pc_shc_deferred(void)
 {
     return g_defer_n;
+}
+
+static void pc_defer_drop(u32 h)
+{
+    int i;
+    for (i = 0; i < g_defer_n; i++) {
+        if (g_defer_hash[i] == h) { g_defer_hash[i] = g_defer_hash[--g_defer_n]; break; }
+    }
 }
 
 static int pc_defer_has(u32 h)
@@ -8651,43 +8853,48 @@ static void pc_web_swizzle_target(GLuint* dst, u32* dw, u32* dh, u32 w, u32 h)
 }
 
 /* Draw src into dst (RGBA8, w x h) with output channel i taken from source
- * channel sel[i]. 1 on success. */
-static int pc_web_swizzle(GLuint src, GLuint dst, u32 w, u32 h, const int sel[4])
+ * channel sel[i], then bind restore_fb for drawing. 1 on success.
+ *
+ * Nothing here asks GL what it was set to: every glGet is a JS call into
+ * WebGL, and querying six bindings per shadow per frame was 15% of Onett's
+ * CPU. The bridge mirrors what it binds, so the pass restores from those
+ * mirrors (viewport, colour mask, vertex array, capabilities) or resets them
+ * so the next draw binds afresh (program, texture units). */
+static int pc_web_swizzle(GLuint src, GLuint dst, u32 w, u32 h, const int sel[4],
+                          GLuint restore_fb)
 {
     GLfloat m[16] = { 0 };
-    GLint prev_prog = 0, prev_vao = 0, prev_draw = 0, prev_unit = 0, prev_tex = 0;
     GLint vp[4];
     GLboolean mask[4];
+    GLuint prev_vao;
     GLboolean depth_was, blend_was, cull_was, scissor_was, stencil_was;
     int i;
 
     if (!pc_web_swizzle_init()) return 0;
     for (i = 0; i < 4; i++) m[sel[i] * 4 + i] = 1.0f; /* column-major */
 
-    glGetIntegerv(GL_CURRENT_PROGRAM, &prev_prog);
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_unit);
-    glGetIntegerv(GL_VIEWPORT, vp);
-    glGetBooleanv(GL_COLOR_WRITEMASK, mask);
+    if (!(g_gls.known & GLS_CMASK)) gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    memcpy(mask, g_gls.cmask, sizeof(mask));
+    if (!(g_gls.known & GLS_VAO)) gls_bind_vao(0);
+    prev_vao = g_gls.vao;
+    gls_get_viewport(vp);
     depth_was = gls_is_enabled(GL_DEPTH_TEST);
     blend_was = gls_is_enabled(GL_BLEND);
     cull_was = gls_is_enabled(GL_CULL_FACE);
     scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
-    stencil_was = glIsEnabled(GL_STENCIL_TEST); /* not in the gls cache */
+    stencil_was = glIsEnabled(GL_STENCIL_TEST); /* not in the gls mirror */
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sw_fbo);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, dst, 0);
-    glViewport(0, 0, (GLsizei) w, (GLsizei) h);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gls_viewport(0, 0, (GLsizei) w, (GLsizei) h);
+    gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     gls_disable(GL_DEPTH_TEST);
     gls_disable(GL_BLEND);
     gls_disable(GL_CULL_FACE);
     gls_disable(GL_SCISSOR_TEST);
     if (stencil_was) glDisable(GL_STENCIL_TEST);
     glActiveTexture(GL_TEXTURE0);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
     glBindTexture(GL_TEXTURE_2D, src);
     glUseProgram(sw_prog);
     glUniform1i(sw_loc_src, 0);
@@ -8695,14 +8902,12 @@ static int pc_web_swizzle(GLuint src, GLuint dst, u32 w, u32 h, const int sel[4]
     gls_bind_vao(sw_vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    gls_bind_vao((GLuint) prev_vao);
-    glUseProgram((GLuint) prev_prog);
-    glBindTexture(GL_TEXTURE_2D, (GLuint) prev_tex);
-    glActiveTexture((GLenum) prev_unit);
-    pc_tex_bind_reset();
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
-    glViewport(vp[0], vp[1], vp[2], vp[3]);
-    glColorMask(mask[0], mask[1], mask[2], mask[3]);
+    gls_bind_vao(prev_vao);
+    g_cur_prog = NULL;      /* the next draw binds its own program */
+    pc_tex_bind_reset();    /* and its own textures and unit */
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, restore_fb);
+    gls_viewport(vp[0], vp[1], vp[2], vp[3]);
+    gls_color_mask(mask[0], mask[1], mask[2], mask[3]);
     if (depth_was) gls_enable(GL_DEPTH_TEST);
     if (blend_was) gls_enable(GL_BLEND);
     if (cull_was) gls_enable(GL_CULL_FACE);
@@ -8738,8 +8943,8 @@ int pc_gx_offscreen_begin(int w, int h)
      * the target's 256x256 rectangle behind clips whatever the game draws
      * next into a corner, until its own GXSetViewport happens to come
      * along. */
-    glGetIntegerv(GL_VIEWPORT, g_off_prev_vp);
-    glGetIntegerv(GL_SCISSOR_BOX, g_off_prev_sc);
+    gls_get_viewport(g_off_prev_vp);
+    gls_get_scissor(g_off_prev_sc);
     if (w != g_off_w || h != g_off_h) {
         pc_tex_bind_reset();
         glBindTexture(GL_TEXTURE_2D, g_off_tex);
@@ -8971,7 +9176,8 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
                      swz[c] == GL_ALPHA ? 3 : 0;
         }
         pc_web_swizzle_target(&sw_tex[slot], &sw_w[slot], &sw_h[slot], dw, dh);
-        if (!pc_web_swizzle(g_cp_tex[slot], sw_tex[slot], dw, dh, sel)) return 0;
+        if (!pc_web_swizzle(g_cp_tex[slot], sw_tex[slot], dw, dh, sel,
+                            (GLuint) prev_draw)) return 0;
         o->tex = sw_tex[slot];
     }
 #endif
@@ -9009,7 +9215,7 @@ static void pc_efb_offscreen_publish(void* img)
         pc_web_swizzle_target(&g_off_sw_tex, &g_off_sw_w, &g_off_sw_h,
                               (u32) g_off_w, (u32) g_off_h);
         if (pc_web_swizzle(g_off_tex, g_off_sw_tex, (u32) g_off_w,
-                           (u32) g_off_h, rrrr))
+                           (u32) g_off_h, rrrr, g_off_fbo))
         {
             o->tex = g_off_sw_tex;
         }
@@ -9197,7 +9403,7 @@ void pc_ires_present(void)
     pc_glq_default_fb = 0;
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); /* the window */
     glBindFramebuffer(GL_READ_FRAMEBUFFER, pc_ires_fbo);
-    glViewport(0, 0, ww, wh);
+    gls_viewport(0, 0, ww, wh); /* through the mirror, which others read */
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glBlitFramebuffer(0, 0, pc_ires_w, pc_ires_h, dx, dy, dx + dw, dy + dh,
@@ -11882,6 +12088,14 @@ void GXCallDisplayList(void* list, u32 nbytes)
     pc_stat_dlcalls++;
     if (!list || nbytes == 0) return;
     struct timespec dl_t0;
+#ifdef __EMSCRIPTEN__
+    /* On the web a clock read is a JS call (performance.now), and two per
+     * display list were 2% of a frame's CPU for a diagnostic nobody reads
+     * unless MELEE_FPS asks for the [FPS] line. */
+    static int dl_timed = -1;
+    if (dl_timed < 0) dl_timed = getenv("MELEE_FPS") != NULL;
+    if (dl_timed)
+#endif
     clock_gettime(CLOCK_MONOTONIC, &dl_t0);
 
     const u8* ptr = (const u8*)list;
@@ -12223,6 +12437,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
     }
 
 dl_end:
+#ifdef __EMSCRIPTEN__
+    if (dl_timed)
+#endif
     {
         struct timespec dl_t1;
         clock_gettime(CLOCK_MONOTONIC, &dl_t1);
