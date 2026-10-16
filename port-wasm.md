@@ -12,6 +12,43 @@ opposite of the problem the desktop port has spent its life working around.
 The two real obstacles are structural rather than lexical: the frame loop
 blocks, and the GL bridge is written against desktop headers.
 
+## Status (2026-10-15): playable
+
+The page asks for the player's disc image and plays from it: title, menus,
+character select, matches, results, with music and movies. All 31 stages
+(a level-9 CPU pair on each) and all 26 characters run a full minute
+without a trap; matches run to time and through the results screen.
+
+- **Assets (Phase 4)** went a different way from the plan: no IDBFS copy.
+  `src/port/pc_web_iso.c` wraps `fopen` and reads the ISO in place through
+  `fopencookie`, suspending under ASYNCIFY (`tools/wasm/iso_fs.js` parses
+  the FST). Whole files up to 32 MB are read on open and cached in JS; the
+  music and movies stream.
+- **Frame cost** is the CPU's, as measured in September, but small now:
+  8.5 ms of work a frame on Onett at 2,091 draws, in headless Chromium.
+  Not yet measured on a real GPU.
+- **What wasm32 found.** Code written for 64-bit hosts that is wrong at
+  4-byte pointers: hard-coded host offsets and pads (`pc_itconv.c`'s polar
+  bear, Zebes' acid-state pad, Peach's Castle's pads, the text system's
+  block size). Calls through a mismatched function type, which wasm traps
+  on: a deferred SFX callback, an item material, Rainbow Cruise's joint
+  callback, three collision-device callbacks, two item state tables
+  (`tools/wasm/table_audit.py` checks every state table). And one bug that
+  is not wasm's at all: a missing file closed every DVD entry.
+- **WebGL2 is not GLES 3.0.** It has no texture swizzle (a pass replaces
+  it) and fixes a buffer's kind at its first binding (the GPU display
+  lists' index arena; those lists are off on the web).
+- **Known gaps.** The results screen's portrait boxes are empty and its
+  background black; unconfirmed against a native run. Gamepads are
+  expected to work through SDL's standard-mapping support but have not
+  been tried with a real pad.
+
+Testing: the in-app browser pane has no WebGL. `tools/wasm/drive.js` drives
+headless Chromium (keys, screenshots, `file:` hands the page an ISO), and
+`?MELEE_*` query parameters set the port's environment knobs, e.g.
+`?MELEE_BOOT_MODE=14&MELEE_BOOT_MATCH=8,8,31&MELEE_FORCE_CPU=9,9` for a
+CPU match and `&MELEE_NORENDER=1` to skip the GPU for a fast logic sweep.
+
 ## Phase 0 — emcc compile spike (find the true breakage list)
 
 Add a cross mode to `configure_pc.py`: `EMSDK=<path> python3 configure_pc.py`
