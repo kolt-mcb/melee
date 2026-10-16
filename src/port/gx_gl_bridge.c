@@ -3223,10 +3223,12 @@ static void pc_shtest(const char* dir)
                     else glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, texel);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+#ifndef __EMSCRIPTEN__ /* no texture swizzle in WebGL */
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, swz[m][0]);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, swz[m][1]);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, swz[m][2]);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, swz[m][3]);
+#endif
                 }
             }
             for (u = 0; u < 4; u++) {
@@ -5923,8 +5925,11 @@ static void bridge_create_gl(void)
     /* The vertex ring doubles as the index ring: a batch's indices are
      * streamed into it right after the batch's vertices (see
      * pc_batch_flush), so the same fences cover both. The element binding
-     * is VAO state, recorded here once. */
+     * is VAO state, recorded here once. WebGL forbids one buffer serving as
+     * both, and draws nothing indexed from the ring (pc_indexed_on). */
+#ifndef __EMSCRIPTEN__
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_vbo);
+#endif
     
     gls_bind_vbo(0);
     gls_bind_vao(0);
@@ -8564,6 +8569,152 @@ static int pc_efb_offscreen_on(void)
     return on;
 }
 
+#ifdef __EMSCRIPTEN__
+/* WebGL2 has no texture swizzle (GL_TEXTURE_SWIZZLE_* is an INVALID_ENUM
+ * there), and the shadow target and the GPU EFB copies depend on it: an R8
+ * shadow read as (r,0,0,1) turns everything it falls on red, and an A8 copy
+ * reads as nothing. So the swizzle is done once, when the texture is made,
+ * by drawing it into an RGBA8 texture: out = M * texel, M picking each
+ * output channel from sel[i] (0..3 = R,G,B,A). Like the movie quad, it
+ * keeps its own program and VAO and puts back all GL state it touches. */
+static GLuint sw_prog, sw_vao, sw_fbo;
+static GLint sw_loc_m, sw_loc_src;
+
+static const char* sw_vert_src =
+"#version 330 core\n"
+"out vec2 v_uv;\n"
+"void main() {\n"
+"    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n"
+"    v_uv = p;\n"
+"    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
+"}\n";
+
+static const char* sw_frag_src =
+"#version 330 core\n"
+"in vec2 v_uv;\n"
+"out vec4 frag_color;\n"
+"uniform sampler2D u_src;\n"
+"uniform mat4 u_m;\n"
+"void main() {\n"
+"    frag_color = u_m * texture(u_src, v_uv);\n"
+"}\n";
+
+static GLuint compile_shader(GLenum type, const char* src);
+
+static int pc_web_swizzle_init(void)
+{
+    GLuint vs, fs;
+    GLint ok = 0;
+    if (sw_prog != 0) return 1;
+    vs = compile_shader(GL_VERTEX_SHADER, sw_vert_src);
+    fs = compile_shader(GL_FRAGMENT_SHADER, sw_frag_src);
+    if (vs == 0 || fs == 0) {
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return 0;
+    }
+    sw_prog = glCreateProgram();
+    glAttachShader(sw_prog, vs);
+    glAttachShader(sw_prog, fs);
+    glLinkProgram(sw_prog);
+    glGetProgramiv(sw_prog, GL_LINK_STATUS, &ok);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    if (!ok) {
+        PORT_LOG_ERROR("swizzle pass: link failed");
+        glDeleteProgram(sw_prog);
+        sw_prog = 0;
+        return 0;
+    }
+    sw_loc_m = glGetUniformLocation(sw_prog, "u_m");
+    sw_loc_src = glGetUniformLocation(sw_prog, "u_src");
+    glGenVertexArrays(1, &sw_vao);
+    glGenFramebuffers(1, &sw_fbo);
+    return sw_vao != 0 && sw_fbo != 0;
+}
+
+/* (Re)allocate *dst as a w x h RGBA8 texture if it is not one already. */
+static void pc_web_swizzle_target(GLuint* dst, u32* dw, u32* dh, u32 w, u32 h)
+{
+    if (*dst == 0) glGenTextures(1, dst);
+    if (*dw == w && *dh == h) return;
+    pc_tex_bind_reset();
+    glBindTexture(GL_TEXTURE_2D, *dst);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) w, (GLsizei) h, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    *dw = w;
+    *dh = h;
+}
+
+/* Draw src into dst (RGBA8, w x h) with output channel i taken from source
+ * channel sel[i]. 1 on success. */
+static int pc_web_swizzle(GLuint src, GLuint dst, u32 w, u32 h, const int sel[4])
+{
+    GLfloat m[16] = { 0 };
+    GLint prev_prog = 0, prev_vao = 0, prev_draw = 0, prev_unit = 0, prev_tex = 0;
+    GLint vp[4];
+    GLboolean mask[4];
+    GLboolean depth_was, blend_was, cull_was, scissor_was, stencil_was;
+    int i;
+
+    if (!pc_web_swizzle_init()) return 0;
+    for (i = 0; i < 4; i++) m[sel[i] * 4 + i] = 1.0f; /* column-major */
+
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prev_prog);
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vao);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_unit);
+    glGetIntegerv(GL_VIEWPORT, vp);
+    glGetBooleanv(GL_COLOR_WRITEMASK, mask);
+    depth_was = gls_is_enabled(GL_DEPTH_TEST);
+    blend_was = gls_is_enabled(GL_BLEND);
+    cull_was = gls_is_enabled(GL_CULL_FACE);
+    scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
+    stencil_was = glIsEnabled(GL_STENCIL_TEST); /* not in the gls cache */
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sw_fbo);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, dst, 0);
+    glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gls_disable(GL_DEPTH_TEST);
+    gls_disable(GL_BLEND);
+    gls_disable(GL_CULL_FACE);
+    gls_disable(GL_SCISSOR_TEST);
+    if (stencil_was) glDisable(GL_STENCIL_TEST);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
+    glBindTexture(GL_TEXTURE_2D, src);
+    glUseProgram(sw_prog);
+    glUniform1i(sw_loc_src, 0);
+    glUniformMatrix4fv(sw_loc_m, 1, GL_FALSE, m);
+    gls_bind_vao(sw_vao);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    gls_bind_vao((GLuint) prev_vao);
+    glUseProgram((GLuint) prev_prog);
+    glBindTexture(GL_TEXTURE_2D, (GLuint) prev_tex);
+    glActiveTexture((GLenum) prev_unit);
+    pc_tex_bind_reset();
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    glColorMask(mask[0], mask[1], mask[2], mask[3]);
+    if (depth_was) gls_enable(GL_DEPTH_TEST);
+    if (blend_was) gls_enable(GL_BLEND);
+    if (cull_was) gls_enable(GL_CULL_FACE);
+    if (scissor_was) gls_enable(GL_SCISSOR_TEST);
+    if (stencil_was) glEnable(GL_STENCIL_TEST);
+    return 1;
+}
+
+static GLuint g_off_sw_tex;
+static u32 g_off_sw_w, g_off_sw_h;
+#endif /* __EMSCRIPTEN__ */
+
 /* Returns nonzero when the following draws will go to the off-screen target.
  * The caller must reach GXCopyTex; pc_gx_offscreen_cancel() undoes it. */
 int pc_gx_offscreen_begin(int w, int h)
@@ -8606,9 +8757,11 @@ int pc_gx_offscreen_begin(int w, int h)
          * road, the roofs and the telephone pole on Onett all came out red.
          * Swizzling green, blue and alpha onto red gives the same
          * (i,i,i,i) from one channel. */
+#ifndef __EMSCRIPTEN__ /* WebGL: pc_efb_offscreen_publish swizzles instead */
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
+#endif
         glBindRenderbuffer(GL_RENDERBUFFER, g_off_depth);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, w, h);
         glBindRenderbuffer(GL_RENDERBUFFER, 0);
@@ -8770,10 +8923,12 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
     case 0x22: case 0x23: sg = sb = GL_RED; break;             /* RA4, RA8 */
     default: break;
     }
+#ifndef __EMSCRIPTEN__ /* WebGL: swizzled by a pass after the blit, below */
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, sr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, sg);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, sb);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, sa);
+#endif
 
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
@@ -8805,6 +8960,21 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
 
     o->img = dest;
     o->tex = g_cp_tex[slot];
+#ifdef __EMSCRIPTEN__
+    if (sr != GL_RED || sg != GL_GREEN || sb != GL_BLUE || sa != GL_ALPHA) {
+        static GLuint sw_tex[PC_EFB_OVERRIDES];
+        static u32 sw_w[PC_EFB_OVERRIDES], sw_h[PC_EFB_OVERRIDES];
+        const GLint swz[4] = { sr, sg, sb, sa };
+        int sel[4], c;
+        for (c = 0; c < 4; c++) {
+            sel[c] = swz[c] == GL_GREEN ? 1 : swz[c] == GL_BLUE ? 2 :
+                     swz[c] == GL_ALPHA ? 3 : 0;
+        }
+        pc_web_swizzle_target(&sw_tex[slot], &sw_w[slot], &sw_h[slot], dw, dh);
+        if (!pc_web_swizzle(g_cp_tex[slot], sw_tex[slot], dw, dh, sel)) return 0;
+        o->tex = sw_tex[slot];
+    }
+#endif
     o->w = dw;
     o->h = dh;
     pc_efb_override_mark(o, dest);
@@ -8833,6 +9003,18 @@ static void pc_efb_offscreen_publish(void* img)
     }
     o->img = img;
     o->tex = g_off_tex;
+#ifdef __EMSCRIPTEN__
+    {
+        static const int rrrr[4] = { 0, 0, 0, 0 };
+        pc_web_swizzle_target(&g_off_sw_tex, &g_off_sw_w, &g_off_sw_h,
+                              (u32) g_off_w, (u32) g_off_h);
+        if (pc_web_swizzle(g_off_tex, g_off_sw_tex, (u32) g_off_w,
+                           (u32) g_off_h, rrrr))
+        {
+            o->tex = g_off_sw_tex;
+        }
+    }
+#endif
     o->w = (u32) g_off_w;
     o->h = (u32) g_off_h;
     /* Remember what is in the RAM the console would have written, so a later
@@ -11232,7 +11414,16 @@ static int pc_gpu_dl_on(void)
     static int on = -1;
     if (on < 0) {
         const char* e = getenv("MELEE_GPU_DL");
+#ifdef __EMSCRIPTEN__
+        /* Off on the web unless asked for. Its index arena never bound on
+         * WebGL (dl_gpu_arena_init_gl), so every list it took drew nothing
+         * -- Onett's buildings and trees were missing -- and with that fixed
+         * its skinned draws come out wrong (Donkey Kong in shards). The CPU
+         * replay is correct and the frame has the headroom for it. */
+        on = e != NULL && atoi(e) != 0;
+#else
         on = e == NULL || atoi(e) != 0;
+#endif
         fprintf(stderr, "[GPUDL] display lists %s (MELEE_GPU_DL)\n",
                 on ? "drawn from GPU memory" : "replayed on the CPU");
     }
@@ -11255,6 +11446,9 @@ static void dl_gpu_arena_init_gl(void* arg)
     for (i = 0; i < 2; i++) {
         GLsizeiptr cap = i == 0 ? SV_ARENA_BYTES : SI_ARENA_BYTES;
         unsigned char* map = NULL;
+#ifdef __EMSCRIPTEN__
+        if (i == 0 || persist)
+#endif
         (glBindBuffer)(GL_ARRAY_BUFFER, b[i]);
         if (persist) {
             pc_gl_buffer_storage(GL_ARRAY_BUFFER, cap, NULL, f);
@@ -11271,6 +11465,24 @@ static void dl_gpu_arena_init_gl(void* arg)
                 continue;
             }
         } else {
+#ifdef __EMSCRIPTEN__
+            if (i == 1) {
+                /* WebGL fixes a buffer's kind at its first binding, and an
+                 * index buffer can never have been an ARRAY_BUFFER: bound
+                 * there first, every glDrawElements from the arena failed
+                 * ("must have element array buffer bound") and GPU display
+                 * lists drew nothing. Created as an index buffer, outside
+                 * any vertex array so none records it; dl_gpu_upload fills
+                 * it through COPY_WRITE_BUFFER. */
+                GLint vao = 0;
+                (glGetIntegerv)(GL_VERTEX_ARRAY_BINDING, &vao);
+                (glBindVertexArray)(0);
+                (glBindBuffer)(GL_ELEMENT_ARRAY_BUFFER, b[i]);
+                (glBufferData)(GL_ELEMENT_ARRAY_BUFFER, cap, NULL, GL_STATIC_DRAW);
+                (glBindBuffer)(GL_ELEMENT_ARRAY_BUFFER, 0);
+                (glBindVertexArray)((GLuint) vao);
+            } else
+#endif
             (glBufferData)(GL_ARRAY_BUFFER, cap, NULL, GL_STATIC_DRAW);
         }
         if (i == 0) g_sv_map = map; else g_si_map = map;
@@ -11336,6 +11548,13 @@ static void dl_gpu_upload(GLuint buf, unsigned char* map, GLsizeiptr off, const 
 {
     if (map != NULL) {
         memcpy(map + off, src, (size_t) bytes);
+#ifdef __EMSCRIPTEN__
+    } else if (buf == g_si_buf) {
+        /* An index buffer on WebGL: never an ARRAY_BUFFER (arena init). */
+        glBindBuffer(GL_COPY_WRITE_BUFFER, buf);
+        glBufferSubData(GL_COPY_WRITE_BUFFER, off, bytes, src);
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+#endif
     } else {
         gls_bind_vbo(buf);
         glBufferSubData(GL_ARRAY_BUFFER, off, bytes, src);
