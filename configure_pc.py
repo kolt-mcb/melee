@@ -43,7 +43,12 @@ if SLIPPI:
 # port play the same match over UDP (docs/netplay.md). Opt-in for the same
 # reason Slippi is: with the flag off the directory is not compiled and every
 # hook site is preprocessed away, so the parity binary is unchanged.
-NETPLAY = os.environ.get("PC_NETPLAY") == "1"
+# The web build has it on unless PC_NETPLAY=0: its page is a home-network
+# lobby, and every player's browser runs the match in lockstep over the host's
+# relay (MELEE_NET=web, tools/wasm/serve.js).
+NETPLAY = os.environ.get("PC_NETPLAY",
+                         "1" if os.environ.get("EMSDK") and not os.environ.get("ANDROID_NDK")
+                         else "0") == "1"
 # ENet rides along with netplay: MELEE_NET_PROTO=dolphin joins a Dolphin
 # NetPlay host, and that protocol is ENet underneath. It is vendored
 # (src/port/netplay/enet, MIT, 1.3.17) rather than linked from the system
