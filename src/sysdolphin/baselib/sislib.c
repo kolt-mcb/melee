@@ -893,7 +893,12 @@ HSD_Text* HSD_SisLib_803A6754(int font_idx, s32 context_id)
     text = HSD_SisLib_803A5ACC(font_idx, context_id, 0.0F, 0.0F, 0.0F, 640.0F,
                                480.0F);
 #if BUILD_TARGET_PC
-    alloc = HSD_SisLib_Alloc(sizeof(SisBlock)); /* 0x10 on GameCube */
+    /* 0x10 on GameCube: the block carries one more word after size, which
+     * the code below clears through &alloc->size + 1. sizeof(SisBlock) has
+     * room for it only where padding supplies it -- 24 bytes on 64-bit
+     * hosts, but 12 on wasm32, where the store landed on the next block's
+     * link and character select's next text allocation followed it. */
+    alloc = HSD_SisLib_Alloc(offsetof(SisBlock, size) + 2 * sizeof(u32));
 #else
     alloc = HSD_SisLib_Alloc(0x10);
 #endif
