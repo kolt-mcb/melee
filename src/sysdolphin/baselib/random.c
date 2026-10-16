@@ -96,7 +96,14 @@ void pc_rng_note(void* ret)
         }
     }
 }
+#ifdef __EMSCRIPTEN__
+/* No site on the web: __builtin_return_address is a JS stack trace there,
+ * and HSD_Rand runs hundreds of times a frame (particles alone were 12% of
+ * Fountain of Dreams' CPU). The ring still counts the draws. */
+#define PC_RNG_NOTE() pc_rng_note(NULL)
+#else
 #define PC_RNG_NOTE() pc_rng_note(__builtin_return_address(0))
+#endif
 #else
 #define PC_RNG_NOTE() ((void) 0)
 #endif
