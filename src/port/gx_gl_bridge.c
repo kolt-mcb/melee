@@ -9496,8 +9496,9 @@ void pc_ires_present(void)
  * console's 4:3 with bars at the sides. MELEE_WIDESCREEN=0 is off, 1 fills the
  * window whatever its shape, and a number above 1 is the widest aspect
  * (1.7778 for 16:9). On by default on Android, where every screen is wider
- * than 4:3 and the bars were 40% of a phone's width; off on the desktop,
- * whose screenshots the golden tests compare.
+ * than 4:3 and the bars were 40% of a phone's width, and on the web, which
+ * fills a browser window; off on the desktop, whose screenshots the golden
+ * tests compare.
  *
  * Matches only; menus stay 4:3. Only the picture changes. The game's camera, its projection as the game
  * reads it back and everything the simulation sees are the console's, so a
@@ -9508,7 +9509,7 @@ static f32 pc_widescreen_max(void)
     static f32 a = -1.0f;
     if (a < 0.0f) {
         const char* e = getenv("MELEE_WIDESCREEN");
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
         a = 100.0f;
 #else
         a = 0.0f;
