@@ -1371,11 +1371,17 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         break;
     }
     case It_Kind_Whitebea: {
-        _Static_assert(offsetof(itWhiteBeaAttributes, x8) == 0xC &&
-                           offsetof(itWhiteBeaAttributes, x10) == 0x14 &&
-                           offsetof(itWhiteBeaAttributes, x14) == 0x18 &&
-                           offsetof(itOldottoseaAttributes, x14) == 0x18 &&
-                           offsetof(itOldottoseaAttributes, x20) == 0x24,
+        /* Offsets come from the structs, not literals: x0 is a pointer,
+         * eight bytes on the 64-bit hosts (x4 at 0x8, tail at 0x18) and
+         * four on wasm32, where the block is the GCN layout unchanged. */
+        _Static_assert(offsetof(itWhiteBeaAttributes, x8) ==
+                               offsetof(itWhiteBeaAttributes, x4) + 4 &&
+                           offsetof(itWhiteBeaAttributes, x10) ==
+                               offsetof(itWhiteBeaAttributes, x8) + 8 &&
+                           offsetof(itWhiteBeaAttributes, x14) ==
+                               offsetof(itOldottoseaAttributes, x14) &&
+                           offsetof(itOldottoseaAttributes, x20) ==
+                               offsetof(itOldottoseaAttributes, x14) + 0xC,
                        "polar bear block layout");
         /* The polar bear's block is read through two views that disagree
          * about its middle: itWhiteBeaAttributes (s16 at 0x8..0xE, f32 at
@@ -1390,7 +1396,7 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         if (spec_off + 0x24 > a->len) {
             return;
         }
-        w = zalloc(0x28);
+        w = zalloc(offsetof(itOldottoseaAttributes, x14) + 0x10);
         if (w == NULL) {
             return;
         }
@@ -1402,16 +1408,19 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
             }
             memcpy(w, &p, sizeof(p));
         }
-        conv_scalars(w + 0x8, r + 0x4, 4);          /* x4 f32 */
+        conv_scalars(w + offsetof(itWhiteBeaAttributes, x4), r + 0x4,
+                     4); /* x4 f32 */
         {
             int k;
-            for (k = 0; k < 4; k++) {               /* x8..xE s16 */
+            for (k = 0; k < 4; k++) { /* x8..xE s16 */
                 u16 h = (u16) ((r[0x8 + k * 2] << 8) | r[0x9 + k * 2]);
-                memcpy(w + 0xC + k * 2, &h, 2);
+                memcpy(w + offsetof(itWhiteBeaAttributes, x8) + k * 2, &h, 2);
             }
         }
-        conv_scalars(w + 0x14, r + 0x10, 4);        /* x10 f32 */
-        conv_scalars(w + 0x18, r + 0x14, 0x10);     /* 0x14..0x20, words */
+        conv_scalars(w + offsetof(itWhiteBeaAttributes, x10), r + 0x10,
+                     4); /* x10 f32 */
+        conv_scalars(w + offsetof(itOldottoseaAttributes, x14), r + 0x14,
+                     0x10); /* 0x14..0x20, words */
         art->x4_specialAttributes = w;
         break;
     }
