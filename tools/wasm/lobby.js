@@ -23,6 +23,7 @@
     [25, 'Icicle Mountain'], [23, 'Poké Floats'], [27, 'Flat Zone'], [29, "Yoshi's Island (N64)"],
     [30, 'Kongo Jungle (N64)']];                            // StKind values
   const COSTUMES = 4;            // every fighter has at least four
+  const SLOTS = 8;               // fighters in a match (the PC build's GM_MAX_PLAYERS)
   const CONTROLS = [
     ['Gamepad', 'Plays as you. Plug it in before the match and press a button.'],
     ['Move', '<kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>'],
@@ -107,7 +108,7 @@
   function paintLobby() {
     if (!lobby) return;
     const ps = lobby.players;
-    $('players').innerHTML = [0, 1, 2, 3].map((i) => {
+    $('players').innerHTML = Array.from({ length: SLOTS }, (_, i) => i).map((i) => {
       const p = ps[i];
       if (!p) return `<div class="slot s${i} empty"><div class="who">P${i + 1}</div><div class="what">open</div></div>`;
       return `<div class="slot s${i}${p.id === lobby.you ? ' me' : ''}">
@@ -120,14 +121,14 @@
     $('stage').value = lobby.rules.stage;
     $('stocks').value = lobby.rules.stocks;
     $('minutes').value = lobby.rules.minutes;
-    const free = Math.max(0, 4 - Math.min(4, ps.length));
+    const free = Math.max(0, SLOTS - Math.min(SLOTS, ps.length));
     $('cpus').innerHTML = Array.from({ length: free + 1 }, (_, i) => `<option>${i}</option>`).join('');
     if (!host) { rules.cpus = lobby.rules.cpus | 0; rules.cpulevel = lobby.rules.cpulevel || 9; }
     $('cpus').value = Math.min(rules.cpus, free);
     $('cpulevel').value = rules.cpulevel;
     $('btn-start').disabled = !host || lobby.inMatch;
     $('btn-start').textContent = lobby.inMatch ? 'A match is running…' : host ? 'Start match' : 'Waiting for the host';
-    const n = Math.min(4, ps.length);
+    const n = Math.min(SLOTS, ps.length);
     setStatus(`${n} player${n === 1 ? '' : 's'} here${lobby.waiting ? `, ${lobby.waiting} waiting for a free slot` : ''}`);
   }
   const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -235,7 +236,7 @@
     }, 250);
   }
   // The host's CPU choice travels with the rules; it fills only free slots.
-  const isHostCpuCount = (msg) => Math.max(0, Math.min(4 - msg.players.length, msg.rules.cpus | 0));
+  const isHostCpuCount = (msg) => Math.max(0, Math.min(SLOTS - msg.players.length, msg.rules.cpus | 0));
 
   function backToLobby() { send({ t: 'done' }); setTimeout(() => location.reload(), 100); }
   $('btn-lobby').onclick = backToLobby;

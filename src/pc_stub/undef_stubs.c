@@ -1325,8 +1325,8 @@ __attribute__((weak)) void HSD_PObjSetMtxMark(int a0, int a1, int a2) { PC_STUB_
 #include <port/gc_pad.h>
 
 /* Global pad state for 4 controllers */
-GCPadStatus g_gc_pads[4];
-GCPadStatus g_gc_pads_last[4];
+GCPadStatus g_gc_pads[PC_GAME_PADS];
+GCPadStatus g_gc_pads_last[PC_GAME_PADS];
 int g_gc_pads_initialized = 0;  /* Set to 1 after HSD_PadInit */
 
 /* Auto-start: simulated button presses to skip title screen.
@@ -1716,10 +1716,10 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
 {
     /* Per controller: two pads sharing one `held` reported every edge twice
      * and every release on whichever ran second. */
-    static int stick_x[4], stick_y[4];
-    static int csub_x[4], csub_y[4];
+    static int stick_x[PC_GAME_PADS], stick_y[PC_GAME_PADS];
+    static int csub_x[PC_GAME_PADS], csub_y[PC_GAME_PADS];
     int trig_l = -1, trig_r = -1;
-    static u32 held[4];
+    static u32 held[PC_GAME_PADS];
     long frame;
     u32 pressed = 0;
     int i;
@@ -2353,13 +2353,16 @@ void HSD_PadRenewRawStatus(bool unused)
 {
     (void)unused;
     
-    for (int pad = 0; pad < 4; pad++) {
+    for (int pad = 0; pad < PC_GAME_PADS; pad++) {
         /* Copy current state to last */
         memcpy(&g_gc_pads_last[pad], &g_gc_pads[pad], sizeof(GCPadStatus));
         
         /* Clear current state */
         memset(&g_gc_pads[pad], 0, sizeof(GCPadStatus));
         
+        /* Pads past the console's four have no controller behind them:
+         * netplay (below) and scripts fill them. */
+        if (pad < PC_SDL_PADS) {
         /* Lazy-init: pick up a pad plugged in after boot */
 #ifdef __ANDROID__
         if (pad == 0) {
@@ -2374,6 +2377,7 @@ void HSD_PadRenewRawStatus(bool unused)
             poll_controller(g_controllers[pad], &g_gc_pads[pad]);
         } else if (g_joysticks[pad]) {
             poll_joystick(g_joysticks[pad], &g_gc_pads[pad]);
+        }
         }
         
         /* Always poll keyboard for player 0 — fallback/no-pad mode */
@@ -2485,7 +2489,7 @@ void pc_pad_publish(void);
 /* Update normalized values from raw stick positions */
 void HSD_PadRenewGameStatus(void)
 {
-    for (int pad = 0; pad < 4; pad++) {
+    for (int pad = 0; pad < PC_GAME_PADS; pad++) {
         GCPadStatus* cur = &g_gc_pads[pad];
         
         /* Normalize stick X: s8 range [-128,127] → f32 [-1.0, 1.0] */
@@ -2519,7 +2523,7 @@ void HSD_PadRenewGameStatus(void)
                            cur->stickY != 0 || cur->subStickX != 0 ||
                            cur->subStickY != 0))
             {
-                static int throttle[4];
+                static int throttle[PC_GAME_PADS];
                 if (throttle[pad]++ % 15 == 0) {
                     fprintf(stderr,
                             "[PADLOG] pad%d btn=%08x stick=%d,%d c=%d,%d "
@@ -2565,9 +2569,9 @@ void HSD_PadRenewCopyStatus(void)
      * HSD_PadRenewStatus and threw all of that away, so the game's input
      * path saw a stick that never pointed anywhere and no menu could be
      * navigated. */
-    extern GCPadStatus HSD_PadCopyStatus[4];
-    extern GCPadStatus HSD_PadGameStatus[4];
-    for (int pad = 0; pad < 4; pad++) {
+    extern GCPadStatus HSD_PadCopyStatus[PC_GAME_PADS];
+    extern GCPadStatus HSD_PadGameStatus[PC_GAME_PADS];
+    for (int pad = 0; pad < PC_GAME_PADS; pad++) {
         memcpy(&HSD_PadCopyStatus[pad], &HSD_PadGameStatus[pad],
                sizeof(GCPadStatus));
     }
@@ -2622,15 +2626,15 @@ void HSD_PadInit(u8 qnum, void* queue, u16 nb_list, void* rumble_list)
 /* GCPadStatus here is field-for-field HSD_PadStatus (see port/gc_pad.h), so
  * the game's `extern HSD_PadStatus HSD_PadGameStatus[4]` links against these
  * correctly. */
-GCPadStatus HSD_PadMasterStatus[4];
-GCPadStatus HSD_PadGameStatus[4];
-GCPadStatus HSD_PadCopyStatus[4];
+GCPadStatus HSD_PadMasterStatus[PC_GAME_PADS];
+GCPadStatus HSD_PadGameStatus[PC_GAME_PADS];
+GCPadStatus HSD_PadCopyStatus[PC_GAME_PADS];
 
 
 void pc_pad_publish(void)
 {
     int i;
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < PC_GAME_PADS; i++) {
         GCPadStatus* s = &g_gc_pads[i];
         GCPadStatus* l = &g_gc_pads_last[i];
         GCPadStatus* d = &HSD_PadGameStatus[i];

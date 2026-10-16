@@ -24,7 +24,7 @@
 
 const crypto = require('crypto');
 
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 8; // the PC build's fighter slots
 const PING_MS = 500, PING_KEEP = 20;
 const FRAME_MS = 1000 / 60;
 const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
@@ -179,7 +179,7 @@ exports.join = (conn) => {
             if (Number.isInteger(msg.stage) && msg.stage >= 2 && msg.stage <= 32) room.rules.stage = msg.stage;
             if (Number.isInteger(msg.stocks) && msg.stocks >= 1 && msg.stocks <= 99) room.rules.stocks = msg.stocks;
             if (Number.isInteger(msg.minutes) && msg.minutes >= 0 && msg.minutes <= 99) room.rules.minutes = msg.minutes;
-            if (Number.isInteger(msg.cpus) && msg.cpus >= 0 && msg.cpus <= 3) room.rules.cpus = msg.cpus;
+            if (Number.isInteger(msg.cpus) && msg.cpus >= 0 && msg.cpus < MAX_PLAYERS) room.rules.cpus = msg.cpus;
             if (Number.isInteger(msg.cpulevel) && msg.cpulevel >= 1 && msg.cpulevel <= 9) room.rules.cpulevel = msg.cpulevel;
             broadcastLobby();
             break;

@@ -39,8 +39,15 @@ typedef struct {
     int8_t   err;
 } GCPadStatus;
 
+/* Pads the game reads, one per fighter slot (GM_MAX_PLAYERS on PC). The
+ * first four are the console's ports and the only ones SDL fills; the rest
+ * exist for slots driven from elsewhere -- netplay peers, scripts. */
+#define PC_GAME_PADS 8
+/* Physical controller ports SDL is polled for. */
+#define PC_SDL_PADS 4
+
 /* Owned by pc_stub/undef_stubs.c (the SDL→GC input bridge). */
-extern GCPadStatus g_gc_pads[4];
-extern GCPadStatus g_gc_pads_last[4];
+extern GCPadStatus g_gc_pads[PC_GAME_PADS];
+extern GCPadStatus g_gc_pads_last[PC_GAME_PADS];
 
 #endif /* PORT_GC_PAD_H */

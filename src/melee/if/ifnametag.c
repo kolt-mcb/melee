@@ -132,6 +132,11 @@ float un_802FC9B4(unsigned char slot, unsigned char arg1, unsigned char arg2,
                   unsigned char arg3)
 {
     u8 controller_index = Player_GetPadPort(slot);
+#if BUILD_TARGET_PC
+    /* The tag art is per console port, P1-P4; pads past them (fighters five
+     * to eight) wear those four again. */
+    controller_index &= 3;
+#endif
     if (arg2) {
         if (!arg3) {
             return un_803F98B8[controller_index][arg1];

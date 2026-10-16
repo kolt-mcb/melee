@@ -192,15 +192,16 @@ static void pad_get(const unsigned char* p, NetPad* n)
     n->analogR = p[9];
 }
 
-/* Four is Melee's limit and Slippi's: one local player and up to three
- * remote. Every slot-indexed array in this file is this long, the input rings
+/* Eight: the PC build's fighter slots (GM_MAX_PLAYERS). Four is Melee's
+ * limit and Slippi's, and a Slippi match is held to it (net_config). Packet
+ * slot fields are masked with NET_SLOTS - 1, so this stays a power of two. Every slot-indexed array in this file is this long, the input rings
  * included -- they were two long while every index already ran to
  * net_players - 1, so a third player's own ring_put wrote 16 KB past the end
  * of the array. On arm64 the frame-91 entry of that phantom ring landed
  * exactly on net_slot and net_match, which is why the tablet stopped
  * lockstepping at frame 91 without a word: it had overwritten its own slot
  * number and the flag that says a match is running. */
-#define NET_SLOTS 4
+#define NET_SLOTS 8
 
 /* A ring rather than a table: a match is 28,800 frames and only the last
  * handful are ever wanted. Each slot remembers which frame it holds, so a
@@ -526,6 +527,8 @@ static void net_config(void)
             net_players = atoi(np);
             if (net_players < 2) net_players = 2;
             if (net_players > NET_SLOTS) net_players = NET_SLOTS;
+            /* Slippi's protocol and replays carry four players. */
+            if (net_slippi_proto && net_players > 4) net_players = 4;
         }
     }
     net_slot = net_is_host ? 0 : 1;

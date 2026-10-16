@@ -108,9 +108,17 @@ struct PadLibData {
     /*0x2C*/ struct RumbleInfo rumble_info;
 };
 
+#if BUILD_TARGET_PC
+/* One per fighter slot (port/gc_pad.h PC_GAME_PADS); the first four are the
+ * console's ports. */
+extern HSD_PadStatus HSD_PadMasterStatus[8];
+extern HSD_PadStatus HSD_PadGameStatus[8];
+extern HSD_PadStatus HSD_PadCopyStatus[8];
+#else
 extern HSD_PadStatus HSD_PadMasterStatus[4];
 extern HSD_PadStatus HSD_PadGameStatus[4];
 extern HSD_PadStatus HSD_PadCopyStatus[4];
+#endif
 
 static inline float HSD_PadGetNmlStickY(u8 slot)
 {

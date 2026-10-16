@@ -355,15 +355,6 @@ void onEnterDebugVs(GameModeState* state)
                 }
             }
         }
-        /* Four pad ports: a human past them would read pad state that does
-         * not exist. Until there is input for those slots they play as
-         * CPUs. */
-        for (i = PAD_MAX_CONTROLLERS; i < Gm_Player_NumMax; i++) {
-            if (start->players[i].slot_type == Gm_PKind_Human) {
-                start->players[i].slot_type = Gm_PKind_Cpu;
-                start->players[i].cpu_level = 9;
-            }
-        }
         /* MELEE_BOOT_METAL=<mask>: the slots in the bit mask play metal, as
          * Classic's metal battle does -- the way to put a metal fighter in a
          * debug match. */
