@@ -12,6 +12,7 @@
 #include <melee/it/it_3F14.h>
 #include <melee/it/itCharItems.h>
 #include <melee/it/itYoyo.h>
+#include <melee/it/itemattrs.h>
 #include <melee/it/kinds/itarwinglaser.h>
 #include <melee/it/itCommonItems.h>
 #include <melee/it/types.h>
@@ -815,6 +816,27 @@ static ItemAttr* conv_attr_field(const struct arch* a, u32 field)
     return conv_attr(a, off);
 }
 
+/* The itSpecialAttrsHead a pointer field at file offset `field` points to:
+ * five 32-bit words, swapped flat. Null as conv_attr_field decides. */
+static itSpecialAttrsHead* conv_head_field(const struct arch* a, u32 field)
+{
+    u32 off = be32(a->base + field);
+    itSpecialAttrsHead* out;
+
+    if (off == 0 && !arch_is_ptr(a, field)) {
+        return NULL;
+    }
+    if (off + sizeof(itSpecialAttrsHead) > a->len) {
+        return NULL;
+    }
+    out = zalloc(sizeof(*out));
+    if (out == NULL) {
+        return NULL;
+    }
+    swap_words(out, a->base + off, sizeof(*out));
+    return out;
+}
+
 /* Per-item attributes: a block of 32-bit scalars whose size only the item
  * code knows. Take it up to the next object. */
 static void* conv_special(const struct arch* a, u32 off, u32* size_out)
@@ -1075,10 +1097,10 @@ static ItemDynamics* conv_dynamics(const struct arch* a, u32 off)
             void* inner = zalloc(n * 0x3C);
             if (inner != NULL) {
                 swap_words(inner, a->base + data_off, n * 0x3C);
-                d->dyn_desc.data = inner;
+                d->dyn_desc.params = inner;
             }
         } else {
-            /* lb_80011710 dereferences dyn_desc.data without checking, so a
+            /* lb_80011710 dereferences dyn_desc.params without checking, so a
              * descriptor left NULL here is a crash later rather than a
              * silently missing effect. Say which one and why. */
             fprintf(stderr,
@@ -1533,38 +1555,30 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         break;
     }
     case It_Kind_Foods: {
-        /* Food is an ARRAY of variants, not a single struct: itfoods.c reads
-         * attr[0].x0 as the variant count, picks one at random and hands
-         * attr[i].x4 to it_80273318 as the model's joint tree. The file
-         * entries are 16 bytes ({s32, offset, s32, s32}); the host struct is
-         * 24 once the pointer widens, so a flat swap gets both the stride
-         * and the pointer wrong -- the joint came out NULL and the item died
-         * in it_2725_JObjSetTranslateInline's "jobj" assert the first time a
+        /* Food is a count followed by an ARRAY of variants: itfoods.c picks
+         * one at random below `count` and hands entries[i].joint to
+         * it_80273318 as the model's joint tree. The file entries are 16
+         * bytes ({offset, s32, f32, f32}); the host entry is 24 once the
+         * pointer widens, so a flat swap gets both the stride and the
+         * pointer wrong -- the joint came out NULL and the item died in
+         * it_2725_JObjSetTranslateInline's "jobj" assert the first time a
          * match dropped food. */
         u32 n = be32(r);
         itFoodsAttributes* f;
         u32 i;
-        if (n == 0 || n > 64 || spec_off + n * 16 > a->len) {
+        if (n == 0 || n > 64 || spec_off + 4 + n * 16 > a->len) {
             return;
         }
-        /* One more than the table holds: it_8028F9D8 takes a variant's y
-         * offset from word 0 of the NEXT entry, so the last variant reads
-         * the first word of whatever follows the table in the file. Without
-         * the extra entry that read ran off the allocation and a dropped
-         * food landed at a heap-garbage height. */
-        f = zalloc(sizeof(*f) * (n + 1));
+        f = zalloc(sizeof(*f) + sizeof(itFoodEntry) * n);
         if (f == NULL) {
             return;
         }
+        f->count = (s32) n;
         for (i = 0; i < n; i++) {
-            const u8* e = r + i * 16;
-            f[i].x0 = (s32) be32(e);
-            f[i].x4 = conv_joint_at(a, be32(e + 4));
-            f[i].x8 = (s32) be32(e + 8);
-            f[i].xC = (s32) be32(e + 12);
-        }
-        if (spec_off + n * 16 + 4 <= a->len) {
-            f[n].x0 = (s32) be32(r + n * 16);
+            const u8* e = r + 4 + i * 16;
+            f->entries[i].joint = conv_joint_at(a, be32(e));
+            f->entries[i].heal_amount = (s32) be32(e + 4);
+            conv_scalars(&f->entries[i].offset, e + 8, 8);
         }
         art->x4_specialAttributes = f;
         break;
@@ -1677,7 +1691,7 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         break;
     }
     case It_Kind_Arwing_Laser: {
-        /* The Arwing's laser: the block is {ItemAttr*, f32, f32}
+        /* The Arwing's laser: the block is {itSpecialAttrsHead*, f32, f32}
          * and the first word is a file offset, not a pointer. The flat
          * swapped copy also has the wrong stride once that pointer is eight
          * bytes wide, so the two floats after it read the neighbour's bytes.
@@ -1690,16 +1704,16 @@ static void pc_itconv_fixup(const struct arch* a, Article* art, u32 art_off,
         if (al == NULL) {
             return;
         }
-        al->x0 = conv_attr_field(a, (u32) (r - a->base));
+        al->x0 = conv_head_field(a, (u32) (r - a->base));
         conv_scalars(&al->x4, r + 0x4, 4);
         conv_scalars(&al->x8, r + 0x8, 4);
         art->x4_specialAttributes = al;
         if (getenv("MELEE_ITCONV_LOG") != NULL) {
             fprintf(stderr,
                     "[ITCONV] Arwing laser %d: attr off=%#x -> %p, "
-                    "throw=%g x4=%g x8=%g\n",
+                    "head.x4=%g x4=%g x8=%g\n",
                     kind, (unsigned) be32(r), (void*) al->x0,
-                    al->x0 != NULL ? (double) al->x0->x4_throw_speed_mul : 0.0,
+                    al->x0 != NULL ? (double) al->x0->x4 : 0.0,
                     (double) al->x4, (double) al->x8);
         }
         break;

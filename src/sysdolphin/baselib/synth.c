@@ -1444,8 +1444,8 @@ s32 HSD_SynthSFXVolumeEnvelope(void)
         }
         if (node->user_vol[1].x4 != 0) {
             int c = node->user_vol[1].x4;
-            node->user_vol[0].x8_float =
-                (node->user_vol[0].x8_float * ((f32) c - 1.0f)) / (f32) c +
+            node->user_vol[0].x8_u.x8_float =
+                (node->user_vol[0].x8_u.x8_float * ((f32) c - 1.0f)) / (f32) c +
                 node->user_vol[1].volume / (f32) c;
             node->user_vol[1].x4 -= 1;
             if (node->user_vol[1].x4 != 0) {

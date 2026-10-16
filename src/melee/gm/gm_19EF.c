@@ -144,13 +144,25 @@ static void fn_8019EFC4(HSD_PadStatus* pad)
                  * ahead of it is twice as wide here, so that address is not
                  * the union at all. jobj_slots[i] is the same slot by name:
                  * slot 0 is the GObj, 1..10 are typed.jobjs[0..9]. */
+#if BUILD_TARGET_PC
                 if (i > lbl_80479A98.x70) {
-                    HSD_JObjSetFlags(lbl_80479A98.x28.jobj_slots[i],
+                    HSD_JObjSetFlags(lbl_80479A98.x4_u.x0.x28.jobj_slots[i],
                                      JOBJ_HIDDEN);
                 } else {
-                    HSD_JObjClearFlags(lbl_80479A98.x28.jobj_slots[i],
+                    HSD_JObjClearFlags(lbl_80479A98.x4_u.x0.x28.jobj_slots[i],
                                        JOBJ_HIDDEN);
                 }
+#else
+                if (i > lbl_80479A98.x70) {
+                    HSD_JObjSetFlags(
+                        ((HSD_JObj**) ((u8*) &lbl_80479A98 + 0x28))[i],
+                        JOBJ_HIDDEN);
+                } else {
+                    HSD_JObjClearFlags(
+                        ((HSD_JObj**) ((u8*) &lbl_80479A98 + 0x28))[i],
+                        JOBJ_HIDDEN);
+                }
+#endif
             }
         }
         HSD_JObjAnimAll(child_next);

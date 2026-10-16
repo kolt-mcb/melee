@@ -737,8 +737,8 @@ bool it_80277040(Item_GObj* item_gobj)
                     "n=(%08x,%08x,%08x) x50=%08x\n",
                     (unsigned) gm_GetFrameCount(), (int) item1->kind,
                     (unsigned) coll->env_flags, *(unsigned*) &angle1,
-                    *(unsigned*) &it_804D6D28->xC0, *(unsigned*) &sp5C.x,
-                    *(unsigned*) &sp5C.y, *(unsigned*) &sp5C.z,
+                    *(unsigned*) &it_804D6D28->xC0, *(unsigned*) &normal.x,
+                    *(unsigned*) &normal.y, *(unsigned*) &normal.z,
                     *(unsigned*) &item1->xCC_item_attr->x50);
         }
     }

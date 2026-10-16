@@ -1,4 +1,6 @@
+#if BUILD_TARGET_PC
 #include <stdio.h>
+#endif
 #include "jobj.h"
 
 #include <math.h>
@@ -12,6 +14,8 @@
 /* PC port: validate pointer is not NULL and not a small garbage value */
 #include "port/pc_ptr.h"
 #define PC_PTR_VALID(p) pc_ptr_sane(p)
+#else
+#define PC_PTR_VALID(p) ((p) != NULL)
 #endif
 #include "displayfunc.h"
 #include "dobj.h"
@@ -245,9 +249,13 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
     }
 #endif
     if (jobj->flags & 0x20000) {
+#if BUILD_TARGET_PC
         /* Guard against zero parent scale to prevent NaN in HSD_MtxSRTQuat */
         if (has_scl(jobj->parent) && jobj->parent->scl->x != 0.0f &&
             jobj->parent->scl->y != 0.0f && jobj->parent->scl->z != 0.0f) {
+#else
+        if (has_scl(jobj->parent)) {
+#endif
             scl = jobj->parent->scl;
         } else {
             scl = NULL;
@@ -255,6 +263,7 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
         HSD_MtxSRTQuat(jobj->mtx, &jobj->scale, &jobj->rotate,
                        &jobj->translate, scl);
     } else {
+#if BUILD_TARGET_PC
         /* Guard against zero parent scale to prevent NaN in HSD_MtxSRT */
         scl = NULL; /* Default: no parent scale correction */
         if (has_scl(jobj->parent)) {
@@ -263,7 +272,13 @@ void HSD_JObjMakeMatrix(HSD_JObj* jobj)
                 scl = jobj->parent->scl;
             }
         }
-        
+#else
+        if (has_scl(jobj->parent)) {
+            scl = jobj->parent->scl;
+        } else {
+            scl = NULL;
+        }
+#endif
         HSD_MtxSRT(jobj->mtx, &jobj->scale, (Vec3*) &jobj->rotate,
                    &jobj->translate, scl);
 #if BUILD_TARGET_PC
@@ -1159,21 +1174,7 @@ HSD_JObj* HSD_JObjLoadJoint(HSD_Joint* arg0)
     }
     return jobj;
 #else
-    HSD_JObj* jobj;
-    {
-        static int report = -1;
-        if (report < 0) {
-            report = getenv("MELEE_JOINTLOAD") != NULL;
-        }
-        pc_joint_made = pc_joint_rejected = pc_joint_allocfail = 0;
-        jobj = JObjLoadJointSub(arg0, 0);
-        if (report) {
-            fprintf(stderr, "[JOINTLOAD] root %p -> %d joints (%d rejected, "
-                            "%d alloc failures)\n",
-                    (void*) arg0, pc_joint_made, pc_joint_rejected,
-                    pc_joint_allocfail);
-        }
-    }
+    HSD_JObj* jobj = JObjLoadJointSub(arg0, 0);
     HSD_JObjResolveRefsAll(jobj, arg0);
     return jobj;
 #endif /* BUILD_TARGET_PC */
@@ -1259,6 +1260,8 @@ void HSD_JObjUnref(HSD_JObj* jobj)
             else {
                 port_guard_warn("jobj.c:820");
             }
+            #else
+            HSD_JOBJ_METHOD(jobj)->release_child(jobj);
             #endif /* BUILD_TARGET_PC */
             if (iref_DEC(jobj)) {
                 hsdDelete(jobj);
@@ -1615,11 +1618,16 @@ void HSD_JObjClearFlagsAll(HSD_JObj* jobj, u32 flags)
 
 HSD_JObj* HSD_JObjAlloc(void)
 {
+#if BUILD_TARGET_PC
     HSD_ClassInfo* ci = default_class != NULL ? default_class : &hsdJObj.parent.parent;
     /* Note: ci->alloc may legitimately be NULL here — hsdNew() runs the
      * lazy info_init() (which sets alloc) when head.flags & 1 is clear.
      * Corruption of the class info is guarded inside hsdNew(). */
     HSD_JObj* jobj = hsdNew(ci);
+#else
+    HSD_JObj* jobj =
+        hsdNew(default_class != NULL ? default_class : &hsdJObj.parent.parent);
+#endif
     HSD_ASSERT(2003, jobj);
     return jobj;
 }
@@ -1754,6 +1762,8 @@ void resolveIKJoint1(HSD_JObj* jobj)
                     else {
                         port_guard_warn("jobj.c:1283");
                     }
+                    #else
+                    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
                     #endif /* BUILD_TARGET_PC */
                     jobj->flags &= 0xFFFFFFBF;
                 }
@@ -1992,6 +2002,8 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
     else {
         port_guard_warn("jobj.c:1509");
     }
+    #else
+    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
     #endif /* BUILD_TARGET_PC */
     jobj->flags &= ~JOBJ_MTX_DIRTY;
     if (!(jobj->flags & JOBJ_USER_DEF_MTX)) {
@@ -2042,6 +2054,8 @@ void HSD_JObjSetupMatrixSub(HSD_JObj* jobj)
                     else {
                         port_guard_warn("jobj.c:1555");
                     }
+                    #else
+                    HSD_JOBJ_METHOD(jobj)->make_mtx(jobj);
                     #endif /* BUILD_TARGET_PC */
                     jobj->flags &= ~JOBJ_MTX_DIRTY;
                 }
@@ -2182,6 +2196,8 @@ void JObjRelease(HSD_Class* o)
     else {
         port_guard_warn("jobj.c:1639");
     }
+    #else
+    HSD_JOBJ_METHOD(jobj)->release_child(jobj);
     #endif /* BUILD_TARGET_PC */
 
     if (HSD_IDGetDataFromTable(NULL, jobj->id, NULL) == jobj) {

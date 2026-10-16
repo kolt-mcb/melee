@@ -1,4 +1,6 @@
+#if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#endif
 #include "gobj.h"
 
 #if BUILD_TARGET_PC

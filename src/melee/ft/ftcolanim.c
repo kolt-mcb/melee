@@ -112,9 +112,9 @@ static bool ft_colcmd_ok(Fighter_GObj* gobj, CommandInfo* cmd, int i)
         fprintf(stderr,
                 "[PORT WARN] ft colour overlay: opcode %d is not a command "
                 "(fighter kind %d, script at %p); ending the overlay\n",
-                i + 0x15, fp != NULL ? (int) fp->kind : -1, (void*) cmd->u);
+                i + 0x15, fp != NULL ? (int) fp->kind : -1, (void*) cmd->x8.u);
     }
-    cmd->u = NULL;
+    cmd->x8.u = NULL;
     return false;
 }
 #endif
@@ -164,7 +164,7 @@ bool ftCo_800BFFD0(Fighter* fp, FtColAnim arg1, bool arg2)
         fprintf(stderr,
                 "[COLANIM] gframe=%u p%d idx=%d pri=%d ret=%p "
                 "script=%p unk4=%u unk5=%u\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id, arg1, arg2,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx, arg1, arg2,
                 __builtin_return_address(0),
                 dbg ? dbg->unk : NULL, dbg ? (unsigned) dbg->unk4 : 0u,
                 dbg ? (unsigned) dbg->unk5 : 0u);

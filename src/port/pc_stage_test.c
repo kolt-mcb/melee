@@ -185,11 +185,11 @@ void pc_render_stage_test(void)
         int best = -1, pick = -1;
         for (int i = 0; i < sd->unkC; i++) {
             int nj = 0, nd = 0;
-            if (sd->unk8[i].unk0) count_joint_dobjdesc(sd->unk8[i].unk0, &nj, &nd);
+            if (sd->unk8[i].joint) count_joint_dobjdesc(sd->unk8[i].joint, &nj, &nd);
             if (stage_diag())
                 fprintf(stderr, "[STAGE]  sub[%d] joints=%d dobjdesc=%d cam=%p\n",
                         i, nj, nd, (void*)sd->unk8[i].x10);
-            if (sd->unk8[i].unk0 != NULL) {
+            if (sd->unk8[i].joint != NULL) {
                 if (best < 0) best = i;
                 if (sd->unk8[i].x10 != NULL && pick < 0) pick = i;
             }
@@ -198,7 +198,7 @@ void pc_render_stage_test(void)
         int best_mesh = -1, best_count = 0;
         for (int i = 0; i < sd->unkC; i++) {
             int nj = 0, nd = 0;
-            if (sd->unk8[i].unk0) count_joint_dobjdesc(sd->unk8[i].unk0, &nj, &nd);
+            if (sd->unk8[i].joint) count_joint_dobjdesc(sd->unk8[i].joint, &nj, &nd);
             if (nd > best_count) { best_count = nd; best_mesh = i; }
         }
         int use = (best_mesh >= 0) ? best_mesh : ((pick >= 0) ? pick : best);
@@ -219,15 +219,15 @@ void pc_render_stage_test(void)
             }
         }
         fprintf(stderr, "[STAGE] using sub[%d] joint=%p cam=%p\n",
-                use, (void*)sd->unk8[use].unk0, (void*)sd->unk8[use].x10);
-        if (sd->unk8[use].unk0) {
-            Vec3 rt = sd->unk8[use].unk0->position;
+                use, (void*)sd->unk8[use].joint, (void*)sd->unk8[use].x10);
+        if (sd->unk8[use].joint) {
+            Vec3 rt = sd->unk8[use].joint->position;
             fprintf(stderr, "[STAGE] floor root joint translate=(%.1f,%.1f,%.1f)\n",
                     (double)rt.x, (double)rt.y, (double)rt.z);
         }
 
         /* Convert the joint tree into a renderable jobj. */
-        HSD_JObj* jobj = HSD_JObjLoadJoint(sd->unk8[use].unk0);
+        HSD_JObj* jobj = HSD_JObjLoadJoint(sd->unk8[use].joint);
         if (!jobj) { fprintf(stderr, "[STAGE] HSD_JObjLoadJoint failed\n"); return; }
         {
             int nj = 0, nd = 0; count_jobj(jobj, &nj, &nd);

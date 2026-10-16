@@ -17,7 +17,7 @@
 #define FT_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define FT_FMA(a, b, c) ((a) * (b) + (c))
-#define FT_NMSUB(a, b, c) FT_FMA(-(a), (b), (c))
+#define FT_NMSUB(a, b, c) ((c) - (a) * (b))
 #endif
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -891,8 +891,8 @@ void Fighter_UnkInitReset_80067C98(Fighter* fp)
     float x, y, z;
 
     fp->x8_spawnNum = Fighter_NewSpawn_80068E40();
-    Player_LoadPlayerCoords(fp->player_idxx, &player_coords);
-    fp->facing_dir = Player_GetFacingDirection(fp->player_idxx);
+    Player_LoadPlayerCoords(fp->player_idx, &player_coords);
+    fp->facing_dir = Player_GetFacingDirection(fp->player_idx);
 
 #if BUILD_TARGET_PC
     /* MELEE_SPAWNOFF=1: the per-fighter spawn offset at the moment the spawn
@@ -975,7 +975,7 @@ void Fighter_UnkInitReset_80067C98(Fighter* fp)
     fp->hitlag_mul = 0;
     fp->x2064_ledgeCooldown = 0;
 
-    fp->dmg.x1830_percent = Player_GetDamage(fp->player_idxx);
+    fp->dmg.x1830_percent = Player_GetDamage(fp->player_idx);
 
     fp->dmg.x1838_percentTemp = 0;
 
@@ -1237,8 +1237,8 @@ void Fighter_Spawn(Fighter_GObj* gobj)
         ftData_OnDeath[fp->kind](gobj);
     }
 
-    ftCo_800A101C(fp, Player_GetCpuType(fp->player_idxx),
-                  Player_GetCpuLevel(fp->player_idxx), 0);
+    ftCo_800A101C(fp, Player_GetCpuType(fp->player_idx),
+                  Player_GetCpuLevel(fp->player_idx), 0);
 
     efAsync_QueueClear(&fp->x60C);
     ft_8007C17C(gobj);
@@ -1413,21 +1413,21 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     Fighter* fp = GET_FIGHTER(gobj);
     s32 costume_id;
     fp->kind = argdata->internal_id;
-    fp->player_idxx = argdata->slot;
+    fp->player_idx = argdata->slot;
 
     fp->is_sub_fighter = argdata->x6.b0;
 
-    fp->x34_scale.x = Player_GetModelScale(fp->player_idxx);
+    fp->x34_scale.x = Player_GetModelScale(fp->player_idx);
     fp->x61C = argdata->x5;
-    fp->pad_port = Player_GetPadPort(fp->player_idxx);
-    fp->sub_color = Player_GetSubColor(fp->player_idxx);
-    fp->is_always_metal = Player_GetFlagsBit5(fp->player_idxx);
-    fp->x2226_b3 = Player_GetFlagsBit6(fp->player_idxx);
-    fp->x2226_b6 = Player_GetFlagsBit7(fp->player_idxx);
-    fp->x2225_b5 = Player_GetMoreFlagsBit1(fp->player_idxx);
-    fp->x2225_b7 = Player_GetMoreFlagsBit2(fp->player_idxx);
-    fp->x2228_b3 = Player_GetMoreFlagsBit6(fp->player_idxx);
-    fp->x2229_b1 = Player_GetFlagsAEBit0(fp->player_idxx);
+    fp->pad_port = Player_GetPadPort(fp->player_idx);
+    fp->sub_color = Player_GetSubColor(fp->player_idx);
+    fp->is_always_metal = Player_GetFlagsBit5(fp->player_idx);
+    fp->x2226_b3 = Player_GetFlagsBit6(fp->player_idx);
+    fp->x2226_b6 = Player_GetFlagsBit7(fp->player_idx);
+    fp->x2225_b5 = Player_GetMoreFlagsBit1(fp->player_idx);
+    fp->x2225_b7 = Player_GetMoreFlagsBit2(fp->player_idx);
+    fp->x2228_b3 = Player_GetMoreFlagsBit6(fp->player_idx);
+    fp->x2229_b1 = Player_GetFlagsAEBit0(fp->player_idx);
 
     if (fp->sub_color > 4) {
         HSD_ASSERTREPORT(0x33C, 0, "fighter sub color num over!\n");
@@ -1465,7 +1465,7 @@ void Fighter_UnkInitLoad_80068914(Fighter_GObj* gobj,
     }
 
     fp->costume_id = costume_id;
-    fp->team = Player_GetTeam(fp->player_idxx);
+    fp->team = Player_GetTeam(fp->player_idx);
     fp->gobj = gobj;
     fp->ft_data = gFtDataList[fp->kind];
 #if BUILD_TARGET_PC
@@ -1703,7 +1703,7 @@ Fighter_GObj* Fighter_Create(struct plAllocInfo* input)
         ftCh_Init_80155FCC(gobj);
     } else if (input->x6.has_transformation) {
         ftCo_800BFD04(gobj);
-    } else if (Player_GetFlagsBit3(fp->player_idxx) != 0) {
+    } else if (Player_GetFlagsBit3(fp->player_idx) != 0) {
         ftCo_800C61B0(gobj);
     } else {
         if (!fp->no_normal_motion) {
@@ -1936,11 +1936,11 @@ void Fighter_ChangeMotionState(Fighter_GObj* gobj, FtMotionId msid,
         fp->x213C = -1;
 
         if (fp->x2227_b4 != 0U) {
-            pl_8003FE1C(fp->player_idxx, fp->is_sub_fighter);
+            pl_8003FE1C(fp->player_idx, fp->is_sub_fighter);
             fp->x2227_b4 = false;
         }
         fp->x2227_b5 = false;
-        pl_80040330(fp->player_idxx, fp->is_sub_fighter, fp->x2140);
+        pl_80040330(fp->player_idx, fp->is_sub_fighter, fp->x2140);
         fp->x2140 = 0;
         fp->used_tether = false;
         fp->x2180 = 6;
@@ -2464,9 +2464,9 @@ void Fighter_procAnim(Fighter_GObj* gobj)
             if (fp->dmg.x1830_percent > 0.0f) {
                 fp->dmg.x1830_percent--;
                 ft_80088640(fp, 0x7D, 0x7F, 0x40);
-                Player_SetHPByIndex(fp->player_idxx, fp->is_sub_fighter,
+                Player_SetHPByIndex(fp->player_idx, fp->is_sub_fighter,
                                     fp->dmg.x1830_percent);
-                pl_80040B8C(fp->player_idxx, fp->is_sub_fighter, 1);
+                pl_80040B8C(fp->player_idx, fp->is_sub_fighter, 1);
             }
 
             if (fp->dmg.x1830_percent <= 0.0f) {
@@ -2543,7 +2543,7 @@ void Fighter_procAnim(Fighter_GObj* gobj)
             ftColl_800764DC(gobj);
 
             if (!fp->x221C_b6) {
-                pl_800411C4(fp->player_idxx, fp->is_sub_fighter);
+                pl_800411C4(fp->player_idx, fp->is_sub_fighter);
             }
             ftCo_800DEF38(gobj);
 
@@ -3325,12 +3325,21 @@ void Fighter_procUpdate(Fighter_GObj* gobj)
                     // float atkShieldKBAngle = atan2_80022C30(pAtkShieldKB->y,
                     // pAtkShieldKB->x);
                     /* 8006BB34, 8006BB50 */
+#if BUILD_TARGET_PC
                     pAtkShieldKB->x = FT_FMA(
                         -p_ftCommonData->x3E8_shieldKnockbackFrameDecay,
                         cosf(atkShieldKBAngle), pAtkShieldKB->x);
                     pAtkShieldKB->y = FT_FMA(
                         -p_ftCommonData->x3E8_shieldKnockbackFrameDecay,
                         sinf(atkShieldKBAngle), pAtkShieldKB->y);
+#else
+                    pAtkShieldKB->x -=
+                        p_ftCommonData->x3E8_shieldKnockbackFrameDecay *
+                        cosf(atkShieldKBAngle);
+                    pAtkShieldKB->y -=
+                        p_ftCommonData->x3E8_shieldKnockbackFrameDecay *
+                        sinf(atkShieldKBAngle);
+#endif
                 }
                 fp->xF4_ground_attacker_shield_kb_vel = 0;
             } else {
@@ -3603,7 +3612,7 @@ void Fighter_procMap(Fighter_GObj* gobj)
         }
 
         if (fp->ground_or_air == GA_Ground) {
-            pl_80041280(fp->player_idxx, fp->is_sub_fighter);
+            pl_80041280(fp->player_idx, fp->is_sub_fighter);
         }
 
         if (DbLevel >= DbLKind_DebugRom) {
@@ -3682,7 +3691,7 @@ void Fighter_procCollPos(Fighter_GObj* gobj)
         if (fp->ground_or_air == GA_Air &&
             fp->cur_pos.y < Stage_GetCamBoundsBottomOffset())
         {
-            if (ifMagnify_802FB6E8(fp->player_idxx) == 3) {
+            if (ifMagnify_802FB6E8(fp->player_idx) == 3) {
                 Vec3 cam_offset;
                 Stage_UnkSetVec3TCam_Offset(&cam_offset);
 
@@ -3768,9 +3777,9 @@ void Fighter_TakeDamage_8006CC7C(Fighter* fp, float damage_amount)
         if (fp->dmg.x1830_percent > 999.0f) {
             fp->dmg.x1830_percent = 999.0f;
         }
-        Player_SetHPByIndex(fp->player_idxx, fp->is_sub_fighter,
+        Player_SetHPByIndex(fp->player_idx, fp->is_sub_fighter,
                             fp->dmg.x1830_percent);
-        pl_8003EC9C(fp->player_idxx, fp->is_sub_fighter, fp->dmg.x1830_percent,
+        pl_8003EC9C(fp->player_idx, fp->is_sub_fighter, fp->dmg.x1830_percent,
                     damage_amount);
         ftCo_800C8C84(fp->gobj);
     }
@@ -4005,7 +4014,7 @@ void Fighter_procCollResolve(Fighter_GObj* gobj)
                 fp->shield_health = p_ftCommonData->x280_unkShieldHealth;
                 /// this function is called when shield is broken
                 pl_8003E058(fp->x19BC_shieldDamageTaken3, fp->x221F_b6,
-                            fp->player_idxx, fp->is_sub_fighter);
+                            fp->player_idx, fp->is_sub_fighter);
             }
         }
 
@@ -4302,10 +4311,10 @@ void Fighter_procPlayer(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
 
     if (!fp->is_sleeping) {
-        Player_80032828(fp->player_idxx, fp->is_sub_fighter, &fp->cur_pos);
+        Player_80032828(fp->player_idx, fp->is_sub_fighter, &fp->cur_pos);
         Player_SetFacingDirectionConditional(
-            fp->player_idxx, fp->is_sub_fighter, fp->facing_dir);
-        pl_8003FAA8(fp->player_idxx, fp->is_sub_fighter, &fp->cur_pos,
+            fp->player_idx, fp->is_sub_fighter, fp->facing_dir);
+        pl_8003FAA8(fp->player_idx, fp->is_sub_fighter, &fp->cur_pos,
                     &fp->prev_pos);
     }
 }
@@ -4338,7 +4347,7 @@ void Fighter_Unload_8006DABC(void* user_data)
     HSD_JObjUnref(fp->x2184);
     ftData_800859A8(fp);
     HSD_LObjRemoveAll(fp->x588);
-    Player_80031FB0(fp->player_idxx, fp->is_sub_fighter);
+    Player_80031FB0(fp->player_idx, fp->is_sub_fighter);
 
     HSD_ObjFree(&fighter_x59C_alloc_data, fp->x59C);
     HSD_ObjFree(&fighter_x59C_alloc_data, fp->x5A0);

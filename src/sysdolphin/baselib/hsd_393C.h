@@ -14,7 +14,12 @@
 /* 3941E8 */ s32 hsd_803941E8(void*, void*);
 /* 394314 */ void hsd_80394314(void);
 /* 394434 */ void hsd_80394434(void*);
+#if BUILD_TARGET_PC
 /* 394544 */ void hsd_80394544(s32, s32, u32, u32, s32, s32, s32, s32, s32, s32, intptr_t, void*);
+#else
+/* 394544 */ void hsd_80394544(s32, s32, u32, u32, s32, s32, s32, s32, s32,
+                               s32, s32, void*);
+#endif
 /* 394668 */ void hsd_80394668(void);
 
 #endif

@@ -260,7 +260,7 @@ static void slp_write_game_info_block(unsigned char* b, const StartMeleeData* d)
     /* 0x20: the item spawn bitfields, one 64-bit mask on the console. */
     put_u32(b + 0x20, (u32) (r->x20 >> 32));
     put_u32(b + 0x24, (u32) r->x20);
-    put_s32(b + 0x28, r->x28);
+    put_s32(b + 0x28, (s32) r->it_kind);
     put_f32(b + 0x2C, r->x2C);
     put_f32(b + 0x30, r->x30); /* damage ratio */
     put_f32(b + 0x34, r->game_speed); /* game speed */
@@ -396,7 +396,7 @@ void slp_read_game_info_block(const unsigned char* b, StartMeleeData* d)
     r->x14 = b[0x14];
     r->x18 = get_u32(b + 0x18);
     r->x20 = ((u64) get_u32(b + 0x20) << 32) | get_u32(b + 0x24);
-    r->x28 = (int) get_u32(b + 0x28);
+    r->it_kind = (ItemKind) get_u32(b + 0x28);
     r->x2C = get_f32(b + 0x2C);
     r->x30 = get_f32(b + 0x30);
     r->game_speed = get_f32(b + 0x34);
@@ -660,10 +660,10 @@ void slp_PreFrame(Fighter* fp)
     unsigned slot;
     const HSD_PadStatus* pad;
 
-    if (!slp_active || fp == NULL || fp->x221F_b3) {
+    if (!slp_active || fp == NULL || fp->is_sleeping) {
         return;
     }
-    slot = (unsigned) fp->player_id;
+    slot = (unsigned) fp->player_idx;
     if (slot >= 4) {
         return;
     }
@@ -722,10 +722,10 @@ void slp_PostFrame(Fighter* fp)
     int follower;
     unsigned hurtbox;
 
-    if (!slp_active || fp == NULL || fp->x221F_b3) {
+    if (!slp_active || fp == NULL || fp->is_sleeping) {
         return;
     }
-    slot = (unsigned) fp->player_id;
+    slot = (unsigned) fp->player_idx;
     if (slot >= 4) {
         return;
     }
@@ -993,7 +993,7 @@ static void slp_write_items(void)
         n++;
 
         if (ip->owner != NULL && ip->owner->user_data != NULL) {
-            owner = (int) ((Fighter*) ip->owner->user_data)->player_id;
+            owner = (int) ((Fighter*) ip->owner->user_data)->player_idx;
         }
 
         /* Slippi carries four per-item bytes: Samus's missile type, Peach's
@@ -1127,7 +1127,7 @@ void slp_LCancel(Fighter* fp, int success)
     if (!slp_active || fp == NULL) {
         return;
     }
-    slot = (unsigned) fp->player_id;
+    slot = (unsigned) fp->player_idx;
     if (slot >= 4) {
         return;
     }

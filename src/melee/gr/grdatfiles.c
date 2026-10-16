@@ -53,6 +53,7 @@ void* pc_lbheap_persistent(int heap_id, size_t size);
 /// @todo Merge declaration and definition
 /* static */ extern UnkStageDat grDatFiles_803E0924;
 
+#if BUILD_TARGET_PC
 /* Per-object conversion tracing, off unless MELEE_GRDAT_TRACE is set.
  *
  * These fire once per DObj, PObj, joint and vertex -- hundreds to thousands
@@ -68,6 +69,7 @@ static int grdat_trace_on(void)
     }
     return on;
 }
+#endif
 
 void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, size_t length)
 {
@@ -320,7 +322,7 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
 
     /* Fill x86_64 struct with converted values */
     /* unk0 (spawn-point entries) is converted below, after the joint map exists. */
-    x64Dat->unk4 = be32_swap(gcnDat->unk4);
+    x64Dat->count = be32_swap(gcnDat->unk4);
 
     /* Convert the x8_t array */
     if (val != 0) {
@@ -342,25 +344,25 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             pval = be32_swap(*(const u32*)(ep + 0x00));
             /* Convert the HSD_Joint tree from GCN to x86_64 format */
             if (pval != 0) {
-                x64Arr[i].unk0 = grDatFiles_ConvertJointTreeGCNtoX64(
+                x64Arr[i].joint = grDatFiles_ConvertJointTreeGCNtoX64(
                     dataBase + pval, dataBase, 0, NULL);
             } else {
-                x64Arr[i].unk0 = NULL;
+                x64Arr[i].joint = NULL;
             }
 
             /* The map's animation sets (see grdat_conv_anim_set_array): these
              * used to be rebased raw and dropped again by grAnime_801C7C1C's
              * pointer check, so no stage ever animated. */
             pval = be32_swap(*(const u32*)(ep + 0x04));
-            x64Arr[i].unk4 = (HSD_AnimJoint**) grdat_conv_anim_set_array(
+            x64Arr[i].anims = (HSD_AnimJoint**) grdat_conv_anim_set_array(
                 pval, dataBase, GRDAT_ANIMJOINT);
 
             pval = be32_swap(*(const u32*)(ep + 0x08));
-            x64Arr[i].unk8 = (HSD_MatAnimJoint**) grdat_conv_anim_set_array(
+            x64Arr[i].matanims = (HSD_MatAnimJoint**) grdat_conv_anim_set_array(
                 pval, dataBase, GRDAT_MATANIMJOINT);
 
             pval = be32_swap(*(const u32*)(ep + 0x0C));
-            x64Arr[i].unkC = (HSD_ShapeAnimJoint**) grdat_conv_anim_set_array(
+            x64Arr[i].shapeanims = (HSD_ShapeAnimJoint**) grdat_conv_anim_set_array(
                 pval, dataBase, GRDAT_SHAPEANIMJOINT);
 
             /* The map's camera: a GCN HSD_CameraDescPerspective (class name,
@@ -460,7 +462,7 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
             /* x28: one u8 of flags per animation set (grAnime_801C8138
              * reads flags[set]); bytes, so a rebase is a conversion. */
             pval = be32_swap(*(const u32*)(ep + 0x28));
-            x64Arr[i].x28 = gcn_ptr_to_x64(pval, dataBase);
+            x64Arr[i].anim_loops = gcn_ptr_to_x64(pval, dataBase);
 
             /* x2C: x30 joint indices (s16) that Ground_801C3BB4 hands to
              * Ground_801C3FA4. Left pointing at the file they stayed big-
@@ -506,7 +508,7 @@ static UnkStageDat* grDatFiles_ConvertStageDatGCNtoX64(const UnkStageDat_gcn* gc
      * `pairs` is pair_count pairs of big-endian s16 (joint index, x280 slot). */
     {
         u32 e_off = be32_swap(gcnDat->unk0);
-        s32 e_cnt = x64Dat->unk4;
+        s32 e_cnt = x64Dat->count;
         x64Dat->unk0 = NULL;
         if (e_off != 0 && e_off < 0x80000000U && e_cnt > 0 && e_cnt < 4096) {
             struct grdat_spawn_entry {

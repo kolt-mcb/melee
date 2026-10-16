@@ -539,6 +539,14 @@ static const gm_803DDEC8Struct* pc_round_end(const gm_803DDEC8Struct* from)
     }
     return last;
 }
+/* Bounds for the sentinel walks below; on the console they expand to nothing
+ * and the loops read exactly as upstream's. */
+#define PC_ROUND_WALK(p, from) (p) != pc_round_end(from) &&
+#define PC_ROUND_IDX_OK(i) (i) < PC_ROUND_MAX &&
+#else
+#define PC_ROUND_WALK(p, from)
+#define PC_ROUND_IDX_OK(i)
+#define pc_classic_round(round) (&gmClassic_803DDEC8.x00[round])
 #endif
 
 
@@ -617,7 +625,7 @@ static gmClassicMatchup* gmClassic_801B2BA4(gmClassicMatchup* arg0,
                 goto next;
             }
 
-            for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
+            for (temp_idx = 0; PC_ROUND_IDX_OK(temp_idx) arg2[temp_idx].x0 != 0xD; temp_idx++) {
                 for (k = 0; k < 3; k++) {
                     if (arg2[temp_idx].xC != NULL &&
                         cur_char == arg2[temp_idx].xC->x2.x02[k])
@@ -627,7 +635,7 @@ static gmClassicMatchup* gmClassic_801B2BA4(gmClassicMatchup* arg0,
                 }
             }
 
-            for (temp_idx = 0; temp_idx < PC_ROUND_MAX && arg2[temp_idx].x0 != 0xD; temp_idx++) {
+            for (temp_idx = 0; PC_ROUND_IDX_OK(temp_idx) arg2[temp_idx].x0 != 0xD; temp_idx++) {
                 if (arg2[temp_idx].xC != NULL) {
                     if (Stage_8022519C(arg2[temp_idx].xC->x00) ==
                         Stage_8022519C(entry->x00))
@@ -672,10 +680,11 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
 #else
     gmClassicSceneData* scene_data =
         (gmClassicSceneData*) gm_Mode_Classic_States;
-    gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
+/* Upstream reads scene_data->matchups directly; no local on the console. */
+#define scene_matchups (&scene_data->matchups)
 #endif
 
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 8) {
             gmClassicMatchup* result = gmClassic_801B2BA4(
                 scene_matchups->x2B0, o->state.order.x60, arg0);
@@ -706,7 +715,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 2) && !(flags & 0x20)) {
             gmClassicMatchup* result = gmClassic_801B2BA4(
@@ -738,7 +747,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if ((flags & 0x10) && !(flags & 0x20)) {
             gmClassicMatchup* result = gmClassic_801B2BA4(
@@ -770,7 +779,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         u8 flags = ptr->x1;
         if (flags == 0 || flags == 4) {
             gmClassicMatchup* result = gmClassic_801B2BA4(
@@ -810,10 +819,10 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         const char* e = getenv("MELEE_1P_METAL_CKIND");
         if (e != NULL) {
             int ck = atoi(e), k;
-            for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+            for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
                 if (ptr->x1 != 4) continue;
                 for (k = 0; k < 39 && scene_matchups->x0CC[k].x00 != 328; k++) {
-                    if (scene_matchups->x0CC[k].x02[0] == ck) {
+                    if (scene_matchups->x0CC[k].x2.x02[0] == ck) {
                         ptr->xC = &scene_matchups->x0CC[k];
                         break;
                     }
@@ -822,7 +831,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 #endif
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 == 0x80) {
             u8 x2val = ptr->x2;
             switch ((s32) x2val) {
@@ -839,7 +848,7 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
         }
     }
 
-    for (ptr = arg0; ptr != pc_round_end(arg0) && ptr->x0 != 0xD; ptr++) {
+    for (ptr = arg0; PC_ROUND_WALK(ptr, arg0) ptr->x0 != 0xD; ptr++) {
         if (ptr->x1 & 0x20) {
             ptr->xC = scene_matchups->x0C0;
             return ptr;
@@ -847,6 +856,9 @@ static gm_803DDEC8Struct* gmClassic_801B2D54(gm_803DDEC8Struct* arg0)
     }
     return ptr;
 }
+#if !BUILD_TARGET_PC
+#undef scene_matchups
+#endif
 
 void gm_Mode_Classic_OnLoad(void)
 {
@@ -861,7 +873,8 @@ void gm_Mode_Classic_OnLoad(void)
 #else
     gmClassicSceneData* scene_data =
         (gmClassicSceneData*) gm_Mode_Classic_States;
-    gmClassic_803DDEC8Data* scene_matchups = &scene_data->matchups;
+/* Upstream reads scene_data->matchups directly; no local on the console. */
+#define scene_matchups (&scene_data->matchups)
 #endif
     gmClassicRuntimeData* o =
         (gmClassicRuntimeData*) &gmClassicIntroDataBuffer;
@@ -915,6 +928,9 @@ void gm_Mode_Classic_OnLoad(void)
     gm_80172174();
     Ground_801C5A28();
 }
+#if !BUILD_TARGET_PC
+#undef scene_matchups
+#endif
 
 void gm_Mode_Classic_OnInit(void)
 {

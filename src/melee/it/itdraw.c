@@ -1,8 +1,10 @@
 #include "itdraw.h"
 
+#if BUILD_TARGET_PC
 #include <stdio.h>
 
 #include "port/pc_ptr.h"
+#endif
 
 #include "inlines.h"
 #include "it_2725.h"

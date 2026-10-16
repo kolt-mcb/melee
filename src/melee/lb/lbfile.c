@@ -329,7 +329,7 @@ bool lbFile_800168A0(int heap_id, const char* basename, void** dst,
      * reading ~2.6KB out of it). The preload cache is a GCN load-time
      * optimisation; loading fresh is always correct, just slower. */
     cancel = false;
-    lbFile_80016760_inline(heap_id, basename, dst, size);
+    loadFile(heap_id, basename, dst, size);
     return false;
 #else
     if ((*dst = lbDvd_8001819C(basename))) {

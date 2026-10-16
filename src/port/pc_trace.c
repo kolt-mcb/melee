@@ -599,7 +599,7 @@ static void pc_trace_itang(void)
                    : 0xFFFFFFFFu;
         fprintf(stderr, "[ITANG-PORT] gframe=%u kind=%d ang=%08x bits=%08x x17=%d",
                 (unsigned) gm_GetFrameCount(), (int) ip->kind,
-                *(const unsigned*) &ip->x378_itemColl.ecb_source.angle, bits,
+                *(const unsigned*) &ip->x378_itemColl.ecb_source.x4.x0_1.angle, bits,
                 (int) ip->xDC8_word.flags.x17);
         j = (HSD_JObj*) gobj->hsd_obj;
         for (k = 0; k < 3 && j != NULL; k++, j = j->child) {
@@ -802,7 +802,7 @@ static void pc_trace_ailog(void)
                                  * flag sits at the opposite end. Reverse the
                                  * sixteen bits here rather than in the eye of
                                  * whoever reads the two logs. */
-                                unsigned v = vfp->parts[q].flags8, w = 0;
+                                unsigned v = vfp->parts[q].x8.flags8, w = 0;
                                 int b;
                                 for (b = 0; b < 16; b++) {
                                     if (v & (1u << b)) {
@@ -828,7 +828,7 @@ static void pc_trace_ailog(void)
                                 b2 ? *(const unsigned*) &b2->rotate.y : 0,
                                 b2 ? *(const unsigned*) &b2->rotate.z : 0,
                                 b2 ? (unsigned) b2->flags : 0,
-                                (unsigned) vfp->x594_s32,
+                                (unsigned) vfp->x594.x594_s32,
                                 *(const unsigned*) &vfp->mv.co.guard.x4,
                                 *(const unsigned*) &vfp->mv.co.guard.x8,
                                 (b1 && b1->aobj) ? (unsigned) b1->aobj->flags
@@ -844,7 +844,7 @@ static void pc_trace_ailog(void)
                             (unsigned) gm_GetFrameCount(), vslot);
                     for (q = 0; q < 6; q++) {
                         Vec3 jp;
-                        lb_8000B1CC(vfp->coll_data.ecb_source.x10C_joint[q],
+                        lb_8000B1CC(vfp->coll_data.ecb_source.x4.x0.x10C_joint[q],
                                     NULL, &jp);
                         fprintf(stderr, " %08x,%08x",
                                 *(const unsigned*) &jp.x,
@@ -860,7 +860,7 @@ static void pc_trace_ailog(void)
                          * not, the matrix builder is at fault; if they differ,
                          * the animation feeding them is. */
                         HSD_JObj* j0 =
-                            vfp->coll_data.ecb_source.x10C_joint[0];
+                            vfp->coll_data.ecb_source.x4.x0.x10C_joint[0];
                         if (j0 != NULL) {
                             const unsigned* r = (const unsigned*) &j0->rotate;
                             const unsigned* sc = (const unsigned*) &j0->scale;
@@ -878,7 +878,7 @@ static void pc_trace_ailog(void)
                         /* Up the parent chain from ECB joint 0, printing each
                          * ancestor's world translation. The first ancestor
                          * whose matrix differs is where the drift enters. */
-                        HSD_JObj* j = vfp->coll_data.ecb_source.x10C_joint[0];
+                        HSD_JObj* j = vfp->coll_data.ecb_source.x4.x0.x10C_joint[0];
                         int depth = 0;
                         fprintf(stderr, "[FTCHAIN-PORT] gframe=%u p%d",
                                 (unsigned) gm_GetFrameCount(), vslot);
@@ -1049,8 +1049,8 @@ static void pc_trace_animid(void)
                           ? fp->parts[i].joint
                           : fp->parts[i].x4_jobj2;
         HSD_AObj* a = (j != NULL) ? j->aobj : NULL;
-        if (!fp->parts[i].flags_b1 || fp->parts[i].flags_b0 ||
-            fp->parts[i].flags_b5 || a == NULL)
+        if (!fp->parts[i].x8.x0.flags_b1 || fp->parts[i].x8.x0.flags_b0 ||
+            fp->parts[i].x8.x0.flags_b5 || a == NULL)
         {
             continue;
         }
@@ -1147,7 +1147,7 @@ static void pc_trace_bones(void)
         int pn = ftPartsTable[fp->kind]->parts_num;
         fprintf(stderr, "[PARTFLAGS-PORT] p%d gframe=%u n=%d x594=%08x dyn=%d "
                 "af=%08x fsm=%08x blend=%08x cmdt=%08x cmdfc=%08x col=(%d,%d,%p,%d,%p,%d,%p) in=(%08x,%08x,%08x,%08x,%08x)",
-                want_p, want_f, pn, (unsigned) fp->x594_s32,
+                want_p, want_f, pn, (unsigned) fp->x594.x594_s32,
                 (int) fp->dynamics_num, *(u32*) &fp->cur_anim_frame,
                 *(u32*) &fp->frame_speed_mul,
                 *(u32*) &fp->x8A4_animBlendFrames,
@@ -1161,7 +1161,7 @@ static void pc_trace_bones(void)
                 (unsigned) fp->input.held_buttons[0],
                 (unsigned) fp->input.pressed_buttons, (unsigned) fp->input.released_buttons);
         for (b = 0; b < pn && b < 80; b++) {
-            fprintf(stderr, " %02x", (unsigned) fp->parts[b].hi);
+            fprintf(stderr, " %02x", (unsigned) fp->parts[b].x8.x0_1.hi);
         }
         fprintf(stderr, "\n");
     }
@@ -1508,11 +1508,11 @@ static void pc_trace_ecbdump(void)
     }
     fprintf(stderr, "src=%d up=%08x down=%08x front=%08x back=%08x ang=%08x "
                     "x124=%08x x128=%08x x12C=%08x flags=%08x env=%08x\n",
-            (int) c->ecb_source.kind, *(const u32*) &c->ecb_source.up,
-            *(const u32*) &c->ecb_source.down,
-            *(const u32*) &c->ecb_source.front,
-            *(const u32*) &c->ecb_source.back,
-            *(const u32*) &c->ecb_source.angle,
+            (int) c->ecb_source.kind, *(const u32*) &c->ecb_source.x4.x0_1.up,
+            *(const u32*) &c->ecb_source.x4.x0_1.down,
+            *(const u32*) &c->ecb_source.x4.x0_1.front,
+            *(const u32*) &c->ecb_source.x4.x0_1.back,
+            *(const u32*) &c->ecb_source.x4.x0_1.angle,
             *(const u32*) &c->ecb_source.x124,
             *(const u32*) &c->ecb_source.x128,
             *(const u32*) &c->ecb_source.x12C, (unsigned) c->x130_flags,
@@ -1520,7 +1520,7 @@ static void pc_trace_ecbdump(void)
     fprintf(stderr,
             "[X594-PORT] p%d gframe=%u x594=%08x loop=%d animid=%d "
             "blendlen=%08x blendframe=%08x motion=%d\n",
-            slot, gf, (unsigned) fp->x594_s32, (int) fp->x594_b1_loop,
+            slot, gf, (unsigned) fp->x594.x594_s32, (int) fp->x594.x0.x594_b1_loop,
             (int) fp->anim_id, *(const u32*) &fp->x8A4_animBlendFrames,
             *(const u32*) &fp->x8A8_anim_frame, (int) fp->motion_id);
     /* The CPU AI's idea of how far this fighter reaches, rebuilt every frame
@@ -1629,7 +1629,7 @@ static void pc_trace_spawn_item(int frame)
     }
     spawn.pos = spawn.prev_pos;
     spawn.facing_dir = it_8026B684(&spawn.prev_pos);
-    spawn.x44_flag.b0 = 1;
+    spawn.x44_flag.x0.b0 = 1;
     g = Item_80268B18(&spawn);
     fprintf(stderr, "[SPAWN] kind %d at frame %d -> %s\n", want_kind, frame,
             g != NULL ? "spawned" : "refused");

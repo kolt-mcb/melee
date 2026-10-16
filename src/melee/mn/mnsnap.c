@@ -1004,7 +1004,6 @@ struct fn_802545C4_cursor {
 void fn_802545C4(HSD_GObj* gobj)
 {
     struct fn_802545C4_cursor cursor;
-    (void) gobj;
     u64 buttons;
     s32 state;
     f32 t;
@@ -1018,6 +1017,7 @@ void fn_802545C4(HSD_GObj* gobj)
     Vec3* translate;
     /* Preserve the original frame; the local stack layout remains unknown. */
     PAD_STACK(236);
+    (void) gobj;
     buttons = (mn_804A04F0.buttons = mn_80229624(4));
     HSD_JObjAnimAll(mnSnap_804A0A10.select_jobj);
     jobj2 = mnSnap_804A0A10.move_jobj;
@@ -2191,10 +2191,10 @@ void fn_802545C4(HSD_GObj* gobj)
 /// Handles the Back button to exit the Snap menu and cleans up GObjs/text.
 void fn_80257D7C(HSD_GObj* gobj)
 {
-    (void) gobj;
     mnSnap_State* snap = &mnSnap_804A0A10;
     s32 i;
     u64 buttons;
+    (void) gobj;
 
     if (mn_804D6BC8.cooldown != 0) {
         Menu_DecrementAnimTimer();

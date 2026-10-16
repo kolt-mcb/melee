@@ -4341,10 +4341,10 @@ static void fn_800301D0(HSD_GObj* gobj, intptr_t arg1)
 
 void Camera_800304E0(HSD_GObj* gobj, int pc_render_code)
 {
-    (void) pc_render_code;
     s64 prio8;
     s64 prio1;
     HSD_CObj* cobj;
+    (void) pc_render_code;
 
     cobj = gobj->hsd_obj;
     if (HSD_CObjSetCurrent(cobj) != 0) {

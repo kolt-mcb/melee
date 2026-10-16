@@ -2539,7 +2539,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
         if (first) {
             dr->facing_dir_1 = dir;
             dr->x1848_kb_angle = (int) angle;
-            dr->x184c_damaged_hurtbox = (int) best_entry->hurt1->height;
+            dr->x184c_damaged_hurtbox = (int) best_entry->x10.hurt1->height;
             dr->kb_applied = best_kb.v;
             dr->x1854_collpos = best_entry->pos;
             dr->x1860_element = element;
@@ -2552,7 +2552,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
              * same four bytes it declares as a DmgLogEntry*. */
             *(float*) &dr->x1870 = dir;
             dr->x1874 = (int) angle;
-            dr->x1878 = (int) best_entry->hurt1->height;
+            dr->x1878 = (int) best_entry->x10.hurt1->height;
             dr->x187c = best_kb.v;
             dr->x1880 = best_entry->pos;
             dr->x188c = (int) element;

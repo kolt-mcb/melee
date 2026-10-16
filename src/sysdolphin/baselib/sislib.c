@@ -1,5 +1,7 @@
 #include "sislib.h"
 
+#include "sislib_font.h"
+
 #include <stdio.h>
 
 #if BUILD_TARGET_PC
@@ -31,6 +33,31 @@
  * at odd addresses. Reading them through a u16* on this target gave
  * byte-swapped glyph codes (0x2036 "6" became 0x3620) and offsets a hundred
  * times too large, so every menu string's glyphs were dropped. */
+/// Was in sislib.static.h, which upstream removed.
+static inline u8* HSD_SisLib_BytePtr(void* ptr)
+{
+    return ptr;
+}
+
+/// Bytes in a saved cursor record, not counting its type byte.
+enum SIS_SAVED_CURSOR {
+    SIS_SAVED_CURSOR_SIZE = sizeof(u8*)
+};
+
+#if BUILD_TARGET_PC
+/// Saved cursors are pointer-sized big-endian values.
+static inline u8* sisGetSavedCursor(const u8* p)
+{
+    uintptr_t value = 0;
+    int i;
+
+    for (i = 0; i < SIS_SAVED_CURSOR_SIZE; i++) {
+        value = (value << 8) | p[i];
+    }
+    return (u8*) value;
+}
+#endif
+
 #if BUILD_TARGET_PC
 #define SIS_U16(p) ((u16) ((((const u8*) (p))[0] << 8) | ((const u8*) (p))[1]))
 #define SIS_S16(p) ((s16) SIS_U16(p))
@@ -697,7 +724,9 @@ int HSD_SisLib_803A611C(int font_idx, HSD_GObj* parent_gobj, u16 class_id,
  * loaded and freed. Hence 2048, and offsets checked against the archive's
  * length rather than only against what is mapped (all of the pool is). */
 #define PC_SIS_MAX_ENTRIES 2048
-static SIS pc_sis_tables[5][PC_SIS_MAX_ENTRIES];
+/* Flat pointer slots, two per entry, as HSD_SisLib_804D1124[f][n] indexes
+ * them: [0] glyph images, [1] glyph widths, then the encoded strings. */
+static u8* pc_sis_tables[5][PC_SIS_MAX_ENTRIES * 2];
 
 static u32 pc_sis_be32(const void* p)
 {
@@ -706,7 +735,7 @@ static u32 pc_sis_be32(const void* p)
            (u32) b[3];
 }
 
-SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
+u8** pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
                     unsigned long len)
 {
     const u8* src = raw;
@@ -714,7 +743,7 @@ SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
     int i;
 
     if (src == NULL || base == NULL || font_idx < 0 || font_idx >= 5) {
-        return (SIS*) raw;
+        return (u8**) raw;
     }
     memset(pc_sis_tables[font_idx], 0, sizeof(pc_sis_tables[font_idx]));
     for (i = 0; i < PC_SIS_MAX_ENTRIES; i++) {
@@ -728,14 +757,10 @@ SIS* pc_sis_convert(s32 font_idx, const void* raw, void* dataBase,
         if (len != 0 && (k >= len || t >= len)) {
             break; /* past the table: these words are not offsets */
         }
-        pc_sis_tables[font_idx][i].kerning =
-            (k != 0 && pc_mem_readable(base + k, 2))
-                ? (TextKerning*) (base + k)
-                : NULL;
-        pc_sis_tables[font_idx][i].textures =
-            (t != 0 && pc_mem_readable(base + t, 4))
-                ? (TextGlyphTexture*) (base + t)
-                : NULL;
+        pc_sis_tables[font_idx][i * 2] =
+            (k != 0 && pc_mem_readable(base + k, 2)) ? base + k : NULL;
+        pc_sis_tables[font_idx][i * 2 + 1] =
+            (t != 0 && pc_mem_readable(base + t, 4)) ? base + t : NULL;
     }
     return pc_sis_tables[font_idx];
 }
@@ -753,10 +778,10 @@ void HSD_SisLib_803A62A0(s32 font_idx, char* archive_name, char* symbol_name)
         u8** sis = HSD_ArchiveGetPublicAs(u8*, HSD_SisLib_804D1110[font_idx],
                                           symbol_name);
 #if BUILD_TARGET_PC
-        /* PC port: SIS is two pointers -- 8 bytes in the archive, 16 here --
+        /* PC port: each SIS entry is two pointers -- 8 bytes in the archive, 16 here --
          * so indexing this table in place walks at the wrong stride and reads
          * each 4-byte offset as an 8-byte pointer. Every
-         * HSD_SisLib_804D1124[f][n].kerning in the tree then hands out a
+         * HSD_SisLib_804D1124[f][n] in the tree then hands out a
          * non-null pointer into nothing, which is what took the character
          * select down once it reached its rules text.
          *
@@ -881,36 +906,28 @@ void HSD_SisLib_803A660C(s32 font_idx, s32 dst_idx, s32 src_idx)
     HSD_SisLib_803A6478(dst, src);
 }
 
-HSD_Text* HSD_SisLib_803A6754(int font_idx, s32 context_id)
+HSD_Text* HSD_SisLib_803A6754(int font_idx, int context_id)
 {
-    SisBlock* alloc;
+    SisBuffer* alloc;
     HSD_Text* text;
-    HSD_Text* buffer;
+    u8* buffer;
 
     text = HSD_SisLib_803A5ACC(font_idx, context_id, 0.0F, 0.0F, 0.0F, 640.0F,
                                480.0F);
-#if BUILD_TARGET_PC
-    /* 0x10 on GameCube: the block carries one more word after size, which
-     * the code below clears through &alloc->size + 1. sizeof(SisBlock) has
-     * room for it only where padding supplies it -- 24 bytes on 64-bit
-     * hosts, but 12 on wasm32, where the store landed on the next block's
-     * link and character select's next text allocation followed it. */
-    alloc = HSD_SisLib_Alloc(offsetof(SisBlock, size) + 2 * sizeof(u32));
-#else
-    alloc = HSD_SisLib_Alloc(0x10);
-#endif
+    /* 0x10 on GameCube. On PC this is 24 bytes on 64-bit hosts and 16 on
+     * wasm32: the old SisBlock-shaped allocation had room for count only
+     * where padding supplied it, and on wasm32 the store to it landed on the
+     * next block's link. */
+    alloc = HSD_SisLib_Alloc(sizeof(SisBuffer));
     text->alloc_data = alloc;
     buffer = HSD_SisLib_Alloc(0x80);
     alloc->data = buffer;
-    alloc->next = (SisBlock*) buffer;
-    alloc->size = 0x80; ///< @todo This being a byte store means one of my
-                        ///< assumptions is wrong;
-    // maybe this is a different struct.
-    *(u8*) &alloc->next->next =
-        0; ///< @todo Do any other Data struct usages have a 0xC member?
-    *(&alloc->size + 1) = 0;
+    alloc->end = buffer;
+    alloc->size = 0x80;
+    *alloc->end = 0;
+    alloc->count = 0;
     HSD_SisLib_803A6368(text, 0);
-    text->sis_buffer = (SIS*) alloc->data;
+    text->sis_buffer = alloc->data;
     return text;
 }
 
@@ -1071,8 +1088,8 @@ int HSD_SisLib_803A6B98(HSD_Text* text, float x, float y, const char* fmt, ...)
     u8 encoded[128];
     s32 x_coord;
     s32 y_coord;
-    HSD_Text* old_buf;
-    SisBlock* alloc;
+    u8* old_buf;
+    SisBuffer* alloc;
     s32 encoded_len;
     s32 copied_bytes;
     u8* new_buf;
@@ -1104,7 +1121,7 @@ int HSD_SisLib_803A6B98(HSD_Text* text, float x, float y, const char* fmt, ...)
     }
 
     old_size = alloc->size;
-    required_size = (HSD_SisLib_BytePtr(alloc->next) -
+    required_size = (HSD_SisLib_BytePtr(alloc->end) -
                      HSD_SisLib_BytePtr(old_buf = alloc->data)) +
                     0x11;
     required_size = encoded_len + required_size;
@@ -1114,20 +1131,20 @@ int HSD_SisLib_803A6B98(HSD_Text* text, float x, float y, const char* fmt, ...)
         new_buf = HSD_SisLib_Alloc((s32) alloc->size);
         copy_src = (u8*) old_buf;
         copy_idx = 0;
-        while (copy_idx < (s32) (((u8*) alloc->next - (u8*) alloc->data) + 1))
+        while (copy_idx < (s32) (((u8*) alloc->end - (u8*) alloc->data) + 1))
         {
             new_buf[copy_idx] = *copy_src;
             copy_idx += 1;
             copy_src += 1;
         }
-        alloc->data = (HSD_Text*) new_buf;
-        text->sis_buffer = (SIS*) new_buf;
-        alloc->next =
-            (SisBlock*) (new_buf + ((u8*) alloc->next - (u8*) old_buf));
+        alloc->data = new_buf;
+        text->sis_buffer = new_buf;
+        alloc->end =
+            (new_buf + ((u8*) alloc->end - (u8*) old_buf));
         HSD_SisLib_Free(old_buf);
     }
 
-    cur = (u8**) &alloc->next;
+    cur = (u8**) &alloc->end;
     *(*cur)++ = 7;
     copied_bytes = 0;
     x_coord = (s16) x;
@@ -1151,7 +1168,7 @@ int HSD_SisLib_803A6B98(HSD_Text* text, float x, float y, const char* fmt, ...)
     *(*cur)++ = 0xF;
     *(*cur)++ = 0xD;
     **cur = 0;
-    return ((sisLib_803A7664_t*) alloc)->xC++;
+    return alloc->count++;
 }
 
 /// @todo there seems to be a file boundary before this function,
@@ -1215,7 +1232,7 @@ s32 HSD_SisLib_803A70A0(HSD_Text* text, s32 entry_idx, char* fmt, ...)
 {
     u8 buffer[128];
     u8 encoded[128];
-    SisBlock* alloc;
+    SisBuffer* alloc;
     s32 old_size;
     u8* entry;
     s32 new_size;
@@ -1247,15 +1264,15 @@ s32 HSD_SisLib_803A70A0(HSD_Text* text, s32 entry_idx, char* fmt, ...)
             new_size = 0;
         }
         if (old_size < new_size) {
-            HSD_Text* old_buf;
+            u8* old_buf;
             s32 tail_len;
             u32 required_size;
 
             result = new_size - old_size;
-            tail_len = HSD_SisLib_BytePtr(alloc->next) - playhead;
+            tail_len = HSD_SisLib_BytePtr(alloc->end) - playhead;
             old_buf = alloc->data;
             required_size = new_size +
-                            (HSD_SisLib_BytePtr(alloc->next) -
+                            (HSD_SisLib_BytePtr(alloc->end) -
                              HSD_SisLib_BytePtr(old_buf)) +
                             1;
             if (alloc->size < required_size) {
@@ -1265,34 +1282,34 @@ s32 HSD_SisLib_803A70A0(HSD_Text* text, s32 entry_idx, char* fmt, ...)
                 copy_src = (u8*) old_buf;
                 copy_idx = 0;
                 while (copy_idx <
-                       (s32) (((u8*) alloc->next - (u8*) alloc->data) + 1))
+                       (s32) (((u8*) alloc->end - (u8*) alloc->data) + 1))
                 {
                     new_buf[copy_idx] = *copy_src;
                     copy_idx += 1;
                     copy_src += 1;
                 }
-                alloc->data = (HSD_Text*) new_buf;
-                text->sis_buffer = (SIS*) new_buf;
-                alloc->next =
-                    (SisBlock*) (new_buf + (HSD_SisLib_BytePtr(alloc->next) -
+                alloc->data = new_buf;
+                text->sis_buffer = new_buf;
+                alloc->end =
+                    (new_buf + (HSD_SisLib_BytePtr(alloc->end) -
                                             HSD_SisLib_BytePtr(old_buf)));
                 HSD_SisLib_Free(old_buf);
-                playhead = (u8*) alloc->next - tail_len;
+                playhead = (u8*) alloc->end - tail_len;
             }
             for (i = tail_len; i > 0; i--) {
                 playhead[result + i] = playhead[i];
             }
-            alloc->next =
-                (SisBlock*) (HSD_SisLib_BytePtr(alloc->next) + result);
+            alloc->end =
+                (HSD_SisLib_BytePtr(alloc->end) + result);
         } else if (old_size > new_size) {
             s32 shrink_size = old_size - new_size;
-            s32 tail_len = HSD_SisLib_BytePtr(alloc->next) - playhead;
+            s32 tail_len = HSD_SisLib_BytePtr(alloc->end) - playhead;
 
             for (i = 0; i < tail_len; i++) {
                 playhead[i] = playhead[shrink_size + i];
             }
-            alloc->next =
-                (SisBlock*) (HSD_SisLib_BytePtr(alloc->next) - shrink_size);
+            alloc->end =
+                (HSD_SisLib_BytePtr(alloc->end) - shrink_size);
         }
         for (i = 0; i < new_size; i++) {
             *playhead++ = encoded[i];
@@ -1370,15 +1387,17 @@ void HSD_SisLib_803A75E0(HSD_Text* text, s32 entry_idx)
 
 void HSD_SisLib_803A7664(HSD_Text* text)
 {
-    sisLib_803A7664_t* data;
+    SisBuffer* data;
 
-    data = (sisLib_803A7664_t*) text->alloc_data;
-    data->x0 = data->x4;
-    *(u8*) data->x0 = 0;
-    data->xC = 0;
+    data = text->alloc_data;
+    data->end = data->data;
+    *data->end = 0;
+    data->count = 0;
 }
 
-static u8 HSD_SisLib_8040CB00[0x240] = {
+/* Defined in hsd_3A76.c upstream; that file is not built on PC, so this
+ * translation unit keeps its own copy (declared in sislib_font.h). */
+TextGlyphMetrics HSD_SisLib_8040CB00[288] = {
     0x09, 0x08, 0x09, 0x0C, 0x09, 0x08, 0x08, 0x08, 0x09, 0x08, 0x09, 0x08,
     0x09, 0x08, 0x09, 0x08, 0x09, 0x08, 0x09, 0x08, 0x04, 0x03, 0x06, 0x05,
     0x04, 0x04, 0x05, 0x03, 0x08, 0x06, 0x08, 0x06, 0x04, 0x03, 0x05, 0x03,
@@ -1429,12 +1448,12 @@ static u8 HSD_SisLib_8040CB00[0x240] = {
     0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00,
 };
 
-void HSD_SisLib_803A8134(void* cursor, HSD_Text* text, f32* out_width,
+void HSD_SisLib_803A8134(u8* cursor, HSD_Text* text, f32* out_width,
                          f32* out_height)
 {
-    SIS* sis;
+    u8** sis;
     TextGlyphTexture* glyph_tex;
-    u8* default_kerning = HSD_SisLib_8040CB00;
+    u8* default_kerning = HSD_SisLib_BytePtr(HSD_SisLib_8040CB00);
     f32 line_height;
     f32 saved_scale_x;
     f32 saved_scale_y;
@@ -1445,18 +1464,19 @@ void HSD_SisLib_803A8134(void* cursor, HSD_Text* text, f32* out_width,
     u16 glyph_code;
     s32 kern_width;
     s32 clear_idx;
-    u32 pop_result;
-    TextKerning* kern_data_2;
+    u8* pop_result;
+    TextGlyphMetrics* kern_data_2;
     u8 opcode;
-    TextKerning* kern_data;
+    TextGlyphMetrics* kern_data;
     saved_scale_x = text->x80.x;
     saved_scale_y = text->x80.y;
     saved_spacing = text->x78.x;
     kern_enabled = text->kerning;
     sis = HSD_SisLib_804D1124[text->font_idx];
-    saved_x6C = text->x6C;
+    saved_x6C = text->state_stack_used;
     if (sis != NULL) {
-        glyph_tex = sis->textures;
+        /* [1] is the glyph widths; the old SIS struct called it textures */
+        glyph_tex = (TextGlyphTexture*) sis[1];
     }
     *out_width = 0.0F;
     *out_height = 32.0F * text->x80.y;
@@ -1465,8 +1485,8 @@ loop_3:
     switch (opcode) {
     case 0:
         pop_result = HSD_SisLib_803A7F0C(text, 0x85);
-        if (pop_result != 0U) {
-            cursor = (u8*) (pop_result + 4);
+        if (pop_result != NULL) {
+            cursor = pop_result + 4;
             goto block_33;
         }
         break;
@@ -1535,10 +1555,10 @@ loop_3:
                  * lives above 4 GB, so that truncated -- the menu crashed
                  * measuring its first string. Same arithmetic, in pointers. */
                 if (glyph_code < 0x4000U) {
-                    kern_data = (TextKerning*) (default_kerning +
+                    kern_data = (TextGlyphMetrics*) (default_kerning +
                                (((glyph_code - 0x2000) * 2) & 0x1FFFE));
                 } else {
-                    kern_data = (TextKerning*) &glyph_tex
+                    kern_data = (TextGlyphMetrics*) &glyph_tex
                             ->data[((glyph_code - 0x4000) * 2) & 0x1FFFE];
                 }
                 kern_width = (kern_data->right - 2) + kern_data->left;
@@ -1549,18 +1569,18 @@ loop_3:
                     kern_width =
                         (s32) (default_kerning +
                                (((glyph_code - 0x2000) * 2) & 0x1FFFE));
-                    kern_data = (TextKerning*) kern_width;
+                    kern_data = (TextGlyphMetrics*) kern_width;
                     kern_width = kern_data->right - 2;
-                    kern_data = (TextKerning*) (u32) kern_data->left;
+                    kern_data = (TextGlyphMetrics*) (u32) kern_data->left;
                     kern_width = (s32) kern_data + kern_width;
                     *out_width =
                         -((text->x80.x * (f32) kern_width) - *out_width);
                 } else {
                     kern_data_2 =
-                        (TextKerning*) &glyph_tex
+                        (TextGlyphMetrics*) &glyph_tex
                             ->data[((glyph_code - 0x4000) * 2) & 0x1FFFE];
                     kern_width = kern_data_2->right - 2;
-                    kern_data_2 = (TextKerning*) (u32) kern_data_2->left;
+                    kern_data_2 = (TextGlyphMetrics*) (u32) kern_data_2->left;
                     kern_width = (s32) kern_data_2 + kern_width;
                     *out_width =
                         -((text->x80.x * (f32) kern_width) - *out_width);
@@ -1583,11 +1603,11 @@ block_done:
     text->x80.x = saved_scale_x;
     text->x80.y = saved_scale_y;
     text->x78.x = saved_spacing;
-    text->x6C = saved_x6C;
+    text->state_stack_used = saved_x6C;
     opcode = 0;
-    clear_idx = text->x6C;
-    while (clear_idx < (s32) text->x6E) {
-        text->string_buffer[clear_idx] = opcode;
+    clear_idx = text->state_stack_used;
+    while (clear_idx < (s32) text->state_stack_capacity) {
+        text->state_stack[clear_idx] = opcode;
         clear_idx += 1;
     }
 }
@@ -1606,13 +1626,13 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
 
     switch (flags & 0x7F) {
     case 1:
-        old_x6E = text->x6E;
-        if (old_x6E < (s32) (text->x6C + 5)) {
+        old_x6E = text->state_stack_capacity;
+        if (old_x6E < (s32) (text->state_stack_used + 5)) {
             new_x6E = old_x6E + 0x10;
-            old_buf = (u8*) text->string_buffer;
-            text->string_buffer = HSD_SisLib_Alloc(new_x6E);
+            old_buf = (u8*) text->state_stack;
+            text->state_stack = HSD_SisLib_Alloc(new_x6E);
             src = old_buf;
-            text->x6E = (u16) new_x6E;
+            text->state_stack_capacity = (u16) new_x6E;
             count = old_x6E;
             idx = 0;
             if (old_x6E > 0) {
@@ -1620,7 +1640,7 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                 if (bulk != 0) {
                     do {
                         for (k = 0; k < 8; k++) {
-                            text->string_buffer[idx++] = src[k];
+                            text->state_stack[idx++] = src[k];
                         }
                         src += 8;
                         bulk -= 1;
@@ -1631,41 +1651,41 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                     }
                 }
                 do {
-                    text->string_buffer[idx++] = *src++;
+                    text->state_stack[idx++] = *src++;
                     count -= 1;
                 } while (count != 0);
             }
         zero_1:
-            while (idx < (s32) text->x6E) {
-                text->string_buffer[idx] = 0;
+            while (idx < (s32) text->state_stack_capacity) {
+                text->state_stack[idx] = 0;
                 idx += 1;
             }
             HSD_SisLib_Free(old_buf);
         }
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((s32) (256.0F * text->x78.x) >> 8);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) (256.0F * text->x78.x);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((s32) (256.0F * text->x78.y) >> 8);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) (256.0F * text->x78.y);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) flags;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((s32) (256.0F * text->x78.x) >> 8);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) (256.0F * text->x78.x);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((s32) (256.0F * text->x78.y) >> 8);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) (256.0F * text->x78.y);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) flags;
         return;
     case 2:
-        old_x6E = text->x6E;
-        if (old_x6E < (s32) (text->x6C + 4)) {
+        old_x6E = text->state_stack_capacity;
+        if (old_x6E < (s32) (text->state_stack_used + 4)) {
             new_x6E = old_x6E + 0x10;
-            old_buf = (u8*) text->string_buffer;
-            text->string_buffer = HSD_SisLib_Alloc(new_x6E);
+            old_buf = (u8*) text->state_stack;
+            text->state_stack = HSD_SisLib_Alloc(new_x6E);
             src = old_buf;
-            text->x6E = (u16) new_x6E;
+            text->state_stack_capacity = (u16) new_x6E;
             count = old_x6E;
             idx = 0;
             if (old_x6E > 0) {
@@ -1673,7 +1693,7 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                 if (bulk != 0) {
                     do {
                         for (k = 0; k < 8; k++) {
-                            text->string_buffer[idx++] = src[k];
+                            text->state_stack[idx++] = src[k];
                         }
                         src += 8;
                         bulk -= 1;
@@ -1684,38 +1704,38 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                     }
                 }
                 do {
-                    text->string_buffer[idx++] = *src++;
+                    text->state_stack[idx++] = *src++;
                     count -= 1;
                 } while (count != 0);
             }
         zero_2:
-            while (idx < (s32) text->x6E) {
-                text->string_buffer[idx] = 0;
+            while (idx < (s32) text->state_stack_capacity) {
+                text->state_stack[idx] = 0;
                 idx += 1;
             }
             HSD_SisLib_Free(old_buf);
         }
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) text->active_color.r;
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) text->active_color.g;
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) text->active_color.b;
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) flags;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) text->active_color.r;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) text->active_color.g;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) text->active_color.b;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) flags;
         return;
     case 3:
-        old_x6E = text->x6E;
-        if (old_x6E < (s32) (text->x6C + 5)) {
+        old_x6E = text->state_stack_capacity;
+        if (old_x6E < (s32) (text->state_stack_used + 5)) {
             new_x6E = old_x6E + 0x10;
-            old_buf = (u8*) text->string_buffer;
-            text->string_buffer = HSD_SisLib_Alloc(new_x6E);
+            old_buf = (u8*) text->state_stack;
+            text->state_stack = HSD_SisLib_Alloc(new_x6E);
             src = old_buf;
-            text->x6E = (u16) new_x6E;
+            text->state_stack_capacity = (u16) new_x6E;
             count = old_x6E;
             idx = 0;
             if (old_x6E > 0) {
@@ -1723,7 +1743,7 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                 if (bulk != 0) {
                     do {
                         for (k = 0; k < 8; k++) {
-                            text->string_buffer[idx++] = src[k];
+                            text->state_stack[idx++] = src[k];
                         }
                         src += 8;
                         bulk -= 1;
@@ -1734,41 +1754,41 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                     }
                 }
                 do {
-                    text->string_buffer[idx++] = *src++;
+                    text->state_stack[idx++] = *src++;
                     count -= 1;
                 } while (count != 0);
             }
         zero_3:
-            while (idx < (s32) text->x6E) {
-                text->string_buffer[idx] = 0;
+            while (idx < (s32) text->state_stack_capacity) {
+                text->state_stack[idx] = 0;
                 idx += 1;
             }
             HSD_SisLib_Free(old_buf);
         }
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((s32) (256.0F * text->x80.x) >> 8);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) (256.0F * text->x80.x);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((s32) (256.0F * text->x80.y) >> 8);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) (256.0F * text->x80.y);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) flags;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((s32) (256.0F * text->x80.x) >> 8);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) (256.0F * text->x80.x);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((s32) (256.0F * text->x80.y) >> 8);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) (256.0F * text->x80.y);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) flags;
         return;
     case 4:
-        old_x6E = text->x6E;
-        if (old_x6E < (s32) (text->x6C + 2)) {
+        old_x6E = text->state_stack_capacity;
+        if (old_x6E < (s32) (text->state_stack_used + 2)) {
             new_x6E = old_x6E + 0x10;
-            old_buf = (u8*) text->string_buffer;
-            text->string_buffer = HSD_SisLib_Alloc(new_x6E);
+            old_buf = (u8*) text->state_stack;
+            text->state_stack = HSD_SisLib_Alloc(new_x6E);
             src = old_buf;
-            text->x6E = (u16) new_x6E;
+            text->state_stack_capacity = (u16) new_x6E;
             count = old_x6E;
             idx = 0;
             if (old_x6E > 0) {
@@ -1776,7 +1796,7 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                 if (bulk != 0) {
                     do {
                         for (k = 0; k < 8; k++) {
-                            text->string_buffer[idx++] = src[k];
+                            text->state_stack[idx++] = src[k];
                         }
                         src += 8;
                         bulk -= 1;
@@ -1787,33 +1807,33 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                     }
                 }
                 do {
-                    text->string_buffer[idx++] = *src++;
+                    text->state_stack[idx++] = *src++;
                     count -= 1;
                 } while (count != 0);
             }
         zero_4:
-            while (idx < (s32) text->x6E) {
-                text->string_buffer[idx] = 0;
+            while (idx < (s32) text->state_stack_capacity) {
+                text->state_stack[idx] = 0;
                 idx += 1;
             }
             HSD_SisLib_Free(old_buf);
         }
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) text->alignment;
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) flags;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) text->alignment;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) flags;
         return;
     case 5:
-        old_x6E = text->x6E;
-        if (old_x6E < (s32) (text->x6C + 5)) {
+        old_x6E = text->state_stack_capacity;
+        if (old_x6E < (s32) (text->state_stack_used + SIS_SAVED_CURSOR_SIZE + 1)) {
             new_x6E = old_x6E + 0x10;
-            old_buf = (u8*) text->string_buffer;
+            old_buf = (u8*) text->state_stack;
             (void) old_buf;
-            text->string_buffer = HSD_SisLib_Alloc(new_x6E);
+            text->state_stack = HSD_SisLib_Alloc(new_x6E);
             src = old_buf;
-            text->x6E = (u16) new_x6E;
+            text->state_stack_capacity = (u16) new_x6E;
             count = old_x6E;
             idx = 0;
             if (old_x6E > 0) {
@@ -1821,7 +1841,7 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                 if (bulk != 0) {
                     do {
                         for (k = 0; k < 8; k++) {
-                            text->string_buffer[idx++] = src[k];
+                            text->state_stack[idx++] = src[k];
                         }
                         src += 8;
                         bulk -= 1;
@@ -1832,62 +1852,75 @@ void HSD_SisLib_803A7684(HSD_Text* text, const u8* cursor, u8 flags)
                     }
                 }
                 do {
-                    text->string_buffer[idx++] = *src++;
+                    text->state_stack[idx++] = *src++;
                     count -= 1;
                 } while (count != 0);
             }
         zero_5:
-            while (idx < (s32) text->x6E) {
-                text->string_buffer[idx] = 0;
+            while (idx < (s32) text->state_stack_capacity) {
+                text->state_stack[idx] = 0;
                 idx += 1;
             }
             HSD_SisLib_Free(old_buf);
         }
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((u32) cursor >> 0x18U);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((u32) cursor >> 0x10U);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) ((u32) cursor >> 8U);
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) (u32) cursor;
-        pos = text->x6C;
-        text->x6C = pos + 1;
-        text->string_buffer[pos] = (u8) flags;
+#if BUILD_TARGET_PC
+        /* The cursor is saved pointer-sized, big-endian (as upstream does):
+         * four bytes truncated it on 64-bit hosts. */
+        {
+            int shift;
+            for (shift = (SIS_SAVED_CURSOR_SIZE - 1) * 8; shift >= 32;
+                 shift -= 8)
+            {
+                text->state_stack[text->state_stack_used++] =
+                    (u8) ((uintptr_t) cursor >> shift);
+            }
+        }
+#endif
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((uintptr_t) cursor >> 0x18U);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((uintptr_t) cursor >> 0x10U);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) ((uintptr_t) cursor >> 8U);
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) (uintptr_t) cursor;
+        pos = text->state_stack_used;
+        text->state_stack_used = pos + 1;
+        text->state_stack[pos] = (u8) flags;
         return;
     }
 }
 
-s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
+u8* HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
 {
     s8 entry;
     s32 flag_hi;
     s32 entry_flags;
     s32 target_type;
-    s32 result;
+    u8* result;
     s32 remove_size;
     s32 pos;
 
     flag_hi = flags & 0x80;
     target_type = flags & 0x7F;
-    pos = text->x6C;
-    result = 0;
+    pos = text->state_stack_used;
+    result = NULL;
     remove_size = 0;
     while (pos >= 0) {
-        entry = text->string_buffer[pos];
+        entry = text->state_stack[pos];
         entry_flags = entry & 0x80;
         switch ((u8) entry & 0x7F) { /* irregular */
         case 1:
             pos -= 4;
             if (target_type == 1) {
                 text->x78.x =
-                    (f32) SIS_S16((text->string_buffer + pos)) / 256.0F;
+                    (f32) SIS_S16((text->state_stack + pos)) / 256.0F;
                 text->x78.y =
-                    (f32) SIS_S16((text->string_buffer + pos + 2)) / 256.0F;
+                    (f32) SIS_S16((text->state_stack + pos + 2)) / 256.0F;
                 if (flag_hi == entry_flags) {
                     remove_size = 5;
                 }
@@ -1897,9 +1930,9 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
         case 2:
             pos -= 3;
             if (target_type == 2) {
-                text->active_color.r = text->string_buffer[pos];
-                text->active_color.g = text->string_buffer[pos + 1];
-                text->active_color.b = text->string_buffer[pos + 2];
+                text->active_color.r = text->state_stack[pos];
+                text->active_color.g = text->state_stack[pos + 1];
+                text->active_color.b = text->state_stack[pos + 2];
                 if (flag_hi == entry_flags) {
                     remove_size = 4;
                 }
@@ -1910,9 +1943,9 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
             pos -= 4;
             if (target_type == 3) {
                 text->x80.x =
-                    (f32) SIS_U16((text->string_buffer + pos)) / 256.0F;
+                    (f32) SIS_U16((text->state_stack + pos)) / 256.0F;
                 text->x80.y =
-                    (f32) SIS_U16((text->string_buffer + pos + 2)) / 256.0F;
+                    (f32) SIS_U16((text->state_stack + pos + 2)) / 256.0F;
                 if (flag_hi == entry_flags) {
                     remove_size = 5;
                 }
@@ -1922,7 +1955,7 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
         case 4:
             pos -= 1;
             if (target_type == 4) {
-                text->alignment = text->string_buffer[pos];
+                text->alignment = text->state_stack[pos];
                 if (flag_hi == entry_flags) {
                     remove_size = 2;
                 }
@@ -1930,11 +1963,15 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
             }
             break;
         case 5:
-            pos -= 4;
+            pos -= SIS_SAVED_CURSOR_SIZE;
             if (target_type == 5) {
-                result = *(s32*) (text->string_buffer + pos);
+#if BUILD_TARGET_PC
+                result = sisGetSavedCursor(text->state_stack + pos);
+#else
+                result = *(u8**) (text->state_stack + pos);
+#endif
                 if (flag_hi == entry_flags) {
-                    remove_size = 5;
+                    remove_size = SIS_SAVED_CURSOR_SIZE + 1;
                 }
                 goto done;
             }
@@ -1944,20 +1981,20 @@ s32 HSD_SisLib_803A7F0C(HSD_Text* text, s32 flags)
     }
 done:
     if (remove_size != 0) {
-        while ((pos + remove_size) < (s32) text->x6C) {
-            text->string_buffer[pos] = text->string_buffer[pos + remove_size];
+        while ((pos + remove_size) < (s32) text->state_stack_used) {
+            text->state_stack[pos] = text->state_stack[pos + remove_size];
             pos += 1;
         }
-        while (pos < (s32) text->x6C) {
-            text->string_buffer[pos] = 0;
+        while (pos < (s32) text->state_stack_used) {
+            text->state_stack[pos] = 0;
             pos += 1;
         }
-        text->x6C -= remove_size;
+        text->state_stack_used -= remove_size;
     }
     return result;
 }
 
-void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
+void HSD_SisLib_803A84BC(HSD_GObj* gobj, intptr_t pass)
 {
     // clang-format off
     HSD_Text *text;
@@ -1965,7 +2002,9 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
     Mtx m;
     f32 line_width_out;
     f32 line_height_out;
-    TextKerning *kerning = NULL;
+    /* sis[0]: glyph images, sis[1]: glyph widths. The names are the old
+     * SIS struct's field names, kept for the code below. */
+    TextGlyphTexture *kerning = NULL;
     TextGlyphTexture *textures = NULL;
 
     f32 min_x;
@@ -1993,14 +2032,14 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
 #else
     u8 *data = &HSD_SisLib_8040CD40;
 #endif
-    u8 *default_kerning = HSD_SisLib_8040CB00;
+    u8 *default_kerning = HSD_SisLib_BytePtr(HSD_SisLib_8040CB00);
 
 #if BUILD_TARGET_PC
     { static int _sl_on = -1, _sl_n = 0;
       if (_sl_on < 0) _sl_on = (getenv("MELEE_SISLOG") != NULL);
       if (_sl_on && _sl_n < 60) { _sl_n++;
         HSD_Text* _t = gobj ? (HSD_Text*)gobj->user_data : (HSD_Text*)pass;
-        fprintf(stderr, "SISDRAW gobj=%p pass=%d text=%p hidden=%d buf=%p readable=%d font=%d sis=%p\n", (void*)gobj, pass, (void*)_t,
+        fprintf(stderr, "SISDRAW gobj=%p pass=%d text=%p hidden=%d buf=%p readable=%d font=%d sis=%p\n", (void*)gobj, (int)pass, (void*)_t,
                 _t ? (int)_t->hidden : -1, _t ? (void*)_t->sis_buffer : NULL, _t ? (int)pc_mem_readable(_t->sis_buffer, 1) : -1,
                 _t ? (int)_t->font_idx : -1, _t ? (void*)HSD_SisLib_804D1124[_t->font_idx] : NULL); } }
 #endif
@@ -2024,10 +2063,10 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
 #endif
         u8 *sis_cursor = (u8 *)text->sis_buffer;
         if (gobj != NULL) {
-            SIS *sis = HSD_SisLib_804D1124[text->font_idx];
+            u8 **sis = HSD_SisLib_804D1124[text->font_idx];
             if (sis != NULL) {
-                kerning = sis->kerning;
-                textures = sis->textures;
+                kerning = (TextGlyphTexture *)sis[0];
+                textures = (TextGlyphTexture *)sis[1];
             }
         }
         if (gobj != NULL) {
@@ -2149,13 +2188,13 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
             line_delay = text->x90;
             char_delay = text->x92;
             skip_count = text->x98;
-            saved_x6C = text->x6C;
+            saved_x6C = text->state_stack_used;
             // this is the compare for the loop
             while ((line_started < 2U) && ((sis_cursor != text->x60) || ((u8) text->x4B == 0))) {
                 if ((sis_cursor == text->x60) && text->x94) {
                     text->x94--;
                 } else {
-                    u32 pop_result;
+                    u8* pop_result;
                     s32 clear_idx;
                     f32 x_origin;
                     s16 y_offset;
@@ -2163,8 +2202,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                     switch (*sis_cursor) {
                         case 0:
                             pop_result = HSD_SisLib_803A7F0C(text, 5);
-                            if (pop_result != 0U) {
-                                sis_cursor = (u8*) (pop_result + 4);
+                            if (pop_result != NULL) {
+                                sis_cursor = pop_result + 4;
                                 break;
                             }
                             line_started = 2U;
@@ -2184,16 +2223,16 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                             text->fitting = text->default_fitting;
                             text->x94 = 0U;
                             text->x4B = 0U;
-                            while (clear_idx < (s32) text->x6E) {
-                                *((u8 *)text->string_buffer + clear_idx) = 0;
+                            while (clear_idx < (s32) text->state_stack_capacity) {
+                                *((u8 *)text->state_stack + clear_idx) = 0;
                                 clear_idx += 1;
                             }
-                            text->x6C = 0;
+                            text->state_stack_used = 0;
                             /* fallthrough */
                         case 2:
                             text->x98 = 0;
                             sis_cursor += 1;
-                            text->sis_buffer = (SIS *)sis_cursor;
+                            text->sis_buffer = sis_cursor;
                             line_started = 3U;
                             break;
                         case 3:
@@ -2541,11 +2580,11 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
             text->alignment = saved_alignment;
             text->kerning = saved_kerning;
             text->fitting = saved_fitting;
-            text->x6C = saved_x6C;
+            text->state_stack_used = saved_x6C;
             {
-                s32 clear_i = text->x6C;
-                while ((s32) clear_i < (s32) text->x6E) {
-                    *(text->string_buffer + clear_i) = 0;
+                s32 clear_i = text->state_stack_used;
+                while ((s32) clear_i < (s32) text->state_stack_capacity) {
+                    *(text->state_stack + clear_i) = 0;
                     clear_i += 1;
                 }
             }

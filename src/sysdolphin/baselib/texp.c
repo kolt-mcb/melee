@@ -1,5 +1,7 @@
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
+#endif
 #include "texp.h"
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
@@ -40,12 +42,16 @@ HSD_TExpType HSD_TExpGetType(HSD_TExp* texp)
     return texp->type;
 }
 
+#if BUILD_TARGET_PC
 #pragma GCC optimize("O0")
+#endif
 static HSD_TExp* TevAlloc(void)
 {
     HSD_TExp* texp = hsdAllocMemPiece(sizeof(HSD_TETev));
     HSD_ASSERT(62, texp);
+#if BUILD_TARGET_PC
     __builtin_memset(texp, 0, sizeof(HSD_TETev));
+#endif
     return texp;
 }
 
@@ -53,10 +59,14 @@ static HSD_TExp* CnstAlloc(void)
 {
     HSD_TExp* texp = hsdAllocMemPiece(sizeof(HSD_TECnst));
     HSD_ASSERT(70, texp);
+#if BUILD_TARGET_PC
     __builtin_memset(texp, 0, sizeof(HSD_TECnst));
+#endif
     return texp;
 }
+#if BUILD_TARGET_PC
 #pragma GCC optimize("O2")
+#endif
 
 void HSD_TExpFree(HSD_TExp* texp)
 {
@@ -295,6 +305,9 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
         texp->cnst.next = (*texp_list);
         *texp_list = texp;
         texp->cnst.ref = 0;
+#if !BUILD_TARGET_PC
+        texp->cnst.val = val;
+#endif
         texp->cnst.comp = comp;
         texp->cnst.ctype = type;
         texp->cnst.reg = 0xFF;
@@ -306,7 +319,9 @@ HSD_TExp* HSD_TExpCnst(void* val, HSD_TEInput comp, HSD_TEType type,
          * frees the texp with them.  Snapshotting froze every animated
          * colour/alpha at its load-time value (the title logo's diffuse, for
          * one) and broke dedup, since the compare above matched on `val`. */
+#if BUILD_TARGET_PC
         texp->cnst.val = val;
+#endif
         return texp;
     } while (true);
 
@@ -1197,7 +1212,9 @@ void HSD_TExpSetReg(HSD_TExp* texp)
     u32 changed;
     HSD_TECnst* clist;
 
+#if BUILD_TARGET_PC
     if (texp == NULL || (uintptr_t) texp < 0x10000) return;
+#endif
 
     clist = &texp->cnst;
     changed = 0;

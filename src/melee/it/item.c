@@ -1387,10 +1387,10 @@ void Item_80268E5C(HSD_GObj* gobj, enum_t msid, Item_StateChangeFlags flags)
                     *(unsigned*) &item_data->x378_itemColl.ecb.right.x,
                     *(unsigned*) &item_data->x378_itemColl.ecb.left.x,
                     *(unsigned*) &item_data->x378_itemColl.cur_pos.y,
-                    *(unsigned*) &item_data->x378_itemColl.ecb_source.angle,
-                    (int) item_data->xDCE_flag.b7,
-                    *(unsigned*) &item_data->x378_itemColl.ecb_source.up,
-                    *(unsigned*) &item_data->x378_itemColl.ecb_source.down,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.x4.x0_1.angle,
+                    (int) item_data->xDCE_flag.x0.b7,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.x4.x0_1.up,
+                    *(unsigned*) &item_data->x378_itemColl.ecb_source.x4.x0_1.down,
                     __builtin_return_address(0));
         }
     }

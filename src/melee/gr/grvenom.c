@@ -1014,8 +1014,8 @@ void grVenom_80204B88(Ground_GObj* gobj)
      * different flags. Name the console's bits on PC and leave the GameCube
      * expression exactly as it was. */
 #if BUILD_TARGET_PC
-#define VE_ENV_HI (gp->u.venom2.xE0_state.b2)
-#define VE_ENV_LO (gp->u.venom2.xE0_state.b6)
+#define VE_ENV_HI (gp->u.venom2.xE0_state.x0.b2)
+#define VE_ENV_LO (gp->u.venom2.xE0_state.x0.b6)
 #else
 #define VE_ENV_HI ((env_flags >> 5) & 1)
 #define VE_ENV_LO ((env_flags >> 1) & 1)

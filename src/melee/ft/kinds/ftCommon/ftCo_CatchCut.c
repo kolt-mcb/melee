@@ -21,7 +21,7 @@ void ftCo_800DA698(Fighter_GObj* gobj, bool arg1)
         if (dbg) {
             fprintf(stderr, "[GRABDBG] gframe=%u p%d catch cut (%d) from %p "
                             "grab_timer=%g\n",
-                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                     (int) arg1, __builtin_return_address(0),
                     (double) GET_FIGHTER(fp->victim_gobj)->grab_timer);
         }

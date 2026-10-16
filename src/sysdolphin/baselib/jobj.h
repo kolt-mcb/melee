@@ -52,7 +52,10 @@ void port_guard_warn(const char* site);
         }                                                                     \
     } while (0)
 #else
-#define HSD_JOBJ_REQUIRE(p, retval) ((void) 0)
+/* Empty, not ((void) 0): MWCC counts that expression statement against
+ * its inlining budget, and itCoin_ResetRotation's three SetRotation calls
+ * then stop being inlined (it_802F1630 in itcoin.o). */
+#define HSD_JOBJ_REQUIRE(p, retval)
 #endif
 
 #define JOBJ_PTCL_ACTIVE 0x7FFFFFFF

@@ -1,8 +1,10 @@
 #include "archive.h"
 
 #include <string.h>
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdint.h>
+#endif
 
 #include <dolphin/os.h>
 

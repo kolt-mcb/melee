@@ -1,4 +1,6 @@
+#if BUILD_TARGET_PC
 #include <baselib/psstructs.h>
+#endif
 #include "psdisptev.h"
 
 #include "psstructs.h"

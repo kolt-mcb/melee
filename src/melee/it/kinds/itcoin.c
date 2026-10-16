@@ -1,5 +1,7 @@
 #include "itcoin.h"
+#if BUILD_TARGET_PC
 #include "port/log.h"
+#endif
 
 #include <melee/it/forward.h>
 

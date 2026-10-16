@@ -25,14 +25,11 @@
  * reciprocal-square-root refinements of sqrtf_store. The console form is
  * the original expression, kept textually so MWCC emits the same
  * instruction. */
-#if BUILD_TARGET_PC
 #define MP_NMSUB(a, b, c) (-fma((a), (b), -(c))) /* fnmsub: -0 on an exact zero */
-#else
-#define MP_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
-#endif
 #else
 #define MP_FMA(a, b, c) ((a) * (b) + (c))
 #define MP_FMAF(a, b, c) ((a) * (b) + (c))
+#define MP_NMSUB(a, b, c) (-(((a) * (b)) - (c)))
 #endif
 
 #include <Runtime/platform.h>
@@ -6026,7 +6023,9 @@ void mpJointSetCb1(int joint_id, void* user_data,
                    mpLib_JointCollisionCallback cb)
 {
     CollJoint* joint;
+#if BUILD_TARGET_PC
     MP_PC_CHECK_JOINT(joint_id, );
+#endif
     joint = &groundCollJoint[joint_id];
     joint->cb_0 = cb;
     joint->cb_data_0 = user_data;

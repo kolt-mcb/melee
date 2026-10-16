@@ -205,7 +205,7 @@ CSS_ICONS = 26
 # overlap, so aiming at a centre leaves at least 2.1 units of slack against
 # a worst-case residual of one 1.5-unit step.
 #
-# The panel table (mnStageSel_803F06D0 in mn/mnstagesel.static.h: thirty
+# The panel table (mnStageSel_803F06D0 in mn/mnstagesel.c: thirty
 # 0x1C-byte records, +0xB the StKind a panel commits) is parsed so the
 # kind of each panel cannot drift from the game. The positions are not in
 # the source -- they are joints of the MnSlMap layout -- so they are the
@@ -243,7 +243,7 @@ SSS_GEOM = {
 def sss_panel_kinds(path=None):
     """Panel index -> the StKind it commits, parsed from the game's table."""
     src = open(path or os.path.join(REPO, "src", "melee", "mn",
-                                    "mnstagesel.static.h")).read()
+                                    "mnstagesel.c")).read()
     body = src[src.index("mnStageSel_803F06D0"):]
     body = body[body.index("{"):body.index("};")]
     out = {}
@@ -268,7 +268,7 @@ def sss_kinds(path=None):
 def sss_half_extents(path=None):
     """Panel index -> (half width, half height), from the game's table."""
     src = open(path or os.path.join(REPO, "src", "melee", "mn",
-                                    "mnstagesel.static.h")).read()
+                                    "mnstagesel.c")).read()
     body = src[src.index("mnStageSel_803F06D0"):]
     body = body[body.index("{"):body.index("};")]
     out = {}

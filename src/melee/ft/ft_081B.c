@@ -1297,7 +1297,7 @@ bool ft_80084A80(int arg0, Fighter_GObj* gobj, int* arg1, int* arg2, int* arg3)
                 "[GFXGROUND] gframe=%u pcf=%u which=%d player=%d ga=%d "
                 "floor=%d anim=%.3f\n",
                 (unsigned) gm_GetFrameCount(), (unsigned) pc_frame_number, arg0,
-                (int) fp->player_id, (int) fp->ground_or_air,
+                (int) fp->player_idx, (int) fp->ground_or_air,
                 (int) fp->coll_data.floor.index, (double) fp->cur_anim_frame);
     }
 #endif

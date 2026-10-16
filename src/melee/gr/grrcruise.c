@@ -99,9 +99,9 @@ bool grRCruise_8020014C(Ground_GObj* arg);
 void grRCruise_80200154(Ground_GObj* gobj);
 void grRCruise_8020045C(Ground_GObj* arg);
 void grRCruise_80200540(Ground_GObj* gobj);
-void grRCruise_80200578(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
+void grRCruise_80200578(void* gp_arg, int joint_id, CollData* cd, int arg3, mpLib_GroundEnum arg4, float arg5);
 void grRCruise_802010A4(Ground_GObj* gobj, s32 id, CollData* coll);
-void fn_80200460(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3, mpLib_GroundEnum arg4, f32 arg5);
+void fn_80200460(void* gp_arg, int joint_id, CollData* cd, int arg3, mpLib_GroundEnum arg4, float arg5);
 void grRCruise_80201B60(HSD_JObj* jobj, bool arg1);
 void grRCruise_8020071C(Ground_GObj* gobj);
 void grRCruise_80200B48(Ground_GObj* gobj);
@@ -124,7 +124,7 @@ static void sdata2_order(void)
 }
 #endif
 
-S16Vec3 grRc_803E4DA8[] = {
+GrJoint grRc_803E4DA8[] = {
     { 0, 1, 1 },   { 1, 1, 1 },   { 2, 1, 1 },   { 3, 1, 1 },   { 4, 1, 1 },
     { 11, 1, 7 },  { 10, 1, 17 }, { 6, 1, 7 },   { 7, 1, 7 },   { 8, 1, 7 },
     { 9, 1, 7 },   { 12, 1, 19 }, { 13, 1, 18 }, { 14, 1, 18 }, { 15, 1, 18 },
@@ -359,7 +359,7 @@ static void grRCruise_802010A4_cb(void* gobj, int id, CollData* coll,
 }
 #define RCRUISE_JOINT_CB grRCruise_802010A4_cb
 #else
-#define RCRUISE_JOINT_CB (mpColl_Callback) (Event) grRCruise_802010A4
+#define RCRUISE_JOINT_CB (mpLib_JointCollisionCallback) grRCruise_802010A4
 #endif
 
 void grRCruise_801FF444(Ground_GObj* gobj)
@@ -777,6 +777,7 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
 #else
         lbVector_Diff(&gp->u.scroll.x10, &sp64, &gp->u.arwing.xE0);
 #endif
+#if BUILD_TARGET_PC
         if (getenv("MELEE_RCSCROLL") != NULL) {
             static int n;
             if (n++ < 3) {
@@ -795,6 +796,7 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
                         (double) sp64.x, (double) sp64.y, (double) sp64.z);
             }
         }
+#endif
         gp->u.scroll.x10 = sp64;
         sp64.x *= -1.0f;
         sp64.y *= -1.0f;
@@ -853,8 +855,7 @@ void grRCruise_80200074(Ground_GObj* gobj)
         grAnime_801C8098(gobj, grRc_804D4790[i], 7, 1, 0.0F, 0.0F);
         gp->u.rcruise.x3C[i].x2 =
             Ground_801C32D4(gp->map_id, grRc_804D4790[i]);
-        mpJointSetCb1(gp->u.rcruise.x3C[i].x2, gobj,
-                      (mpColl_Callback) fn_80200460);
+        mpJointSetCb1(gp->u.rcruise.x3C[i].x2, gobj, fn_80200460);
         gp->u.rcruise.x3C[i].xC = Ground_801C3FA4(gobj, grRc_804D4790[i]);
         gp->u.rcruise.x3C[i].x8 = 0;
         gp->u.rcruise.x3C[i].x4 = 0;
@@ -961,7 +962,7 @@ void grRCruise_80200154(Ground_GObj* gobj)
 
 void grRCruise_8020045C(Ground_GObj* arg) {}
 
-void fn_80200460(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3,
+void fn_80200460(void* gp_arg, int joint_id, CollData* cd, int arg3,
                  mpLib_GroundEnum arg4, f32 arg5)
 {
     HSD_GObj* gobj = (HSD_GObj*) gp_arg;
@@ -1001,8 +1002,8 @@ void grRCruise_80200540(Ground_GObj* gobj)
     gp->u.rcruise.x2C = 0;
 }
 
-void grRCruise_80200578(Ground* gp_arg, s32 joint_id, CollData* cd, s32 arg3,
-                        mpLib_GroundEnum arg4, f32 arg5)
+void grRCruise_80200578(void* gp_arg, int joint_id, CollData* cd, int arg3,
+                        mpLib_GroundEnum arg4, float arg5)
 {
     UNUSED u8 pad[8];
     Point3d pos;

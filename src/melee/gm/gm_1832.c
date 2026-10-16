@@ -464,9 +464,9 @@ void fn_80184AB8(HSD_GObj* arg0)
 
 void fn_8018504C(HSD_GObj* gobj)
 {
-    (void) gobj;
     int new_var;
     PAD_STACK(16);
+    (void) gobj;
     new_var = 0x32;
     if (lbl_804735A8.x3A < 0x31U) {
         lbl_804735A8.x3A = (u16) (lbl_804735A8.x3A + 1);
@@ -531,11 +531,11 @@ s32 fn_801851C0(void)
 
 void fn_801852FC(HSD_GObj* gobj, int pc_render_code)
 {
-    (void) pc_render_code;
     int i;
     int j;
 
     PAD_STACK(0x18);
+    (void) pc_render_code;
 
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
         for (i = 0; i < lbl_804735E8.xE0; i++) {
@@ -660,9 +660,9 @@ void fn_8018564C(HSD_GObj* gobj, int pc_render_code)
 
 void fn_8018569C(HSD_GObj* gobj, int pc_render_code)
 {
-    (void) pc_render_code;
     int i;
     PAD_STACK(8);
+    (void) pc_render_code;
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
         for (i = 0; i < lbl_804735E8.xE0 + 1; i++) {
             if (i == 0) {

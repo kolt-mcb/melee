@@ -673,9 +673,9 @@ void grZebes_801D881C(HSD_GObj* gobj)
                 fprintf(stderr, "[ZEVTX] f%u", fr);
                 for (k = 0; k < 6; k++)
                     fprintf(stderr, " %08x %08x %08x %08x %08x %08x",
-                            *(const u32*) &v[k].x0, *(const u32*) &v[k].x4,
+                            *(const u32*) &v[k].base_pos.x, *(const u32*) &v[k].base_pos.y,
                             *(const u32*) &v[k].pos.x, *(const u32*) &v[k].pos.y,
-                            *(const u32*) &v[k].x10, *(const u32*) &v[k].x14);
+                            *(const u32*) &v[k].prev_pos.x, *(const u32*) &v[k].prev_pos.y);
                 fprintf(stderr, "\n");
             }
             if (fr == 1 || fr == 2) {
@@ -1624,9 +1624,9 @@ s32 grZebes_801DAA08(void)
                  * fields they are instead of where they used to sit. */
                 struct UnkStageDat_x8_t* e =
                     &grDatFiles_801C6330(2)->unk4->unk8[2];
-                HSD_ShapeAnimJoint** sap = e->unkC;
-                HSD_AnimJoint** ajp = e->unk4;
-                HSD_MatAnimJoint** mjp = e->unk8;
+                HSD_ShapeAnimJoint** sap = e->shapeanims;
+                HSD_AnimJoint** ajp = e->anims;
+                HSD_MatAnimJoint** mjp = e->matanims;
 #else
                 u8* dat = (0, (u8*) grDatFiles_801C6330(2)->unk4->unk8);
                 HSD_ShapeAnimJoint** sap =
@@ -2643,6 +2643,7 @@ bool grZebes_801DCBFC(Ground_GObj* gobj, HSD_GObj* fobj, void* arg)
 #else
         *(void**) arg = ((HSD_GObj*) yakumono_param)->user_data;
 #endif
+#if BUILD_TARGET_PC
         /* MELEE_ACIDLOG=1: every acid touch, with the attack parameters the
          * converted block yields. The acid failing silently is how this went
          * unnoticed for so long -- a touch that never lands looks identical
@@ -2662,6 +2663,7 @@ bool grZebes_801DCBFC(Ground_GObj* gobj, HSD_GObj* fobj, void* arg)
                         (unsigned) ((const u32*) *(void**) arg)[3],
                         (unsigned) ((const u32*) *(void**) arg)[5]); }
         }
+#endif
         if (prev.y > slope) {
             Ground_801C43A4(&pos);
             Ground_801C53EC(0x61A82);

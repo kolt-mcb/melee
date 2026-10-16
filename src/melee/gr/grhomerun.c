@@ -860,7 +860,6 @@ void grHomeRun_8021EAF8(void)
 /// Copies the main camera into a target camera
 void fn_8021EB10(HSD_GObj* target_cam_gobj, intptr_t code)
 {
-    (void) code;
     HSD_GObj* main_cam_gobj;
     HSD_CObj* main_cam_cobj;
     HSD_CObj* target_cam_cobj;
@@ -870,6 +869,7 @@ void fn_8021EB10(HSD_GObj* target_cam_gobj, intptr_t code)
     HSD_RectF32 viewport;
     Scissor scissor;
     Vec3 position;
+    (void) code;
 
     target_cam_cobj = target_cam_gobj->hsd_obj;
     main_cam_gobj = Camera_80030A50();

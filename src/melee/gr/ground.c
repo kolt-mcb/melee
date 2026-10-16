@@ -927,6 +927,7 @@ void Ground_801C0800(StageIdPair* pair)
 
         if (stage_info.ald_yaku_all != NULL) {
             for (i = 1; stage_info.ald_yaku_all[i].script != NULL; i++) {
+#if BUILD_TARGET_PC
                 /* PC port: the ItCo tables are converted lazily, so reading
                  * the slot directly gives NULL until something spawns that
                  * kind -- and this runs at stage load, before anything has.
@@ -949,6 +950,15 @@ void Ground_801C0800(StageIdPair* pair)
                 }
                 a->xC_itemStates->x0_itemStateDesc[i].xC_script =
                     stage_info.ald_yaku_all[i].script;
+#else
+                Article* a = it_804D6D38
+                    [It_PKind_Random -
+                     It_Kind_Section_Monster_Character_Misc_Start]; // Get item
+                                                                    // data for
+                                                                    // It_PKind_Random
+                a->xC_itemStates->x0_itemStateDesc[i].xC_script =
+                    stage_info.ald_yaku_all[i].script;
+#endif
             }
         }
 #undef PC_ONLY_ELSE
@@ -2019,8 +2029,11 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
     bool temp_r25;
     /// @todo @c phi_r30 probably belongs to an @c inline.
     StageParam* phi_r30;
-    StageParam* phi_r30_0;
 #if BUILD_TARGET_PC
+    StageParam* phi_r30_0;
+    enum_t bgm = BGM_Undefined;
+    bool result = false;
+    int i;
     StageParam pc_row;
     int pc_count = 0;
     {
@@ -2032,11 +2045,11 @@ static bool Ground_801C24F8(StKind stkind, u32 arg1, s32* arg2)
     }
     phi_r30_0 = &pc_row;
 #else
-    phi_r30_0 = stage_info.param->stage_params;
-#endif
+    StageParam* phi_r30_0 = stage_info.param->stage_params;
     enum_t bgm = BGM_Undefined;
     bool result = false;
     int i;
+#endif
 #if BUILD_TARGET_PC
     for (i = 0; i < pc_count; i++) {
 #else
@@ -2510,8 +2523,11 @@ bool Ground_InitMapColl(HSD_JObj* jobj, s32 arg1)
 {
     u8 _[4];
     bool result = false;
-    UnkArchiveStruct* temp_r3;
 #if BUILD_TARGET_PC
+    UnkArchiveStruct* temp_r3;
+    GrJoint* cur;
+    int i;
+    int max;
     /* PC port: this binds stage JObjs to mp/ collision joints. It was gated
      * off (opt-in via MELEE_STAGE_COLL) from before MapCollData was
      * converted, and the gate outlived the reason: with collision on, every
@@ -2522,11 +2538,13 @@ bool Ground_InitMapColl(HSD_JObj* jobj, s32 arg1)
     if (getenv("MELEE_NO_STAGE_COLL") != NULL) {
         return false;
     }
-#endif
     temp_r3 = grDatFiles_801C6330(arg1);
+#else
+    UnkArchiveStruct* temp_r3 = grDatFiles_801C6330(arg1);
     GrJoint* cur;
     int i;
     int max;
+#endif
     if (temp_r3 != NULL) {
         cur = temp_r3->unk4->unk8[arg1].unk20;
         max = temp_r3->unk4->unk8[arg1].unk24;

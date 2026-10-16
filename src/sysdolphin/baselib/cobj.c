@@ -32,6 +32,7 @@ static HSD_CObj* current;
  * their own (close-up) cameras during the floor's render, overriding the
  * far camera the harness wants. Forcing lets the floor render with the far
  * camera so the whole stage is visible. */
+#if BUILD_TARGET_PC
 static HSD_CObj* pc_force_cam = NULL;
 
 void HSD_CObjPCSetForceCam(HSD_CObj* cobj) {
@@ -59,6 +60,7 @@ MtxPtr HSD_CObjPCGetForceViewMtx(void) {
 #endif
     return NULL;
 }
+#endif
 
 #define DegToRad(a) ((a) * 0.01745329252F)
 
@@ -246,7 +248,11 @@ void HSD_CObjReqAnim(HSD_CObj* cobj, float startframe)
 
 GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx44 mtx)
 {
+#if BUILD_TARGET_PC
     GXProjectionType projection_type = GX_PERSPECTIVE;
+#else
+    GXProjectionType projection_type;
+#endif
     switch (cobj->projection_type) {
     case PROJ_PERSPECTIVE:
         projection_type = GX_PERSPECTIVE;
@@ -269,6 +275,7 @@ GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx44 mtx)
                  cobj->projection_param.frustum.left,
                  cobj->projection_param.frustum.right, cobj->near, cobj->far);
         break;
+#if BUILD_TARGET_PC
     default:
         /* Unset/garbage projection type: fall back to perspective so the
          * output matrix is never left uninitialized. */
@@ -276,6 +283,7 @@ GXProjectionType makeProjectionMtx(HSD_CObj* cobj, Mtx44 mtx)
                        cobj->projection_param.perspective.aspect, cobj->near,
                        cobj->far);
         break;
+#endif
     }
     return projection_type;
 }
@@ -295,10 +303,12 @@ void pc_get_fb_size(float* w, float* h)
 static bool setupOffscreenCamera(HSD_CObj* cobj)
 {
     Mtx44 mtx;
+#if BUILD_TARGET_PC
     int i, j;
     for (i = 0; i < 4; i++)
         for (j = 0; j < 4; j++)
             mtx[i][j] = (i == j) ? 1.0f : 0.0f;
+#endif
 
     GXSetViewport(cobj->viewport.xmin, cobj->viewport.ymin,
                   cobj->viewport.xmax - cobj->viewport.xmin,
@@ -537,6 +547,7 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
     Vec3 up_vec;
     Vec3 interest;
 
+#if BUILD_TARGET_PC
     bool guard = !(cobj->flags & 2) && HSD_CObjMtxIsDirty(cobj);
     if (getenv("MELEE_MTR") && guard) {
         HSD_CObjGetEyePosition(cobj, &eyepos);
@@ -549,6 +560,9 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
                 (double)interest.x, (double)interest.y, (double)interest.z);
     }
     if (guard) {
+#else
+    if (!(cobj->flags & 2) && HSD_CObjMtxIsDirty(cobj)) {
+#endif
         HSD_CObjGetEyePosition(cobj, &eyepos);
         HSD_CObjGetUpVector(cobj, &up_vec);
         HSD_CObjGetInterest(cobj, &interest);
@@ -557,6 +571,7 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
         HSD_WObjClearFlags(cobj->interest, 2);
         HSD_CObjClearFlags(cobj, 0x40000000);
         HSD_CObjSetFlags(cobj, 0x80000000);
+#if BUILD_TARGET_PC
         if (getenv("MELEE_MTR")) {
             fprintf(stderr, "[VMTX] cobj=%p eye=(%.2f,%.2f,%.2f) up=(%.1f,%.1f,%.1f) tgt=(%.2f,%.2f,%.2f) row2=(%.2f,%.2f,%.2f,%.2f)\n",
                     (void*)cobj, (double)eyepos.x, (double)eyepos.y, (double)eyepos.z,
@@ -565,6 +580,7 @@ void HSD_CObjSetupViewingMtx(HSD_CObj* cobj)
                     (double)cobj->view_mtx[2][0], (double)cobj->view_mtx[2][1],
                     (double)cobj->view_mtx[2][2], (double)cobj->view_mtx[2][3]);
         }
+#endif
     }
 }
 
@@ -741,6 +757,7 @@ int HSD_CObjGetEyeVector(HSD_CObj* cobj, Vec3* eye)
         HSD_CObjGetInterest(cobj, &interest);
         VECSubtract(&interest, &eyepos, eye);
         if (vec_normalize_check(eye, eye) == 0) {
+#if BUILD_TARGET_PC
             if (getenv("MELEE_STAGE_DIAG")) {
                 static int _en = 0; if (_en < 6) { _en++;
                     fprintf(stderr, "[EYEVER] cobj=%p eyepos=(%.2f,%.2f,%.2f) interest=(%.2f,%.2f,%.2f) out=(%.4f,%.4f,%.4f)\n",
@@ -748,6 +765,7 @@ int HSD_CObjGetEyeVector(HSD_CObj* cobj, Vec3* eye)
                         (double)interest.x,(double)interest.y,(double)interest.z,
                         (double)eye->x,(double)eye->y,(double)eye->z); }
             }
+#endif
             return 0;
         }
     }

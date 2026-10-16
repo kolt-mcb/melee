@@ -1,5 +1,7 @@
 #include "lbcardgame.h"
+#if BUILD_TARGET_PC
 #include <stdint.h>
+#endif
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"

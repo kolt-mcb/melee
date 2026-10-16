@@ -183,10 +183,13 @@ SFX_SOURCES = collect(MELEE / "sfx")
 IF_SOURCES = collect(MELEE / "if")
 # textlib_1.c is upstream's August split of textlib.c and inherits the same
 # dependencies (ty/toy.h, textdraw.h), so it stays out with its parent.
+# if_2FFC.c and if_3004.c are upstream's October split of soundtest.c, and
+# stay out with it.
 IF_SOURCES = [s for s in IF_SOURCES
               if Path(s).name not in {"soundtest.c", "ifprize.c",
                                       "textlib.c", "textlib_1.c",
-                                      "textdraw.c"}]
+                                      "textdraw.c", "if_2FFC.c",
+                                      "if_3004.c"}]
 MATH_SHIM = [str(SRC / "math_shim.c")]
 # MSL's own sinf/cosf. Without them the game's trig resolves to glibc, which
 # is correctly rounded where the console's is a polynomial.

@@ -188,7 +188,7 @@ int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
     if (getenv("MELEE_CPUATK") != NULL) {
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[CPUATK] gframe=%u p%d PICK from %p\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                 __builtin_return_address(0));
     }
 #endif
@@ -381,7 +381,7 @@ int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
             fprintf(stderr,
                     "[CPUATK] gframe=%u p%d cmd=%d t=%.1f m=[%.6f %.6f %.6f "
                     "%.6f] x80=%d per=%d\n",
-                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                     (int) list->cmd, (double) t, (double) (upper - relPredY),
                     (double) ((relPredY + x568) - lower),
                     (double) ((relx + rangeF) - dirx),
@@ -411,7 +411,7 @@ int ftCo_800B4AB0(Fighter* fp, Fighter* target, void* arg2)
         extern u32 gm_GetFrameCount(void);
         int k;
         fprintf(stderr, "[CPUATK] gframe=%u p%d count=%d xC8=%d want=[",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id, (int) count,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx, (int) count,
                 (int) cpu->xC8);
         for (k = 0; k < (int) cpu->xC8 && k < 8; k++) {
             fprintf(stderr, "%d ", (int) cpu->xA8_array[k]);
@@ -997,7 +997,7 @@ void ftCo_800B658C(Fighter* fp)
     if (getenv("MELEE_AIGATE") != NULL) {
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[AIENTRY] gframe=%u p%d tgt=%d\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                 temp_r0 != NULL ? 1 : 0);
     }
 #endif
@@ -1062,7 +1062,7 @@ void ftCo_800B658C(Fighter* fp)
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[AIGATE] gframe=%u p%d g630C=%d xA4=%d goa=%d "
                         "g2C08=%d g8A9C=%d\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                 (int) ftCo_800B630C(fp), (int) temp_r31->xA4,
                 (int) fp->ground_or_air, (int) ftCo_800A2C08(fp),
                 (int) ftCo_800B8A9C(fp));
@@ -2229,7 +2229,7 @@ void ftCo_800B9704(Fighter* fp)
     if (getenv("MELEE_CPUATK") != NULL) {
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[CPUATK] gframe=%u p%d SET x34=%d lvl=%d rand=%.6f\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id, (int) cpu->x34,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx, (int) cpu->x34,
                 (int) cpu->level, (double) rand);
     }
 #endif
@@ -2417,7 +2417,7 @@ bool ftCo_800B9CBC(Fighter* fp)
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr,
                 "[CPUATK] gframe=%u p%d tgt=%d b5=%d x34=%d xC=%d lvl=%d\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                 temp_r29 != NULL, (int) temp_r31->xF9_b5, (int) temp_r31->x34,
                 (int) temp_r31->kind, (int) temp_r31->level);
     }

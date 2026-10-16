@@ -3,6 +3,13 @@
 #endif
 #include "lb_0195.h"
 
+#if BUILD_TARGET_PC
+/* These are weak in the port build only; MWCC has no __attribute__. */
+#define PC_WEAK __attribute__((weak))
+#else
+#define PC_WEAK
+#endif
+
 #include "lb_0192.h"
 #include "lbaudio_ax.h"
 #include "lbcardgame.h"
@@ -29,7 +36,7 @@ struct lb_804329F0_t {
 
 /* 4329F0 */ static struct lb_804329F0_t lb_804329F0;
 
-__attribute__((weak)) void lb_8001955C(void)
+PC_WEAK void lb_8001955C(void)
 {
     if (HSD_PadGetResetSwitch()) {
         lbAudioAx_80027DBC();
@@ -46,7 +53,7 @@ __attribute__((weak)) void lb_8001955C(void)
     lb_8001CC84();
 }
 
-__attribute__((weak)) void lb_800195D0(void)
+PC_WEAK void lb_800195D0(void)
 {
     lb_800192A8(lb_8001955C);
     lb_8001CC84();
@@ -87,14 +94,14 @@ __attribute__((weak)) void lb_800195D0(void)
 #endif /* BUILD_TARGET_PC */
 }
 
-__attribute__((weak)) void fn_800195FC(void)
+PC_WEAK void fn_800195FC(void)
 {
     HSD_PadRenewRawStatus(0);
     lb_8001C600();
     lbSnap_8001D2BC();
 }
 
-__attribute__((weak)) void lb_80019628(void)
+PC_WEAK void lb_80019628(void)
 {
     int i;
     OSTime period;
@@ -149,12 +156,12 @@ __attribute__((weak)) void lb_80019628(void)
     lb_804329F0.x48 = 1;
 }
 
-__attribute__((weak)) void lb_80019880(u64 arg0)
+PC_WEAK void lb_80019880(u64 arg0)
 {
     lb_804329F0.x38 = arg0;
 }
 
-__attribute__((weak)) u8 lb_80019894(void)
+PC_WEAK u8 lb_80019894(void)
 {
     u8 count;
     int enabled = OSDisableInterrupts();
@@ -164,12 +171,12 @@ __attribute__((weak)) u8 lb_80019894(void)
     return count;
 }
 
-__attribute__((weak)) void lb_800198E0(void)
+PC_WEAK void lb_800198E0(void)
 {
     HSD_PadRenewMasterStatus();
 }
 
-__attribute__((weak)) void lb_80019900(void)
+PC_WEAK void lb_80019900(void)
 {
     int i;
     for (i = 0; i < 2; i++) {
@@ -199,12 +206,12 @@ __attribute__((weak)) void lb_80019900(void)
     }
 }
 
-__attribute__((weak)) int lb_80019A30(int index)
+PC_WEAK int lb_80019A30(int index)
 {
     return lb_804329F0.x0[index].x10;
 }
 
-__attribute__((weak)) void lb_80019A48(void)
+PC_WEAK void lb_80019A48(void)
 {
     int enabled = OSDisableInterrupts();
 
@@ -215,7 +222,7 @@ __attribute__((weak)) void lb_80019A48(void)
     OSRestoreInterrupts(enabled);
 }
 
-__attribute__((weak)) void lb_80019AAC(Event arg0)
+PC_WEAK void lb_80019AAC(Event arg0)
 {
     int i;
 

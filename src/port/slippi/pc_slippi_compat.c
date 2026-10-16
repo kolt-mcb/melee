@@ -276,7 +276,7 @@ void slp_compat_ucf_input(struct Fighter* fp_)
     if (!slp_compat(SLP_FIX_UCF_INPUT) || ftCo_IsCpuControlled(fp)) {
         return;
     }
-    port = fp->x618_player_id & 3;
+    port = fp->player_idx & 3;
     raw = pc_pad_raw_history((int) port, 0);
     if (raw == NULL) {
         return;
@@ -368,11 +368,11 @@ static void slp_ucf_dashback(Fighter* fp)
     int delta;
 
     if (slp_compat_trace()) {
-        const PADStatus* a = pc_pad_raw_history((int) fp->x618_player_id, 0);
-        const PADStatus* b = pc_pad_raw_history((int) fp->x618_player_id, 2);
+        const PADStatus* a = pc_pad_raw_history((int) fp->player_idx, 0);
+        const PADStatus* b = pc_pad_raw_history((int) fp->player_idx, 2);
         fprintf(stderr, "[SLP-COMPAT] turn p%d follower=%d animf=%.2f "
                         "facing*lx=%+.3f thr=%+.3f tilt=%d raw %d<-%d\n",
-                (int) fp->x618_player_id, (int) fp->is_sub_fighter,
+                (int) fp->player_idx, (int) fp->is_sub_fighter,
                 (double) fp->cur_anim_frame,
                 (double) (fp->facing_dir * fp->input.lstick[0].x),
                 (double) p_ftCommonData->dash_smash_stick_threshold,
@@ -401,7 +401,7 @@ static void slp_ucf_dashback(Fighter* fp)
     /* The whole point of the code: the raw stick against two readings back,
      * from UCF's own ring (not the console's raw queue -- the ring only moves
      * when this fighter's input is processed). */
-    delta = slp_ucf_dx(fp->x618_player_id);
+    delta = slp_ucf_dx(fp->player_idx);
     if (delta * delta <= 75 * 75) {
         return;
     }
@@ -412,7 +412,7 @@ static void slp_ucf_dashback(Fighter* fp)
          * compiled in. */
         fprintf(stderr, "[SLP-COMPAT] ucf-dashback fired: p%d delta %d, "
                         "facing %+.0f\n",
-                (int) fp->x618_player_id, delta, (double) fp->facing_dir);
+                (int) fp->player_idx, delta, (double) fp->facing_dir);
     }
 
     fp->mv.co.turn.has_turned = true;
@@ -424,7 +424,7 @@ static void slp_ucf_dashback(Fighter* fp)
      * follower whose command block has not been built yet is a state the port
      * can reach on its own. */
     {
-        Fighter_GObj* follower = Player_GetEntityAtIndex(fp->player_id, 1);
+        Fighter_GObj* follower = Player_GetEntityAtIndex(fp->player_idx, 1);
         if (follower != NULL) {
             Fighter* ffp = GET_FIGHTER(follower);
             struct Fighter_x1A88_xFC_t* cmd = ffp->cpu.x444;
@@ -646,7 +646,7 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
     do {                                                                      \
         if (getenv("MELEE_GRABDBG") != NULL) {                                \
             fprintf(stderr, "[GRABDBG] gframe=%u p%d wobble check: %s\n",     \
-                    (unsigned) gm_GetFrameCount(), (int) fp->player_id, why); \
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_idx, why); \
         }                                                                     \
     } while (0)
     /* Held, not thrown: CapturePulledHi (0xDF) to CaptureDamageLw (0xE4). */
@@ -691,8 +691,8 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
     if (getenv("MELEE_GRABDBG") != NULL) {
         fprintf(stderr, "[GRABDBG] gframe=%u p%d held by p%d: hit %u "
                         "(last %u) count %u teams=%d\n",
-                (unsigned) gm_GetFrameCount(), (int) fp->player_id,
-                (int) gfp->player_id, move, last, count,
+                (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
+                (int) gfp->player_idx, move, last, count,
                 (int) gm_8016B168());
     }
     if (gm_8016B168()) {
@@ -706,11 +706,11 @@ int slp_compat_wobble_check(Fighter_GObj* gobj)
      * the last move ID it compared against, and CatchCut tests it as a word:
      * the held fighter is released unless that was 0. */
     ftCo_800DA698(grabber, last != 0);
-    nana = Player_GetEntityAtIndex(gfp->player_id, 1);
+    nana = Player_GetEntityAtIndex(gfp->player_idx, 1);
     if (nana != NULL) {
         Fighter* nfp = GET_FIGHTER(nana);
         if (!nfp->x221F_b1 && !nfp->x2219_b5 &&
-            nfp->x2070.x2071_b0_3 != 13)
+            nfp->x2070.x0.x2071_b0_3 != 13)
         {
             if (nfp->ground_or_air == GA_Ground) {
                 ftCo_800DA698(nana, false);
@@ -754,7 +754,7 @@ int slp_compat_ucf_shield_drop(struct HSD_GObj* gobj, int* kind_reg)
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] shield-drop p%d c.y=%+.3f/%+.3f "
                         "tx=%d/%d y=%+.3f floor=%d flags=%x\n",
-                (int) fp->x618_player_id, (double) fp->input.cstick[0].y,
+                (int) fp->player_idx, (double) fp->input.cstick[0].y,
                 (double) p_ftCommonData->x314, fp->active_timer.lstick.x,
                 p_ftCommonData->x320, (double) fp->input.lstick[0].y,
                 fp->coll_data.floor.index,
@@ -793,7 +793,7 @@ int slp_compat_ucf_pass_down(struct Fighter* fp_, int down)
     if (down || !slp_compat(SLP_FIX_UCF_SHIELDDROP)) {
         return down;
     }
-    return slp_ucf[fp->x618_player_id & 3].sd > 1;
+    return slp_ucf[fp->player_idx & 3].sd > 1;
 }
 
 /* The ring's Y change, as slp_ucf_dx for X. */
@@ -818,7 +818,7 @@ int slp_compat_ucf_sdi(struct Fighter* fp_, int lt)
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] sdi p%d lt=%d tx=%d ty=%d sticky=%d,%d "
                         "prev=%+.3f,%+.3f\n",
-                (int) fp->x618_player_id, lt, fp->active_timer.lstick.x,
+                (int) fp->player_idx, lt, fp->active_timer.lstick.x,
                 fp->active_timer.lstick.y, fp->active_sticky.lstick.x,
                 fp->active_sticky.lstick.y, (double) fp->input.lstick[1].x,
                 (double) fp->input.lstick[1].y);
@@ -838,11 +838,11 @@ int slp_compat_ucf_sdi(struct Fighter* fp_, int lt)
     if (!(thr > mag)) {
         return 0;
     }
-    dx = slp_ucf_dx(fp->x618_player_id);
-    dy = slp_ucf_dy(fp->x618_player_id);
+    dx = slp_ucf_dx(fp->player_idx);
+    dy = slp_ucf_dy(fp->player_idx);
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] ucf-sdi p%d d=%d,%d -> %d\n",
-                (int) fp->x618_player_id, dx, dy, dx * dx + dy * dy > 3844);
+                (int) fp->player_idx, dx, dy, dx * dx + dy * dy > 3844);
     }
     return dx * dx + dy * dy > 3844;
 }
@@ -864,10 +864,10 @@ int slp_compat_ucf_shield_sdi(struct Fighter* fp_, int lt)
     if (!(fp->input.lstick[1].x < p_ftCommonData->sdi_min_stick_mag)) {
         return 0;
     }
-    dx = slp_ucf_dx(fp->x618_player_id);
+    dx = slp_ucf_dx(fp->player_idx);
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] ucf-shield-sdi p%d dx=%d -> %d\n",
-                (int) fp->x618_player_id, dx, dx * dx > 3844);
+                (int) fp->player_idx, dx, dx * dx > 3844);
     }
     return dx * dx > 3844;
 }
@@ -890,10 +890,10 @@ int slp_compat_ucf_tumble(struct Fighter* fp_, int lt)
     if (!(fabsf(fp->input.lstick[1].x) < p_ftCommonData->x210)) {
         return 0;
     }
-    dx = slp_ucf_dx(fp->x618_player_id);
+    dx = slp_ucf_dx(fp->player_idx);
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] ucf-tumble p%d dx=%d -> %d\n",
-                (int) fp->x618_player_id, dx, dx * dx > 5625);
+                (int) fp->player_idx, dx, dx * dx > 5625);
     }
     return dx * dx > 5625;
 }
@@ -909,7 +909,7 @@ float slp_compat_ucf_squatrv(struct Fighter* fp_, float thr)
 
     if (slp_compat_trace()) {
         fprintf(stderr, "[SLP-COMPAT] squatrv p%d x94=%.4f tx=%d stick=%+.3f,%+.3f\n",
-                (int) fp->x618_player_id, (double) thr,
+                (int) fp->player_idx, (double) thr,
                 fp->active_timer.lstick.x, (double) fp->input.lstick[0].x,
                 (double) fp->input.lstick[0].y);
     }

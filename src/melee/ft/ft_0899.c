@@ -174,7 +174,7 @@ void ft_80089B08(Fighter_GObj* gobj)
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x8].joint;
                 ik.jobj2 =
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x10].joint;
-                ik.angle_max = M_PI_2f;
+                ik.angle_max = M_PI_2_F;
                 ik.angle_limit = 1.2217305f;
                 lb_8000B1CC(ik.jobj0, NULL, &ik.pos0);
                 lb_8000B1CC(ik.jobj1, NULL, &ik.pos1);
@@ -194,10 +194,14 @@ void ft_80089B08(Fighter_GObj* gobj)
                 rot_save1 = ik.jobj1->rotate;
                 rot_save2 = ik.jobj2->rotate;
                 if (fn_8008998C(fp, &ik, &spA4) != 0) {
+#if BUILD_TARGET_PC
                     if (!pc_ik_solve_off())
+#endif
                         lbBgFlash_80021410(&ik);
                 }
+#if BUILD_TARGET_PC
                 if (!pc_ik_ankle_off())
+#endif
                 lbBgFlash_80020E38(ik.jobj2, &spA4, 0.34906584f, 0.34906584f,
                                    -1.0f);
                 ik.jobj0->rotate = rot_save0;
@@ -249,7 +253,7 @@ void ft_80089B08(Fighter_GObj* gobj)
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x9].joint;
                 ik.jobj2 =
                     fp->parts[((ftData_x58_t*) fp->ft_data->x58)->x11].joint;
-                ik.angle_max = M_PI_2f;
+                ik.angle_max = M_PI_2_F;
                 ik.angle_limit = 1.2217305f;
                 lb_8000B1CC(ik.jobj0, NULL, &ik.pos0);
                 lb_8000B1CC(ik.jobj1, NULL, &ik.pos1);
@@ -269,10 +273,14 @@ void ft_80089B08(Fighter_GObj* gobj)
                 rot_save4 = ik.jobj1->rotate;
                 rot_save5 = ik.jobj2->rotate;
                 if (fn_8008998C(fp, &ik, &spA4) != 0) {
+#if BUILD_TARGET_PC
                     if (!pc_ik_solve_off())
+#endif
                         lbBgFlash_80021410(&ik);
                 }
+#if BUILD_TARGET_PC
                 if (!pc_ik_ankle_off())
+#endif
                 lbBgFlash_80020E38(ik.jobj2, &spA4, 0.34906584f, 0.34906584f,
                                    1.0f);
                 ik.jobj0->rotate = rot_save3;

@@ -1494,7 +1494,7 @@ void lb_80011710(DynamicsTemplate* arg0, DynamicsDesc* arg1)
      *
      * lb_800117F4, just below, already walks this same list `cur != NULL`.
      * Bound by the list as it does. */
-    if (arg0->data == NULL || arg1->data == NULL) {
+    if (arg0->params == NULL || arg1->data == NULL) {
         return;
     }
 #endif

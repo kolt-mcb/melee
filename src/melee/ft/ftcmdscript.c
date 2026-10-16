@@ -62,7 +62,7 @@ void ftCo_800B3E04(Fighter* fp)
         if (getenv("MELEE_CPUCMD") != NULL) {
             extern u32 gm_GetFrameCount(void);
             fprintf(stderr, "[CPUCMD] gframe=%u p%d op=0x%02x\n",
-                    (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                    (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                     (unsigned) (u8) *cur);
         }
 #endif
@@ -378,7 +378,7 @@ void ftCo_800B463C(Fighter* fp, u8 cmd)
     if (cpucmd_at()) {
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d byte=%u from=%p\n",
-                (int) gm_GetFrameCount(), (int) fp->player_id, (unsigned) cmd,
+                (int) gm_GetFrameCount(), (int) fp->player_idx, (unsigned) cmd,
                 __builtin_return_address(0));
     }
 #endif
@@ -392,7 +392,7 @@ void ftCo_800B46B8(Fighter* fp, u8 cmd, u8 arg)
     if (cpucmd_at()) {
         extern u32 gm_GetFrameCount(void);
         fprintf(stderr, "[CPUCMD-AT] gframe=%d p%d cmd=%u arg=%u from=%p\n",
-                (int) gm_GetFrameCount(), (int) fp->player_id, (unsigned) cmd,
+                (int) gm_GetFrameCount(), (int) fp->player_idx, (unsigned) cmd,
                 (unsigned) arg, __builtin_return_address(0));
     }
 #endif

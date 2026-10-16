@@ -155,15 +155,6 @@ static inline float getNameTagFrame(int slot)
                        Player_GetPlayerSlotType(slot));
 }
 
-    lbArchive_LoadSections(*archive, &x, "ScInfPnm_scene_models", NULL);
-#if BUILD_TARGET_PC
-    /* The archive hands back a NULL-terminated array of 32-bit
-     * DynamicModelDesc offsets, unrelocated and big-endian. */
-    x = pc_conv_ModelDescArray(x, (*archive)->data);
-    if (x == NULL) {
-        return;
-    }
-#endif
 static inline bool has_nametag(int slot)
 {
     if (Player_GetPlayerSlotType(slot) != Gm_PKind_Human ||
@@ -203,6 +194,14 @@ void un_802FCBA0(void)
 
     archive = ifAll_GetArchive();
     lbArchive_LoadSections(*archive, &x, "ScInfPnm_scene_models", 0);
+#if BUILD_TARGET_PC
+    /* The archive hands back a NULL-terminated array of 32-bit
+     * DynamicModelDesc offsets, unrelocated and big-endian. */
+    x = pc_conv_ModelDescArray(x, (*archive)->data);
+    if (x == NULL) {
+        return;
+    }
+#endif
     un_804A1ED0.joint = x[0]->joint;
     if (x[0]->anims) {
         un_804A1ED0.animjoint = x[0]->anims[0];

@@ -1,5 +1,7 @@
+#if BUILD_TARGET_PC
 #include <stdlib.h>
 #include <stdio.h>
+#endif
 #include "psdisp.h"
 
 #include <string.h>
@@ -68,9 +70,6 @@ static void pc_ps_fifo_u8(u8 v)
                         : (void) 0),                                          \
      PC_GXQ_NAME(GXSetVtxDesc)(a, t))
 #define GXBegin(p, f, n) (pc_ps_nf = 0, PC_GXQ_NAME(GXBegin)(p, f, n))
-#else
-#define PS_FIFO_F32(v) (GXWGFifo.f32 = (v))
-#define PS_FIFO_U8(v) (GXWGFifo.u8 = (v))
 #endif
 
 // MSL/math.h defines a non-IEEE FLT_EPSILON
@@ -562,7 +561,9 @@ HSD_Particle* particleSort(s32 linkNo, u8 arg1, HSD_Particle** texEdge,
 
 static inline HSD_Particle* psDispSubPoint(HSD_Particle* pp)
 {
+#if BUILD_TARGET_PC
     PC_PS_ENTER("point", pp);
+#endif
     Vec3 buf[16];
     Vec3* p;
     HSD_Particle* last;
@@ -652,7 +653,9 @@ static inline HSD_Particle* psDispSubPoint(HSD_Particle* pp)
 
 static inline HSD_Particle* psDispSubPointTrail(HSD_Particle* pp)
 {
+#if BUILD_TARGET_PC
     PC_PS_ENTER("ptrail", pp);
+#endif
     Vec3 vbuf[32];
     GXColor cbuf[32];
     Vec3* p;
@@ -872,7 +875,13 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                 GXColor4u8(r, g, b, (u8) ((f32) a * pp->trail));
             }
             if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                 PS_FIFO_U8((pp->kind >> 16) & 0xC);
+#else
+                u8 tex_base = (pp->kind >> 16) & 0xC;
+
+                GXWGFifo.u8 = tex_base;
+#endif
             }
             GXPosition3f32(x - up.x, y - up.y, z - up_z);
             {
@@ -883,7 +892,11 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                 GXColor4u8(r, g, b, a);
             }
             if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                 PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 1);
+#else
+                GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 1;
+#endif
             }
             GXPosition3f32(x + right.x, y + right.y, z + right_z);
             {
@@ -894,7 +907,11 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                 GXColor4u8(r, g, b, a);
             }
             if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                 PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 2);
+#else
+                GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 2;
+#endif
             }
             GXPosition3f32((*prev_x) + up.x, (*prev_y) + up.y,
                            (*prev_z) + up_z);
@@ -907,7 +924,11 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                 GXColor4u8(r, g, b, (u8) alpha);
             }
             if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                 PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 3);
+#else
+                GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 3;
+#endif
             }
         } else {
             f32 trail_alpha = 255.0f * (1.0f - pp->trail);
@@ -966,13 +987,24 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                         if (pp->kind & TexFlipT) {
                             t = 1.0f - t;
                         }
+#if BUILD_TARGET_PC
                         PS_FIFO_F32(up.x * tx + (right.x * sx + x));
                         PS_FIFO_F32(up.y * tx + (right.y * sx + y));
                         PS_FIFO_F32(up_z * tx + (right_z * sx + z));
+#else
+                        GXWGFifo.f32 = up.x * tx + (right.x * sx + x);
+                        GXWGFifo.f32 = up.y * tx + (right.y * sx + y);
+                        GXWGFifo.f32 = up_z * tx + (right_z * sx + z);
+#endif
                         GXColor4u8(color->r, color->g, color->b, alpha);
                         if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                             PS_FIFO_F32(s);
                             PS_FIFO_F32(t);
+#else
+                            GXWGFifo.f32 = s;
+                            GXWGFifo.f32 = t;
+#endif
                         }
                     }
                 }
@@ -988,6 +1020,7 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
         }
         GXPosition3f32((cx = x - right.x), y - right.y, z - right_z);
         if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
             PS_FIFO_U8((pp->kind >> 16) & 0xC);
         }
         GXPosition3f32((cx = x - up.x), y - up.y, z - up_z);
@@ -1001,6 +1034,21 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
         GXPosition3f32(x + up.x, y + up.y, z + up_z);
         if (pp->kind & DispTexture) {
             PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 3);
+#else
+            GXWGFifo.u8 = (pp->kind >> 16) & 0xC;
+        }
+        GXPosition3f32((cx = x - up.x), y - up.y, z - up_z);
+        if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 1;
+        }
+        GXPosition3f32((cx = x + right.x), y + right.y, z + right_z);
+        if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 2;
+        }
+        GXPosition3f32(x + up.x, y + up.y, z + up_z);
+        if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 3;
+#endif
         }
     } else {
         u32 primitive_count = *(u32*) it;
@@ -1033,12 +1081,23 @@ static inline void psDispSubMakePolygon(HSD_Particle* pp, u8* texform, f32 x,
                 if (pp->kind & TexFlipT) {
                     t = 1.0f - t;
                 }
+#if BUILD_TARGET_PC
                 PS_FIFO_F32(x + right.x * sx + up.x * tx);
                 PS_FIFO_F32(y + right.y * sx + up.y * tx);
                 PS_FIFO_F32(z + right_z * sx + up_z * tx);
+#else
+                GXPosition3f32(x + right.x * sx + up.x * tx,
+                               y + right.y * sx + up.y * tx,
+                               z + right_z * sx + up_z * tx);
+#endif
                 if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                     PS_FIFO_F32(s);
                     PS_FIFO_F32(t);
+#else
+                    GXWGFifo.f32 = s;
+                    GXWGFifo.f32 = t;
+#endif
                 }
             }
         }
@@ -1093,7 +1152,9 @@ static inline bool psDispSubAbsGtF32(f32 value, f64 limit)
 
 static inline void psDispSub(HSD_Particle* pp, u8* texform)
 {
+#if BUILD_TARGET_PC
     PC_PS_ENTER("sub", pp);
+#endif
     f32 right_y;
     f32 right_x;
     f32 right_z;
@@ -1275,7 +1336,9 @@ static inline void psScaleAppSRTAxes(HSD_Particle* pp, Mtx mtx)
 
 static inline void psDispSubAPPSRTPoint(HSD_Particle* pp)
 {
+#if BUILD_TARGET_PC
     PC_PS_ENTER("appsrtpoint", pp);
+#endif
     Mtx scratch_mtx;
     Vec3 scratch_scale;
     f32 cur_x;
@@ -1419,7 +1482,9 @@ static inline void psDispSubAPPSRTPoint(HSD_Particle* pp)
 
 static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
 {
+#if BUILD_TARGET_PC
     PC_PS_ENTER("appsrt", pp);
+#endif
     Mtx draw_mtx;
     /* Retail keeps a dead 12-byte aggregate at this position. */
     Vec3 pad;
@@ -1696,6 +1761,7 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
                 setVtxDesc(3);
                 GXBegin(GX_QUADS, GX_VTXFMT3, 4U);
             }
+#if BUILD_TARGET_PC
             {
                 f32 vx = -ax + prev_pos_x;
                 f32 vy = -ay + prev_pos_y;
@@ -1739,10 +1805,33 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
                 PS_FIFO_F32(vy);
                 PS_FIFO_F32(prev_pos_z);
             }
+#else
+            GXPosition3f32(-ax + prev_pos_x, -ay + prev_pos_y, prev_pos_z);
             GXColor4u8(draw_color.r, draw_color.g, draw_color.b,
                        (u8) ((f32) draw_color.a * pp->trail));
             if (pp->kind & DispTexture) {
+                GXTexCoord1x8((pp->kind >> 16) & 0xC);
+            }
+            GXPosition3f32(-bx + cur_x, -by + cur_y, cur_z);
+            GXColor4u8(draw_color.r, draw_color.g, draw_color.b, draw_color.a);
+            if (pp->kind & DispTexture) {
+                GXTexCoord1x8(((pp->kind >> 16) & 0xC) + 1);
+            }
+            GXPosition3f32(ax + cur_x, ay + cur_y, cur_z);
+            GXColor4u8(draw_color.r, draw_color.g, draw_color.b, draw_color.a);
+            if (pp->kind & DispTexture) {
+                GXTexCoord1x8(((pp->kind >> 16) & 0xC) + 2);
+            }
+            GXPosition3f32(bx + prev_pos_x, by + prev_pos_y, prev_pos_z);
+#endif
+            GXColor4u8(draw_color.r, draw_color.g, draw_color.b,
+                       (u8) ((f32) draw_color.a * pp->trail));
+            if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                 PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 3);
+#else
+                GXTexCoord1x8(((pp->kind >> 16) & 0xC) + 3);
+#endif
             }
         } else {
             f32 trail_alpha = 255.0f * (1.0f - pp->trail);
@@ -1801,14 +1890,24 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
                         if (pp->kind & TexFlipT) {
                             t = 1.0f - t;
                         }
+#if BUILD_TARGET_PC
                         PS_FIFO_F32(cur_x + ax * sx + bx * tx);
                         PS_FIFO_F32(cur_y + ay * sx + by * tx);
                         PS_FIFO_F32(cur_z);
+#else
+                        GXPosition3f32(cur_x + ax * sx + bx * tx,
+                                       cur_y + ay * sx + by * tx, cur_z);
+#endif
                         GXColor4u8(draw_color.r, draw_color.g, draw_color.b,
                                    (u8) alpha);
                         if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                             PS_FIFO_F32(s);
                             PS_FIFO_F32(t);
+#else
+                            GXWGFifo.f32 = s;
+                            GXWGFifo.f32 = t;
+#endif
                         }
                     }
                 }
@@ -1822,6 +1921,7 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
             setVtxDesc(1);
             GXBegin(GX_QUADS, GX_VTXFMT1, 4U);
         }
+#if BUILD_TARGET_PC
         {
             f32 vx = -ax + cur_x;
             f32 vy = -ay + cur_y;
@@ -1839,7 +1939,31 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
             PS_FIFO_F32(vy);
             PS_FIFO_F32(cur_z);
         }
+#else
+        GXWGFifo.f32 = -ax + cur_x;
+        GXWGFifo.f32 = -ay + cur_y;
+        GXWGFifo.f32 = cur_z;
         if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = (pp->kind >> 16) & 0xC;
+        }
+        GXWGFifo.f32 = -bx + cur_x;
+        GXWGFifo.f32 = -by + cur_y;
+        GXWGFifo.f32 = cur_z;
+        if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 1;
+        }
+        GXWGFifo.f32 = ax + cur_x;
+        GXWGFifo.f32 = ay + cur_y;
+        GXWGFifo.f32 = cur_z;
+        if (pp->kind & DispTexture) {
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 2;
+        }
+        GXWGFifo.f32 = bx + cur_x;
+        GXWGFifo.f32 = by + cur_y;
+        GXWGFifo.f32 = cur_z;
+#endif
+        if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
             PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 1);
         }
         {
@@ -1861,6 +1985,9 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
         }
         if (pp->kind & DispTexture) {
             PS_FIFO_U8(((pp->kind >> 16) & 0xC) + 3);
+#else
+            GXWGFifo.u8 = ((pp->kind >> 16) & 0xC) + 3;
+#endif
         }
     } else {
         u32 primitive_count = *(u32*) it;
@@ -1893,12 +2020,22 @@ static inline void psDispSubAppSRT(HSD_Particle* pp, u8* texform)
                 if (pp->kind & TexFlipT) {
                     t = 1.0f - t;
                 }
+#if BUILD_TARGET_PC
                 PS_FIFO_F32(cur_x + ax * sx + bx * tx);
                 PS_FIFO_F32(cur_y + ay * sx + by * tx);
                 PS_FIFO_F32(cur_z);
+#else
+                GXPosition3f32(cur_x + ax * sx + bx * tx,
+                               cur_y + ay * sx + by * tx, cur_z);
+#endif
                 if (pp->kind & DispTexture) {
+#if BUILD_TARGET_PC
                     PS_FIFO_F32(s);
                     PS_FIFO_F32(t);
+#else
+                    GXWGFifo.f32 = s;
+                    GXWGFifo.f32 = t;
+#endif
                 }
             }
         }
@@ -1992,6 +2129,7 @@ void psDispParticles(u32 target_link, u32 sw)
             } else {
                 pp = non_edge_particles;
             }
+#if BUILD_TARGET_PC
             {
                 static int trace = -1;
                 if (trace < 0) trace = getenv("MELEE_EFTRACE") != NULL;
@@ -2002,6 +2140,7 @@ void psDispParticles(u32 target_link, u32 sw)
                     if (c) fprintf(stderr, "[PSD] link %d sw %u: %d particles to draw\n", linkNo, sw, c);
                 }
             }
+#endif
             while (pp != NULL) {
                 HSD_PSTexGroup* tex_group = NULL;
                 HSD_PSFormGroup* form_group = NULL;
@@ -2182,7 +2321,11 @@ void psDispParticles(u32 target_link, u32 sw)
                         if ((s32) prevTexEdge != 0) {
                             GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
                         } else {
+#if BUILD_TARGET_PC
                             GXSetZMode(getenv("MELEE_PS_NOZ") ? GX_FALSE : GX_TRUE, GX_LEQUAL, GX_FALSE);
+#else
+                            GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+#endif
                         }
                     }
                     if (((pp->kind ^ prev_kind) & DispFog) != 0) {

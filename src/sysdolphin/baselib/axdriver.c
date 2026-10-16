@@ -495,7 +495,9 @@ void AXDriverInterp(HSD_SM* v)
  * targets were already doing. */
 static void AXDriverCallback(int unused)
 {
+#if BUILD_TARGET_PC
     (void) unused;
+#endif
     HSD_SM* v;
     HSD_SM* next;
     PAD_STACK(4);

@@ -35,7 +35,7 @@ static UnkAllstarData lbl_80472CB0_obj;
 #define PC_ALLSTAR_DATA() (&lbl_80472CB0_obj)
 #else
 static u8 lbl_80472CB0[0x78];
-#define PC_ALLSTAR_DATA() (PC_ALLSTAR_DATA())
+#define PC_ALLSTAR_DATA() ((UnkAllstarData*) lbl_80472CB0)
 #endif
 
 AllstarStageEntry lbl_803D85F0[55] = {

@@ -397,7 +397,7 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
         if (!cached) {
             int j;
             for (j = 0; j < 6; j++) {
-                HSD_JObj* jj = coll->ecb_source.x10C_joint[j];
+                HSD_JObj* jj = coll->ecb_source.x4.x0.x10C_joint[j];
                 while (jj != NULL) {
                     if (!(jj->flags & JOBJ_USER_DEF_MTX)) {
                         jj->flags |= JOBJ_MTX_DIRTY;
@@ -495,7 +495,7 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
                 (double) coll->cur_pos.x);
         for (j = 0; j < 6; j++) {
             Vec3 jv;
-            lb_8000B1CC(coll->ecb_source.x10C_joint[j], NULL, &jv);
+            lb_8000B1CC(coll->ecb_source.x4.x0.x10C_joint[j], NULL, &jv);
             fprintf(stderr, " j%d=%a", j, (double) jv.x);
         }
         fprintf(stderr, " L=%a R=%a\n", (double) left_x, (double) right_x);
@@ -509,7 +509,7 @@ void mpColl_LoadECB_JObj(CollData* coll, u32 flags)
             if (w != NULL) {
                 int want = atoi(w);
                 HSD_JObj* jj = (want >= 0 && want < 6)
-                                   ? coll->ecb_source.x10C_joint[want]
+                                   ? coll->ecb_source.x4.x0.x10C_joint[want]
                                    : NULL;
                 int depth = 0;
                 while (jj != NULL && depth < 12) {
@@ -687,10 +687,10 @@ void mpColl_LoadECB_Fixed(CollData* coll)
                 "[ECBFIX] f=%u pos=%a ang=%a u=%a d=%a fr=%a bk=%a "
                 "L=%a R=%a T=%a B=%a\n",
                 (unsigned) gm_GetFrameCount(), (double) coll->cur_pos.x,
-                (double) coll->ecb_source.angle, (double) coll->ecb_source.up,
-                (double) coll->ecb_source.down,
-                (double) coll->ecb_source.front,
-                (double) coll->ecb_source.back, (double) left_x,
+                (double) coll->ecb_source.x4.x0_1.angle, (double) coll->ecb_source.x4.x0_1.up,
+                (double) coll->ecb_source.x4.x0_1.down,
+                (double) coll->ecb_source.x4.x0_1.front,
+                (double) coll->ecb_source.x4.x0_1.back, (double) left_x,
                 (double) right_x, (double) top_y, (double) bottom_y);
         fflush(stderr);
     }

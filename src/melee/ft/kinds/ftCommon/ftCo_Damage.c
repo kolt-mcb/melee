@@ -690,7 +690,7 @@ void ftCo_Damage_OnExitHitlag(Fighter_GObj* gobj)
                         "[LRKB] gframe=%u p%d kbx=%08x kby=%08x sq=%08x "
                         "root=%08x x1AC=%08x ang=%08x cos=%08x sin=%08x "
                         "mag=%08x outx=%08x outy=%08x\n",
-                        (unsigned) gm_GetFrameCount(), (int) fp->player_id,
+                        (unsigned) gm_GetFrameCount(), (int) fp->player_idx,
                         *(u32*) &kb_x, *(u32*) &kb_y, *(u32*) &sq_len,
                         *(u32*) &rt, *(u32*) &p_ftCommonData->x1AC,
                         *(u32*) &kb_angle, *(u32*) &cv, *(u32*) &sv,

@@ -17,10 +17,11 @@
 #define PA_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-#if BUILD_TARGET_PC
-/* PC port: platform.h defines deg_to_rad as a macro; this file declares its
- * own file-local constant of the same name. Drop the macro here so the
- * declaration below is a declaration and not an expanded literal. */
+/* Runtime/platform.h defines deg_to_rad as a macro (on both builds); this
+ * file declares its own file-local constant of the same name. Drop the macro
+ * here so the declaration below is a declaration and not an expanded
+ * literal. */
+#ifdef deg_to_rad
 #undef deg_to_rad
 #endif
 static float const deg_to_rad = MTXDegToRad(1);

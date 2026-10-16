@@ -20,6 +20,7 @@
 
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
+#endif
 
 /* The console fuses a*b+c into one rounding; x86 rounds twice. Every site
  * below that the DOL executes as fmadds is written with this. */
@@ -27,7 +28,6 @@
 #define AI_FMA(a, b, c) fmaf((a), (b), (c))
 #else
 #define AI_FMA(a, b, c) ((a) * (b) + (c))
-#endif
 #endif
 
 typedef struct AfterimageVtx {

@@ -54,8 +54,8 @@ void ftSs_Init_80128944(HSD_GObj* gobj, float farg1, float farg2)
                 "[BOMBJUMP] gframe=%u ang=%08x coll=%d st=%d x2073=%d "
                 "b5=%d idx=%d raw=%08x\n",
                 (unsigned) gm_GetFrameCount(), *(u32*) &float_result,
-                (int) ftColl_8007B868(gobj), (int) fp->x2070.x2071_b0_3,
-                (int) fp->x2070.x2073, (int) fp->x2070.x2071_b5,
+                (int) ftColl_8007B868(gobj), (int) fp->x2070.x0.x2071_b0_3,
+                (int) fp->x2070.x0.x2073, (int) fp->x2070.x0.x2071_b5,
                 (int) fp->x5F4_arr[0].idx,
                 (unsigned) fp->x2070.x2070_int);
     }

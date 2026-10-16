@@ -452,11 +452,11 @@ void ftDrawCommon_80080E18(HSD_GObj* gobj, intptr_t arg1)
         static int n = 0;
         if (n < 8) { n++;
             fprintf(stderr,
-                    "[FTDRAW] gobj=%p fp=%p x221F_b3=%d visible=%d camstate=%d "
+                    "[FTDRAW] gobj=%p fp=%p is_sleeping=%d visible=%d camstate=%d "
                     "x5AC.xC[4]=%p x21FC_b7=%d invisible=%d\n",
                     (void*) gobj, (void*) fp, (int) fp->is_sleeping,
                     (int) ftLib_UpdateScreenVisibility(gobj), (int) Camera_80031060(),
-                    (void*) fp->x5AC.xC[4], (int) fp->x21FC_flag.b7,
+                    (void*) fp->x5AC.xC[4], (int) fp->x21FC_flag.x0.b7,
                     (int) fp->invisible);
             {
                 HSD_JObj* j = GET_JOBJ(gobj);

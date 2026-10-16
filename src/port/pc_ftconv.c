@@ -368,7 +368,7 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
     int dnum;
     u32 boff;
     ftDynamics* dy;
-    ArticleDynamicBones* ab;
+    BoneDynamicsTemplate* ab;
     int i;
     if (off == 0 || off + 8u > len) {
         return NULL;
@@ -387,15 +387,15 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
         return NULL;
     }
     dy = pc_lowmem_alloc(sizeof(*dy));
-    ab = pc_lowmem_alloc(sizeof(*ab));
+    ab = pc_lowmem_alloc(sizeof(*ab) * Ft_Dynamics_NumMax);
     if (dy == NULL || ab == NULL) {
         return NULL;
     }
     memset(dy, 0, sizeof(*dy));
-    memset(ab, 0, sizeof(*ab));
+    memset(ab, 0, sizeof(*ab) * Ft_Dynamics_NumMax);
     for (i = 0; i < dnum; i++) {
         const u8* e = base + boff + (u32) i * 0x18u;
-        BoneDynamicsDesc* b = &ab->array[i];
+        BoneDynamicsTemplate* b = &ab[i];
         u32 ioff = pc_be32(*(const u32*) (e + 4));
         u32 icount = pc_be32(*(const u32*) (e + 8));
         u32* pos = (u32*) &b->dyn_desc.pos;
@@ -413,12 +413,12 @@ static ftDynamics* pc_conv_dynamics_at(const u8* base, unsigned long len, u32 of
                 for (w = 0; w < (int) nw; w++) {
                     inner[w] = pc_be32(si[w]);
                 }
-                b->dyn_desc.data = (struct DynamicsData*) inner;
+                b->dyn_desc.params = (void*) inner;
             }
         }
     }
-    dy->dynamicsNum = dnum;
-    dy->ftDynamicBones = ab;
+    dy->x0.dynamicsNum = dnum;
+    dy->x0.ftDynamicBones = ab;
     return dy;
 }
 
@@ -487,7 +487,7 @@ static void kirby_hat_vis(KirbyHatStruct* h, const u8* base, unsigned long len,
                          ? (void*) pc_conv_VisLookup(base + e, base, len, h->desc.model_num)
                          : NULL;
     }
-    h->desc.vis_table = rows;
+    h->desc.vis_table = (FtPartsVisLookup* (*)[4]) rows;
 }
 
 void* pc_ftconv_kirby_hat(void* raw)
@@ -964,7 +964,7 @@ static struct ftData_x8* pc_conv_PartsDesc(const u8* raw, const u8* base,
                                      : NULL;
                 }
             }
-            out->x0.vis_table = rows;
+            out->x0.vis_table = (FtPartsVisLookup* (*)[4]) rows;
         }
     }
 
@@ -1387,7 +1387,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                 items[i] = pc_off_to_ptr(pc_be32(*(const u32*) (e + i * 4)),
                                          base, len);
             }
-            out->x48_items = items;
+            out->x48_items = (union ftData_Item*) items;
         }
     }
 
@@ -1396,10 +1396,9 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
      * animation does not drive, moved each frame by lb_00F9's spring
      * simulation instead.
      *
-     * ftDynamics is {dynamicsNum, ArticleDynamicBones*, ...}, and
-     * ArticleDynamicBones is an array of BoneDynamicsDesc -- {bone_id,
-     * {DynamicsData* data, count, Vec3 pos}}, 0x18 bytes each in the file.
-     * `data` points at `count` records of 0x3C bytes of floats, which
+     * ftDynamics is {{dynamicsNum, BoneDynamicsTemplate*}, ...}, an array
+     * of BoneDynamicsTemplate -- {bone_id, {params*, count, Vec3 pos}},
+     * 0x18 bytes each in the file. `params` points at `count` records of 0x3C bytes of floats, which
      * lb_80011710 copies into the live chain. Same shape as an item's
      * dynamics, which pc_itconv.c already converts; only the outer struct
      * differs.
@@ -1411,7 +1410,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
      * hangs, and DK's tie as a rigid board.
      *
      * x4/x8 are the chain's *collider* list -- the count and an array of
-     * ftData_x38 ({int bone, Vec3, float}, 0x14 bytes, no pointers, so the
+     * AbsorbDesc ({int bone, Vec3, float}, 0x14 bytes, no pointers, so the
      * record has the same layout here). ftColl_8007B3A8 copies them into
      * fp->x1670[] and sets fp->x166C, and lb_8001044C takes that count as
      * num_colliders. With x8 NULL the guard there set the count to 0, so the
@@ -1432,7 +1431,8 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
             boff + (u32) dnum * 0x18u <= len)
         {
             ftDynamics* dy = pc_lowmem_alloc(sizeof(*dy));
-            ArticleDynamicBones* ab = pc_lowmem_alloc(sizeof(*ab));
+            BoneDynamicsTemplate* ab =
+                pc_lowmem_alloc(sizeof(*ab) * Ft_Dynamics_NumMax);
             if (dy != NULL && ab != NULL) {
                 int i;
                 /* Past dynamicsNum as well: the array can hold more chains
@@ -1449,7 +1449,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                      i++)
                 {
                     const u8* e = base + boff + (u32) i * 0x18u;
-                    BoneDynamicsDesc* b = &ab->array[i];
+                    BoneDynamicsTemplate* b = &ab[i];
                     u32 ioff = pc_be32(*(const u32*) (e + 4));
                     u32 icount = pc_be32(*(const u32*) (e + 8));
                     u32* pos = (u32*) &b->dyn_desc.pos;
@@ -1475,12 +1475,12 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                             for (w = 0; w < (int) nw; w++) {
                                 inner[w] = pc_be32(si[w]);
                             }
-                            b->dyn_desc.data = (struct DynamicsData*) inner;
+                            b->dyn_desc.params = (void*) inner;
                         }
                     }
                 }
-                dy->dynamicsNum = dnum;
-                dy->ftDynamicBones = ab;
+                dy->x0.dynamicsNum = dnum;
+                dy->x0.ftDynamicBones = ab;
                 /* +0x10 of the dynamics record is a per-blend-slot table of
                  * per-chain values. ftCo_8009CB40 compares its loop counter
                  * against the value, so it says how many joints at the head
@@ -1534,7 +1534,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                             slots = FT_DYNSLOT_MAX;
                         }
                         if (slots != 0 && xoff + slots * 4u <= len) {
-                            FigaTree*** tbl = pc_lowmem_alloc(
+                            s32** tbl = pc_lowmem_alloc(
                                 sizeof(*tbl) * FT_DYNSLOT_MAX);
                             unsigned q;
                             if (tbl != NULL) {
@@ -1542,7 +1542,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                                 for (q = 0; q < slots; q++) {
                                     u32 ao =
                                         pc_be32(((const u32*) (base + xoff))[q]);
-                                    FigaTree** row;
+                                    s32* row;
                                     int k;
                                     if (ao == 0 || ao + stride > len) {
                                         continue;
@@ -1552,7 +1552,7 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                                         continue;
                                     }
                                     for (k = 0; k < dnum; k++) {
-                                        row[k] = (FigaTree*) (uintptr_t)
+                                        row[k] = (s32)
                                             pc_be32(((const u32*) (base + ao))[k]);
                                     }
                                     tbl[q] = row;
@@ -1572,18 +1572,18 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                     if (hnum > 0 && hnum <= 0xB && hoff != 0 &&
                         hoff + (u32) hnum * 0x14u <= len)
                     {
-                        ftData_x38* hv =
+                        AbsorbDesc* hv =
                             pc_lowmem_alloc(sizeof(*hv) * (size_t) hnum);
                         if (hv != NULL) {
                             int h;
                             for (h = 0; h < hnum; h++) {
                                 const u32* r = (const u32*) (base + hoff +
                                                              (u32) h * 0x14u);
-                                hv[h].x0 = (int) pc_be32(r[0]);
-                                hv[h].x4.x = pc_be32f(r[1]);
-                                hv[h].x4.y = pc_be32f(r[2]);
-                                hv[h].x4.z = pc_be32f(r[3]);
-                                hv[h].x10 = pc_be32f(r[4]);
+                                hv[h].x0_bone_id = (int) pc_be32(r[0]);
+                                hv[h].x4_offset.x = pc_be32f(r[1]);
+                                hv[h].x4_offset.y = pc_be32f(r[2]);
+                                hv[h].x4_offset.z = pc_be32f(r[3]);
+                                hv[h].x10_size = pc_be32f(r[4]);
                             }
                             dy->x4 = hnum;
                             dy->x8 = hv;
@@ -1595,8 +1595,8 @@ struct ftData* pc_conv_ftData(const u8* raw, const u8* base, unsigned long len,
                     fprintf(stderr,
                             "[FTCONV] dynamics: %d chains, [0] bone=%d "
                             "count=%u, %d colliders\n",
-                            dnum, (int) ab->array[0].bone_id,
-                            (unsigned) ab->array[0].dyn_desc.count,
+                            dnum, (int) ab[0].bone_id,
+                            (unsigned) ab[0].dyn_desc.count,
                             (int) dy->x4);
                 }
             }

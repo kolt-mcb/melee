@@ -1,6 +1,10 @@
+#if BUILD_TARGET_PC
 #include <stdio.h>
+#endif
 #include "lbmemory.h"
+#if BUILD_TARGET_PC
 #include <unistd.h>
+#endif
 #if BUILD_TARGET_PC
 #include "port/pc_ptr.h"
 #endif

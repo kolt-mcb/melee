@@ -1,5 +1,7 @@
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
+#endif
 #include "mobj.h"
 
 #include <string.h>
@@ -125,6 +127,7 @@ static void MObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
 
     /* PC diag: confirm the matanim is actually driving material params, and
      * which ones (RGB diffuse? alpha? something else?). */
+#if BUILD_TARGET_PC
     {
         static int _mu_on = -1, _mu_n = 0;
         if (_mu_on < 0) _mu_on = (getenv("MELEE_ANIMLOG") != NULL);
@@ -134,6 +137,7 @@ static void MObjUpdateFunc(void* obj, enum_t type, HSD_ObjData* val)
                     (void*)mobj, (unsigned)type, (double)(val ? val->fv : -1.0f));
         }
     }
+#endif
 
     if (mobj == NULL) {
         return;
@@ -292,6 +296,8 @@ HSD_MObj* HSD_MObjLoadDesc(HSD_MObjDesc* mobjdesc)
         else {
             port_guard_warn("mobj.c:195");
         }
+        #else
+        HSD_MOBJ_METHOD(mobj)->load(mobj, mobjdesc);
         #endif /* BUILD_TARGET_PC */
         /* PC port: TEV compilation was disabled here for a long time
          * ("archive data corruption") — that predated the TObj/TLUT
@@ -366,6 +372,10 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
             else {
                 port_guard_warn("mobj.c:261");
             }
+            #else
+            HSD_TOBJ_METHOD(tobj_2)->make_texp(
+                tobj_2, (TEX_LIGHTMAP_DIFFUSE | TEX_LIGHTMAP_AMBIENT), done,
+                &diff, &alpha, list);
             #endif /* BUILD_TARGET_PC */
         }
     }
@@ -419,6 +429,9 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
                 else {
                     port_guard_warn("mobj.c:311");
                 }
+                #else
+                HSD_TOBJ_METHOD(tobj_3)->make_texp(
+                    tobj_3, TEX_LIGHTMAP_SPECULAR, done, &spec, &alpha, list);
                 #endif /* BUILD_TARGET_PC */
             }
         }
@@ -455,6 +468,9 @@ HSD_TExp* MObjMakeTExp(HSD_MObj* mobj, HSD_TObj* tobj_top, HSD_TExp** list)
             else {
                 port_guard_warn("mobj.c:343");
             }
+            #else
+            HSD_TOBJ_METHOD(tobj_4)->make_texp(tobj_4, TEX_LIGHTMAP_EXT, done,
+                                               &ext, &alpha, list);
             #endif /* BUILD_TARGET_PC */
         }
     }
@@ -525,6 +541,8 @@ void HSD_MObjCompileTev(HSD_MObj* mobj)
         else {
             port_guard_warn("mobj.c:410");
         }
+        #else
+        texp = HSD_MOBJ_METHOD(mobj)->make_texp(mobj, tobj, &mobj->texp);
         #endif /* BUILD_TARGET_PC */
         HSD_TExpCompile(texp, &mobj->tevdesc, &mobj->texp);
         if (tail != NULL) {
@@ -571,7 +589,11 @@ void MObjSetupTev(HSD_MObj* mobj, HSD_TObj* tobj, u32 arg2)
         int ns = 0; HSD_TevDesc* td; for (td = mobj->tevdesc; td; td = td->next) ns++;
         fprintf(stderr, "MOBJSETUPTEV mobj=%p tevdesc=%p stages=%d\n", (void*)mobj, (void*)mobj->tevdesc, ns); } }
 #endif
+#if BUILD_TARGET_PC
     if (mobj->tevdesc == NULL) { return; }
+#else
+    HSD_ASSERT(624, mobj->tevdesc);
+#endif
     HSD_TExpSetupTev(mobj->tevdesc, mobj->texp);
     HSD_TObjSetupVolatileTev(tobj, arg2);
 }
@@ -628,6 +650,8 @@ void HSD_MObjSetup(HSD_MObj* mobj, u32 rendermode)
     else {
         port_guard_warn("mobj.c:467");
     }
+    #else
+    HSD_MOBJ_METHOD(mobj)->setup_tev(mobj, tobj, rendermode);
     #endif /* BUILD_TARGET_PC */
     HSD_SetupRenderModeWithCustomPE(rendermode, mobj->pe);
     if (tail != NULL) {

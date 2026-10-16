@@ -1,8 +1,8 @@
-#include <stdio.h>
 #if BUILD_TARGET_PC
+#include <stdio.h>
 #include "port/pc_dbgflag.h"
-#endif
 #include <stdlib.h>
+#endif
 #include "pobj.h"
 
 #include <math.h> // IWYU pragma: keep
@@ -1128,7 +1128,9 @@ static PObjSetupFlag GetSetupFlags(HSD_JObj* jobj, u32 rendermode)
 static void SetupRigidModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                u32 rendermode)
 {
+#if BUILD_TARGET_PC
     { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[RIGIDSETUP]\n");} }
+#endif
     HSD_JObj* jobj;
     Mtx n;
     PObjSetupFlag flags;
@@ -1165,6 +1167,7 @@ static void SetupRigidModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     }
 }
 
+#if BUILD_TARGET_PC
 static void svtx_dump3(const char* label, Mtx A)
 {
     fprintf(stderr, "SVTX %s=(%.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f | %.4f,%.4f,%.4f,%.4f)\n", label,
@@ -1172,13 +1175,14 @@ static void svtx_dump3(const char* label, Mtx A)
         (double)A[1][0],(double)A[1][1],(double)A[1][2],(double)A[1][3],
         (double)A[2][0],(double)A[2][1],(double)A[2][2],(double)A[2][3]);
 }
-#if 0
 #endif
 
 static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                    u32 rendermode)
 {
+#if BUILD_TARGET_PC
     { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[SHAREDSETUP]\n");} }
+#endif
     HSD_JObj* jobj;
     Mtx n0, n1, m;
     PObjSetupFlag flags = SETUP_NONE;
@@ -1287,9 +1291,9 @@ static void SetupSharedVtxModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
     }
 }
 
+#if BUILD_TARGET_PC
 unsigned long pc_env_bad, pc_env_ok;
 
-#if BUILD_TARGET_PC
 /* SetupEnvelopeModelMtx runs once per skinned PObj per frame and loops up to
  * ten times inside that, and every diagnostic below used to ask getenv on
  * each pass. getenv walks the whole environment block, so reading the
@@ -1314,23 +1318,24 @@ static void pc_pobj_env_init(void)
 static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                                   u32 rendermode)
 {
-#if BUILD_TARGET_PC
-    pc_pobj_env_init();
-#endif
-    if (pc_env_stats_on)
-        { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
     HSD_JObj* jobj;
     HSD_SList* list;
     int MtxIdx = 0;
     MtxPtr right;
     Mtx mtx;
     PObjSetupFlag flags = SETUP_NONE;
+#if BUILD_TARGET_PC
+    pc_pobj_env_init();
+    if (pc_env_stats_on)
+        { static int _ps=0; if(_ps<4){_ps++; fprintf(stderr,"[ENVSETUP]\n");} }
+#endif
 
     jobj = HSD_JObjGetCurrent();
     HSD_PObjClearMtxMark(NULL, HSD_MTX_ENVELOPE);
     flags = GetSetupFlags(jobj, rendermode);
     right = _HSD_mkEnvelopeModelNodeMtx(jobj, mtx);
 
+#if BUILD_TARGET_PC
     if (pc_env_targets_on) {
         /* One line per PObj listing every joint its envelopes bind to, so the
          * binding can be checked against the skeleton dump (MELEE_FT_JOINTS).
@@ -1365,6 +1370,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                     (len > 10) ? "  <-- OVER 10, tail dropped" : "");
         }
     }
+#endif
     for (MtxIdx = 0, list = pobj->u.envelope_list; MtxIdx < 10 && list;
          MtxIdx++, list = list->next)
     {
@@ -1414,6 +1420,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
 #endif
         if (envelope->weight >= (1.0f - FLT_EPSILON)) {
             HSD_JObjSetupMatrix(envelope->jobj);
+#if BUILD_TARGET_PC
             if (pc_env_stats_on) {
                 static int _n1, _nnull;
                 _n1++;
@@ -1425,6 +1432,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                             _n1, _nnull, right != NULL);
                 }
             }
+#endif
             if (right) {
                 MTXConcat(envelope->jobj->mtx, envelope->jobj->envelopemtx,
                           mtx);
@@ -1433,8 +1441,10 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 mtxp = envelope->jobj->mtx;
             }
         } else {
+#if BUILD_TARGET_PC
             f32 wsum = 0.0f;
             int nenv = 0;
+#endif
             mtx[0][0] = mtx[0][1] = mtx[0][2] = mtx[0][3] = mtx[1][0] =
                 mtx[1][1] = mtx[1][2] = mtx[1][3] = mtx[2][0] = mtx[2][1] =
                     mtx[2][2] = mtx[2][3] = 0.0f;
@@ -1448,6 +1458,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 HSD_ASSERT(1896, jp->envelopemtx);
 
                 MTXConcat(jp->mtx, jp->envelopemtx, tmp);
+#if BUILD_TARGET_PC
                 if (pc_bind_check_on) {
                     /* At bind pose, world * inverse-bind must be identity.
                      * Any joint that deviates has a bad envelopemtx -- that is
@@ -1496,12 +1507,16 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                         }
                     }
                 }
+#endif
                 HSD_MtxScaledAdd(tmp, mtx, mtx, envelope->weight);
                 perf++;
+#if BUILD_TARGET_PC
                 wsum += envelope->weight;
                 nenv++;
+#endif
                 envelope = envelope->next;
             }
+#if BUILD_TARGET_PC
             if (pc_env_stats_on) {
                 static int _n;
                 if (_n < 20) {
@@ -1510,6 +1525,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                             (double) wsum);
                 }
             }
+#endif
             mtxp = mtx;
         }
         HSD_PerfCountEnvelopeBlending(perf);
@@ -1518,6 +1534,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
         }
         MTXConcat(vmtx, mtxp, tmp);
         GXLoadPosMtxImm(tmp, mtx_no);
+#if BUILD_TARGET_PC
         if (pc_env_stats_on)
         { static int _em=0; if(_em<12){_em++;
             fprintf(stderr,"[ENVMTX] no=%d w=%.2f r0=(%.2f,%.2f,%.2f,%.2f) r2=(%.2f,%.2f,%.2f,%.2f) vm23=%.1f\n",
@@ -1525,6 +1542,7 @@ static void SetupEnvelopeModelMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx,
                 (double)tmp[0][0],(double)tmp[0][1],(double)tmp[0][2],(double)tmp[0][3],
                 (double)tmp[2][0],(double)tmp[2][1],(double)tmp[2][2],(double)tmp[2][3],
                 (double)vmtx[2][3]); } }
+#endif
         HSD_PerfCountMtxLoad();
 
         if (flags & SETUP_NORMAL) {
@@ -1621,20 +1639,18 @@ void HSD_PObjDisp(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
         return;
     }
 
-    #if BUILD_TARGET_PC
 #if BUILD_TARGET_PC
     /* PC port: guard against corrupted method pointers. */
     HSD_PObjInfo* pobj_info = HSD_POBJ_METHOD(pobj);
     if (pobj_info != NULL && pobj_info->setup_mtx != NULL) {
         pobj_info->setup_mtx(pobj, vmtx, pmtx, rendermode);
     }
-#else
-    HSD_POBJ_METHOD(pobj)->setup_mtx(pobj, vmtx, pmtx, rendermode);
-#endif /* BUILD_TARGET_PC */
     else {
         port_guard_warn("pobj.c:1288");
     }
-    #endif /* BUILD_TARGET_PC */
+#else
+    HSD_POBJ_METHOD(pobj)->setup_mtx(pobj, vmtx, pmtx, rendermode);
+#endif /* BUILD_TARGET_PC */
     if (pobj_type(pobj) == POBJ_SHAPEANIM) {
         PObjDispShapeAnim(pobj, rendermode);
     } else {

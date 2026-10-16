@@ -534,7 +534,7 @@ void lbShadow_8000F38C(s32 arg0)
                             "invisible=%d x221E_b5=%d model=%p acc=%p "
                             "noLight=%d\n",
                             (void*) gobj, (void*) fp->x20A4.shadow, (void*) cm,
-                            (int) fp->x20A4.x0_b3, (int) fp->x21FC_flag.b7,
+                            (int) fp->x20A4.x0_b3, (int) fp->x21FC_flag.x0.b7,
                             (int) fp->invisible, (int) fp->x221E_b5,
                             (void*) fp->x5AC.xC[1],
                             (void*) fp->x20A0_accessory, (int) noLight);

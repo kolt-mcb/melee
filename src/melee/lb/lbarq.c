@@ -1,5 +1,7 @@
 #include "lbarq.h"
+#if BUILD_TARGET_PC
 #include <stdint.h>
+#endif
 
 #include <placeholder.h>
 

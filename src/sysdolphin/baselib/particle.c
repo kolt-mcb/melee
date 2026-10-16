@@ -1,3 +1,4 @@
+#if BUILD_TARGET_PC
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdlib.h>
@@ -4543,6 +4544,85 @@ HSD_GObj* hsd_80398310(u16 class_id, u8 p_link, u8 obj_kind, u32 gx_link)
     fn_80392A08(4, 1, 0);
     return gobj;
 }
+#else
+#include "particle.h"
+
+#include "generator.h"
+
+typedef struct {
+    /* 0x00 */ void* next;
+    /* 0x04 */ s32 type;
+    /* 0x08 */ union particle_PerfDispItem_content {
+        u8 bytes[0x80];
+        char text[0x80];
+        struct particle_PerfDispItem_content_bars {
+            s32 count;
+            u32 color;
+        } bars[16];
+        struct particle_PerfDispItem_content_gradient {
+            f32 pos;
+            u32 color;
+        } gradient[16];
+    } content;
+} PerfDispItem;
+
+#include <Runtime/platform.h>
+
+#include <math.h>
+#include <string.h>
+
+#include "gobjobject.h"
+#include "mtx.h"
+#include "psappsrt.h"
+#include "psstructs.h"
+#include "random.h"
+#include <dolphin/gx.h>
+#include <dolphin/os.h>
+
+// .data
+
+/* 4D78D0 */ static u32 hsd_804D78D0;
+/* 4D78D4 */ static int (**psCallback)(HSD_Particle* part);
+
+/* 4D78D8 */ u16 hsd_804D78D8 = 0;
+/* 4D78DA */ u16 hsd_804D78DA = 0;
+/* 4D78DC */ static u16 numPeakParticles;
+/* 4D78DE */ u16 hsd_804D78DE = 0;
+/* 4D78E0 */ u16 hsd_804D78E0 = 0;
+/* 4D78E2 */ static u16 hsd_804D78E2;
+#ifdef MUST_MATCH
+#pragma push
+#pragma force_active on
+/* 4D78E4 */ static u16 hsd_804D78E4 = 0;
+#pragma pop
+#endif
+/* 4D78E8 */ void (*hsd_804D78E8)(HSD_Generator*, Mtx) = NULL;
+/* 4D78EC */ void (*hsd_804D78EC)(HSD_Generator*) = NULL;
+/* 4D78F0 */ HSD_CObj* psCamera = NULL;
+/* 4D78F4 */ HSD_SList* hsd_804D78F4 = NULL;
+static HSD_JObj* psPointJObj[8];
+/* 4D0908 */ HSD_Particle* hsd_804D0908[16];
+/* 4D0948 */ u32* hsd_804D0948[65];
+/* 4D0A4C */ int psFormGroupArray[65];
+/* 4D0B50 */ HSD_PSTexGroup** psTexGroupArray[65];
+/* 4D0C54 */ HSD_PSFormGroup** psNumCmdList[65];
+/* 4D0D58 */ int psCmdListArray[65];
+/* 4D0E5C */ HSD_PSCmdList** ptclref_804D0E5C[65];
+/* 4D0F60 */ struct hsd_804D0F60_t hsd_804D0F60;
+
+typedef struct PSNode {
+    /* 0x00 */ struct PSNode* child;
+    /* 0x04 */ u8 _pad[4];
+    /* 0x08 */ void (*callback)(struct PSNode*);
+} PSNode;
+
+typedef union {
+    f32 f;
+    u8 bytes[4];
+} ParticleFloatBytes;
+
+static volatile const f32 particle_zero = 0.0F;
+#endif
 
 void hsd_803983A4(HSD_Generator* gen)
 {
@@ -4602,6 +4682,7 @@ void psInitDataBankLoad(int bank, const int* cmdBank, const int* texBank,
     (void) hsd_804D0908;
 
     if (formBank != NULL && *formBank != *texBank) {
+#if BUILD_TARGET_PC
         OSPanic("particle.c", 177,
                 "illigal form data (strange number of group)\n");
     }
@@ -4633,6 +4714,39 @@ void psInitDataBankLoad(int bank, const int* cmdBank, const int* texBank,
     }
     default:
         OSPanic("particle.c", 207, "psInitDataBanks: unknown version\n");
+#else
+        OSPanic(__FILE__, 177,
+                "illigal form data (strange number of group)\n");
+    }
+
+    hsd_804D0948[bank] = (u32*) ref;
+    psFormGroupArray[bank] = *texBank;
+    psTexGroupArray[bank] = (HSD_PSTexGroup**) (texBank + 1);
+
+    if (formBank != NULL) {
+        psNumCmdList[bank] = (HSD_PSFormGroup**) (formBank + 1);
+    } else {
+        psNumCmdList[bank] = NULL;
+    }
+
+    version = *(u16*) cmdBank;
+    switch (version) {
+    case 0:
+        psCmdListArray[bank] = cmdBank[1];
+        ptclref_804D0E5C[bank] = (HSD_PSCmdList**) (cmdBank + 2);
+        break;
+    case 0x40:
+    case 0x41:
+    case 0x42:
+    case 0x43: {
+        s32 count = cmdBank[1];
+        psCmdListArray[bank] = cmdBank[2] + count;
+        ptclref_804D0E5C[bank] = (HSD_PSCmdList**) (cmdBank + 3 - count);
+        break;
+    }
+    default:
+        OSPanic(__FILE__, 207, "psInitDataBanks: unknown version\n");
+#endif
     }
 }
 
@@ -4649,10 +4763,17 @@ void psInitDataBankLocate(int* cmdBank, int* texBank, int* formBank)
     s32* group;
     HSD_PSFormGroup* fg;
     s32 j;
+#if BUILD_TARGET_PC
     s32 num2;
     s32* groups;
     s32* base;
     s32 i;
+#else
+    s32 i;
+    s32 num2;
+    s32* groups;
+    s32* base;
+#endif
     s32 version;
 
     version = *(u16*) cmdBank;
@@ -4685,6 +4806,7 @@ void psInitDataBankLocate(int* cmdBank, int* texBank, int* formBank)
     }
 
     /* Phase 2: Fix cmdList kind bits */
+#if BUILD_TARGET_PC
     {
         s32 count = num2 - num;
         ptr = base + num;
@@ -5314,6 +5436,314 @@ void hsd_80398F8C(HSD_Particle* pp, f32 angle)
     f32 abs_z;
     f32 temp;
     f32 abs_temp;
+#else
+    ptr = base + num;
+    for (i = num; i < num2; i++) {
+        s32* cmd = (s32*) ptr[0];
+        if (cmd != NULL) {
+            cmd[2] = cmd[2] & 0xF1FFFFFF;
+            cmd = (s32*) ptr[0];
+            cmd[2] = cmd[2] | 0x08000000;
+        }
+        ptr++;
+    }
+
+    /* Phase 3: texBank relocation */
+    {
+        s32 num_groups = ((s32*) texBank)[0];
+        s32 k;
+
+        group = groups = (s32*) texBank + 1;
+        for (k = 1; k <= num_groups; k++) {
+            if (group[0] != 0) {
+                group[0] += (s32) texBank;
+            }
+            group++;
+        }
+
+        {
+            group = groups;
+            for (k = 0; k < num_groups; group++, k++) {
+                HSD_PSTexGroup* tg = (HSD_PSTexGroup*) group[0];
+                if (tg == NULL) {
+                    continue;
+                }
+
+                /* Relocate texture pointers in the group */
+                {
+                    s32 ti;
+                    for (ti = 0; (u32) ti < ((HSD_PSTexGroup*) group[0])->num;
+                         ti++)
+                    {
+                        if (((HSD_PSTexGroup*) group[0])->texTable[ti] != NULL)
+                        {
+                            ((HSD_PSTexGroup*) group[0])->texTable[ti] +=
+                                (u32) texBank;
+                        }
+                    }
+                    tg = (HSD_PSTexGroup*) group[0];
+                }
+
+                /* Check format for palette relocation */
+                {
+                    u32 fmt = tg->fmt;
+                    if (fmt != 8 && (fmt - 9) > 1) {
+                        continue;
+                    }
+                }
+
+                /* Palette relocation */
+                if (tg->palflag & 1) {
+                    /* Single palette pointer */
+                    i = tg->num;
+                    if (tg->texTable[i] != NULL) {
+                        tg->texTable[i] += (u32) texBank;
+                    }
+                } else if (tg->palnum != 0) {
+                    /* Multiple palette pointers (palnum > 0) */
+                    i = tg->num;
+                    for (; (u32) i < ((HSD_PSTexGroup*) group[0])->num +
+                                         ((HSD_PSTexGroup*) group[0])->palnum;
+                         i++)
+                    {
+                        HSD_PSTexGroup* tg2 = (HSD_PSTexGroup*) group[0];
+                        u8** entry = &tg2->texTable[i];
+                        if (*entry != NULL) {
+                            *entry += (u32) texBank;
+                        }
+                    }
+                } else {
+                    /* palnum == 0: relocate double the num entries */
+                    i = tg->num;
+                    for (; (u32) i < ((HSD_PSTexGroup*) group[0])->num * 2;
+                         i++)
+                    {
+                        HSD_PSTexGroup* tg2 = (HSD_PSTexGroup*) group[0];
+                        u8** entry = &tg2->texTable[i];
+                        if (*entry != NULL) {
+                            *entry += (u32) texBank;
+                        }
+                    }
+                }
+            }
+        }
+
+        /* Phase 4: formBank relocation */
+        if (formBank == NULL) {
+            return;
+        }
+        {
+            for (i = 1; i <= num_groups; i++) {
+                if (formBank[i] != 0) {
+                    s32 fi;
+                    formBank[i] += (s32) formBank;
+                    fg = (HSD_PSFormGroup*) formBank[i];
+                    for (fi = 0; (u32) fi < fg->num; fi++) {
+                        if (fg->formTable[fi] != NULL) {
+                            fg->formTable[fi] += (u32) formBank;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void psInitDataBank(int bank, int* cmdBank, int* texBank, u32* ref,
+                    int* formBank)
+{
+    if (bank < 65) {
+        psInitDataBankLocate(cmdBank, texBank, formBank);
+        psInitDataBankLoad(bank, cmdBank, texBank, ref, formBank);
+    }
+}
+
+void hsd_80398A08(u32 unused)
+{
+    int i;
+
+    (void) hsd_804D0908;
+    (void) hsd_804D0948;
+    (void) psFormGroupArray;
+    (void) psTexGroupArray;
+    (void) psNumCmdList;
+    (void) psCmdListArray;
+    (void) ptclref_804D0E5C;
+
+    HSD_ObjAllocInit(&hsd_804D0F60.alloc_data, sizeof(HSD_Particle), 4);
+    PAD_STACK(4);
+
+    for (i = 0; i < 16; i++) {
+        hsd_804D0908[i] = NULL;
+    }
+    hsd_804D78E2 = 0;
+    numPeakParticles = 0;
+    for (i = 0; i < 0x41; i++) {
+        psCmdListArray[i] = 0;
+        psFormGroupArray[i] = 0;
+        ptclref_804D0E5C[i] = NULL;
+        psTexGroupArray[i] = NULL;
+        psNumCmdList[i] = NULL;
+        hsd_804D0948[i] = NULL;
+    }
+    psCallback = NULL;
+    for (i = 0; i < 8; i++) {
+        psPointJObj[i] = NULL;
+    }
+}
+
+HSD_Particle* psGenerateParticle0(HSD_Particle** head, int linkNo, int bank,
+                                  u32 kind, u16 texGroup, u8* list, int life,
+                                  int palflag, f32 x, f32 y, f32 z, f32 vx,
+                                  f32 vy, f32 vz, f32 size, f32 grav, f32 fric,
+                                  HSD_Generator* gp, int flgInterpret)
+{
+    HSD_Particle* pp;
+    HSD_Particle** slot;
+    s16 cmd_wait;
+
+    pp = HSD_ObjAlloc(&hsd_804D0F60.alloc_data);
+    if (pp != NULL) {
+        memset(pp, 0, sizeof(*pp));
+    }
+    if (pp == NULL) {
+        return NULL;
+    }
+
+    hsd_804D78E2 += 1;
+    if (hsd_804D78E2 > numPeakParticles) {
+        numPeakParticles = hsd_804D78E2;
+    }
+
+    if (gp != NULL) {
+        pp->idnum = gp->idnum;
+    } else {
+        pp->idnum = hsd_8039D1EC();
+    }
+
+    pp->appsrt = NULL;
+    if (gp != NULL && gp->appsrt != NULL) {
+        psAttachParticleAppSRT(pp, gp->appsrt);
+    }
+
+    if (head == NULL) {
+        slot = &hsd_804D0908[linkNo];
+        pp->next = *slot;
+        *slot = pp;
+    } else {
+        pp->next = *head;
+        *head = pp;
+    }
+
+    pp->bank = bank;
+    pp->linkNo = linkNo;
+    pp->kind = kind;
+    pp->texGroup = texGroup;
+    pp->pos.x = x;
+    pp->pos.y = y;
+    pp->pos.z = z;
+    pp->vel.x = vx;
+    pp->vel.y = vy;
+    pp->vel.z = vz;
+    pp->size = size;
+    pp->grav = grav;
+    pp->fric = fric;
+    pp->life = (u16) (life + 1);
+    pp->cmdList = list;
+    pp->cmdMarkPtr = 0;
+    pp->cmdPtr = 0;
+
+    if (palflag != 0) {
+        pp->kind = pp->kind | 0x10;
+    }
+
+    if (list != NULL) {
+        cmd_wait = 1;
+    } else {
+        cmd_wait = 0;
+    }
+    pp->cmdWait = cmd_wait;
+    pp->poseNum = 0;
+    pp->palNum = 0xFF;
+    pp->primCol.a = 0xFF;
+    pp->primCol.b = 0xFF;
+    pp->primCol.g = 0xFF;
+    pp->primCol.r = 0xFF;
+    pp->envCol.a = 0;
+    pp->envCol.b = 0;
+    pp->envCol.g = 0;
+    pp->envCol.r = 0;
+    pp->envColCount = 0;
+    pp->primColCount = 0;
+    pp->sizeCount = 0;
+    pp->envColRemain = 0;
+    pp->primColRemain = 0;
+    pp->aCmpMode = 0x33;
+    pp->aCmpParam1 = 1;
+    pp->aCmpParam2 = 0xFF;
+    pp->aCmpRemain = 0;
+    pp->aCmpCount = 0;
+    pp->rotateCount = 0;
+    pp->rotateTarget = 0.0F;
+    pp->rotate = 0.0F;
+    pp->gen = gp;
+    if (gp != NULL) {
+        gp->numChild = gp->numChild + 1;
+    }
+
+    pp->pJObjOfs = 0;
+    pp->matColRemain = 0;
+    pp->matColCount = 0;
+    pp->matRGB = 0xFF;
+    pp->matA = 0xFF;
+    pp->ambColRemain = 0;
+    pp->ambColCount = 0;
+    pp->ambRGB = 0xFF;
+    pp->ambA = 0xFF;
+    pp->trail = 1.0F;
+    pp->userdata = NULL;
+
+    if (gp != NULL) {
+        if (gp->userfunc != NULL) {
+            if (gp->userfunc->hookCreate != NULL) {
+                gp->userfunc->hookCreate(pp);
+            }
+        }
+    }
+
+    pp->callback = NULL;
+    if (flgInterpret != 0) {
+        hsd_8039930C(pp, 0);
+    }
+    return pp;
+}
+
+void hsd_80398F0C(s32 linkNo, s32 bank, s32 kind, u16 texGroup, u8* cmdList,
+                  s32 life, s32 zero, HSD_Generator* gen, f32 pos_x, f32 pos_y,
+                  f32 pos_z, f32 vel_x, f32 vel_y, f32 vel_z, f32 fric,
+                  f32 rate, f32 angle3)
+{
+    psGenerateParticle0(0, linkNo, bank, kind, texGroup, cmdList, life, zero,
+                        pos_x, pos_y, pos_z, vel_x, vel_y, vel_z, fric, rate,
+                        angle3, gen, 1);
+}
+
+void hsd_80398F8C(HSD_Particle* pp, f32 angle)
+{
+    f32 vx = pp->vel.x;
+    f32 vz = pp->vel.z;
+    f32 vy = pp->vel.y;
+    f32 sin_a, cos_a;
+    f32 sin_e, cos_e;
+    f32 cos_rand, sin_rand;
+    f32 rand_angle;
+    f32 angle_copy;
+    f32 sin_angle, cos_angle;
+    f32 abs_z;
+    f32 temp;
+    f32 abs_temp;
+    vf32 magnitude;
+#endif
     PAD_STACK(16);
 
     {
@@ -5356,6 +5786,7 @@ void hsd_80398F8C(HSD_Particle* pp, f32 angle)
     }
 
     vx = (vx * vx + vy * vy) + vz * vz;
+#if BUILD_TARGET_PC
     vx = sqrtf(vx);
 
     rand_angle = (f32) (3.141592653589793 * HSD_Randf() * 2.0);
@@ -5364,6 +5795,24 @@ void hsd_80398F8C(HSD_Particle* pp, f32 angle)
     cos_rand = sin_angle * cosf(rand_angle);
     sin_rand = sin_angle * sinf(rand_angle);
     cos_angle = vx * cosf(angle);
+#else
+    if (vx > 0.0F) {
+        f64 x = __frsqrte((f64) vx);
+        x = 0.5 * x * -(((f64) vx * (x * x)) - 3.0);
+        x = 0.5 * x * -(((f64) vx * (x * x)) - 3.0);
+        x = 0.5 * x * -(((f64) vx * (x * x)) - 3.0);
+        magnitude = (f32) ((f64) vx * x);
+        vx = magnitude;
+    }
+
+    rand_angle = (f32) (3.141592653589793 * HSD_Randf() * 2.0);
+
+    angle_copy = angle;
+    sin_angle = vx * sinf(angle_copy);
+    cos_rand = sin_angle * cosf(rand_angle);
+    sin_rand = sin_angle * sinf(rand_angle);
+    cos_angle = vx * cosf(angle_copy);
+#endif
 
     pp->vel.x = cos_rand * cos_e + cos_angle * sin_e;
     pp->vel.y = cos_e * (cos_angle * sin_a) +
@@ -5430,16 +5879,25 @@ static inline void psEnableTexture(HSD_Particle* pp, u8* const* textures)
 #if BUILD_TARGET_PC
 #define PS_B(k) (3 - (k))
 #else
+#if BUILD_TARGET_PC
 #define PS_B(k) (k)
+#endif
 #endif
 
 static inline void psReadFloat(u8** stream)
 {
     u8* p = *stream;
+#if BUILD_TARGET_PC
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[PS_B(0)] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[PS_B(1)] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[PS_B(2)] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[PS_B(3)] = *p++;
+#else
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[0] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[1] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[2] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[3] = *p++;
+#endif
     *stream = p;
 }
 
@@ -7944,6 +8402,7 @@ void hsd_8039D0A0(HSD_Generator* gen)
     }
 }
 
+#if BUILD_TARGET_PC
 static u16 lbl_804D6368 = 0x100;
 
 void hsd_8039D1E4(HSD_Generator* gen, void* userfunc)
@@ -9578,3 +10037,4 @@ HSD_Generator* hsd_8039F6CC(s32 linkNo, s32 bank, s32 gfx_id, HSD_JObj* jobj)
     hsd_804D78F4 = HSD_SListAllocAndAppend(hsd_804D78F4, gen);
     return gen;
 }
+#endif

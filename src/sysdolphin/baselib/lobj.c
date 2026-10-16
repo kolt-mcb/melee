@@ -1,5 +1,5 @@
-#include "pc_execinfo.h"
 #if BUILD_TARGET_PC
+#include "pc_execinfo.h"
 #include "port/pc_dbgflag.h"
 #endif
 #include "lobj.h"
@@ -100,6 +100,7 @@ void HSD_LObjSetActive(HSD_LObj* lobj)
     }
     active_lights[idx] = lobj;
     lobj->id = HSD_Index2LightID(idx);
+#if BUILD_TARGET_PC
     {
         static int _lb_on = -1, _lb_n = 0;
         if (_lb_on < 0) _lb_on = (getenv("MELEE_LOBJLOG") != NULL);
@@ -111,6 +112,7 @@ void HSD_LObjSetActive(HSD_LObj* lobj)
                     (unsigned)lobj->flags);
         }
     }
+#endif
 }
 
 s32 HSD_LObjGetNbActive(void)
@@ -517,12 +519,14 @@ void HSD_LObjSetupInit(HSD_CObj* cobj)
     (void) _pc_unused;
 #endif
 
+#if BUILD_TARGET_PC
     {
         int _cln = 0; HSD_SList* _t = current_lights; while (_t) { _cln++; _t = _t->next; }
         static int _ls_on = -1, _ls_n = 0;
         if (_ls_on < 0) _ls_on = (getenv("MELEE_LOBJLOG") != NULL);
         if (_ls_on && _ls_n < 40) { _ls_n++; fprintf(stderr, "LOBJSETUP current_lights_count=%d\n", _cln); }
     }
+#endif
 
     idx = 0;
     num = 0;
@@ -658,6 +662,7 @@ void HSD_LObjAddCurrent(HSD_LObj* lobj)
     HSD_SList* node;
     HSD_SList** p;
 
+#if BUILD_TARGET_PC
     {
         static int _la_on = -1, _la_n = 0;
         if (_la_on < 0) _la_on = (getenv("MELEE_LOBJLOG") != NULL);
@@ -668,6 +673,7 @@ void HSD_LObjAddCurrent(HSD_LObj* lobj)
                     (unsigned)lobj->flags, (int)HSD_LObjGetPriority(lobj));
         }
     }
+#endif
 
     if (lobj != NULL) {
         node = current_lights;
@@ -1090,6 +1096,8 @@ HSD_LObj* HSD_LObjLoadDesc(HSD_LightDesc* ldesc)
         else {
             port_guard_warn("lobj.c:1015");
         }
+        #else
+        HSD_LOBJ_METHOD(*p)->load(*p, ldesc);
         #endif /* BUILD_TARGET_PC */
         p = &(*p)->next;
     }

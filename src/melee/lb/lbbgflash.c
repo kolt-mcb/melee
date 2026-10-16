@@ -322,9 +322,9 @@ void fn_8001FEC4(HSD_GObj* gobj, intptr_t code)
 
 void fn_800204C8(HSD_GObj* gobj)
 {
-    (void) gobj;
     BgFlashData* data = &lbl_80433658;
     s32 mode = data->state.mode;
+    (void) gobj;
 
     switch (mode) {
     case 0:

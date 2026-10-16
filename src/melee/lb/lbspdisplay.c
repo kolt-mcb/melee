@@ -605,13 +605,13 @@ static HSD_Chan chan1 = {
 
 void fn_80013614(HSD_GObj* gobj, int pc_render_code)
 {
-    (void) pc_render_code;
     struct CameraBlurData* data =
         (struct CameraBlurData*) HSD_GObjGetUserData(gobj);
     u8 pad8[8];
     Mtx view_mtx;
     Mtx view_mtx2;
     GXTexObj tex_obj;
+    (void) pc_render_code;
 
     if (data->callback != NULL) {
         data->callback(gobj);
