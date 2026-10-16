@@ -37,6 +37,19 @@ const lbColl_80008D30_arg1 it_803B8610 = {
 };
 const Vec3 it_803B8634 = { 0.0f, 1.0f, 0.0f };
 
+#if BUILD_TARGET_PC
+/* itTarucann_UnkMotion7_Phys returns a float the physics slot never reads.
+ * PowerPC and x86-64 ignore it; wasm checks the result type of an indirect
+ * call and traps when a barrel cannon fires. */
+static void itTarucann_UnkMotion7_Phys_pc(Item_GObj* gobj)
+{
+    itTarucann_UnkMotion7_Phys(gobj);
+}
+#define TARUCANN_MOTION7_PHYS itTarucann_UnkMotion7_Phys_pc
+#else
+#define TARUCANN_MOTION7_PHYS (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys
+#endif
+
 ItemStateTable it_803F63C0[] = {
     { -1, itTarucann_UnkMotion0_Anim, itTarucann_UnkMotion0_Phys,
       itTarucann_UnkMotion0_Coll },
@@ -46,14 +59,14 @@ ItemStateTable it_803F63C0[] = {
     { 1, itTarucann_UnkMotion6_Anim, itTarucann_UnkMotion6_Phys,
       itTarucann_UnkMotion6_Coll },
     { 1, itTarucann_UnkMotion7_Anim,
-      (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys,
+      TARUCANN_MOTION7_PHYS,
       itTarucann_UnkMotion7_Coll },
     { 1, itTarucann_UnkMotion8_Anim, itTarucann_UnkMotion8_Phys,
       itTarucann_UnkMotion8_Coll },
     { 2, itTarucann_UnkMotion6_Anim, itTarucann_UnkMotion6_Phys,
       itTarucann_UnkMotion6_Coll },
     { 2, itTarucann_UnkMotion7_Anim,
-      (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys,
+      TARUCANN_MOTION7_PHYS,
       itTarucann_UnkMotion7_Coll },
     { 2, itTarucann_UnkMotion8_Anim, itTarucann_UnkMotion8_Phys,
       itTarucann_UnkMotion8_Coll },
