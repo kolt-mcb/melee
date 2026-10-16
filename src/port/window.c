@@ -449,10 +449,14 @@ void window_poll_events(void)
                 g_should_quit = TRUE;
                 break;
             case SDL_KEYDOWN:
+#ifndef __EMSCRIPTEN__
+                /* Not on the web: Escape is how a browser leaves fullscreen,
+                 * and a page whose game has quit can only be reloaded. */
                 if (event.key.keysym.sym == SDLK_ESCAPE)
                 {
                     g_should_quit = TRUE;
                 }
+#endif
                 break;
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_RESIZED)

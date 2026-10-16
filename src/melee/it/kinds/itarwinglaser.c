@@ -19,8 +19,19 @@
 #include <melee/mp/mplib.h>
 #include <sysdolphin/baselib/jobj.h>
 
-static void itArwinglaser_UnkMotion2_Anim(Item_GObj*);
-static void itArwinglaser_UnkMotion3_Anim(Item_GObj*);
+#if BUILD_TARGET_PC
+/* The state table calls these as predicates: a true result destroys the
+ * laser. The console's code ends in it_80273130 (lifetime expired), whose
+ * result is still in r3 on return; declared void, the PC returned whatever
+ * eax held, and wasm traps on the result-type mismatch. */
+#define ARWINGLASER_ANIM_RET bool
+#define ARWINGLASER_ANIM_TAIL return
+#else
+#define ARWINGLASER_ANIM_RET void
+#define ARWINGLASER_ANIM_TAIL
+#endif
+static ARWINGLASER_ANIM_RET itArwinglaser_UnkMotion2_Anim(Item_GObj*);
+static ARWINGLASER_ANIM_RET itArwinglaser_UnkMotion3_Anim(Item_GObj*);
 static void itArwinglaser_UnkMotion2_Phys(Item_GObj*);
 static void itArwinglaser_UnkMotion3_Phys(Item_GObj*);
 static bool itArwinglaser_UnkMotion2_Coll(Item_GObj*);
@@ -334,7 +345,7 @@ void it_802E7A4C(Item_GObj* gobj)
     Item_80268E5C(gobj, item->xDD4_itemVar.arwinglaser.xE38, 2);
 }
 
-static void itArwinglaser_UnkMotion2_Anim(Item_GObj* gobj)
+static ARWINGLASER_ANIM_RET itArwinglaser_UnkMotion2_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
@@ -342,16 +353,16 @@ static void itArwinglaser_UnkMotion2_Anim(Item_GObj* gobj)
     if (it_80272C6C(gobj) == 0) {
         ip->xDD4_itemVar.arwinglaser.xE30 = 1;
     }
-    it_80273130(gobj);
+    ARWINGLASER_ANIM_TAIL it_80273130(gobj);
 }
 
-static void itArwinglaser_UnkMotion3_Anim(Item_GObj* gobj)
+static ARWINGLASER_ANIM_RET itArwinglaser_UnkMotion3_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
 
     ip->xDD4_itemVar.arwinglaser.xE24 = ip->xDD4_itemVar.arwinglaser.xE18;
     ip->xDD4_itemVar.arwinglaser.xE30 = 1;
-    it_80273130(gobj);
+    ARWINGLASER_ANIM_TAIL it_80273130(gobj);
 }
 
 static void itArwinglaser_UnkMotion2_Phys(Item_GObj* gobj)

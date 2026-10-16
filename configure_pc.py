@@ -472,8 +472,10 @@ elif WASM:
                " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
                # ASSERTIONS adds a runtime check to a great many operations
                # and is worth its cost only while bringing the target up.
-               # WASM_DEBUG=1 puts it back.
-               + (" -sASSERTIONS=1" if os.environ.get("WASM_DEBUG") == "1"
+               # WASM_DEBUG=1 puts it back, and keeps the objects' DWARF
+               # through the link so a trap's offset names a source line
+               # (emsymbolizer -t file build/wasm/melee.wasm <offset>).
+               + (" -sASSERTIONS=1 -g" if os.environ.get("WASM_DEBUG") == "1"
                   else " -sASSERTIONS=0")
                + " -Wl,--error-limit=0"
                # Keep the wasm name section: without it a trap reports
@@ -515,6 +517,13 @@ elif WASM:
         _assets = os.environ.get("WASM_ASSETS")
         if _assets:
             LDFLAGS += " --preload-file " + _assets + "@/"
+        else:
+            # The shipping shape: the page asks for the player's own disc
+            # image and the game reads it in place (src/port/pc_web_iso.c
+            # wraps fopen; tools/wasm/iso_fs.js parses the disc).
+            LDFLAGS += (" -Wl,--wrap=fopen"
+                        " --pre-js " + str(ROOT / "tools" / "wasm" / "iso_fs.js") +
+                        " --shell-file " + str(ROOT / "tools" / "wasm" / "shell.html"))
         OUT_PATH = str(OUT_DIR / "melee.html")
     LIBS = "--use-port=sdl2 --use-port=libjpeg"
 else:
@@ -715,7 +724,11 @@ if WASM and os.environ.get("WASM_LINK") != "1":
     n += "default " + out_objs + "\n\n"
 else:
     # The state linker script is a native-only input (see LDFLAGS above).
-    n += "build " + OUT_PATH + ": link " + out_objs + ("" if WASM else " | " + STATE_LD) + "\n"
+    # The page's own JS and shell are link inputs too: editing one must
+    # relink, or the page silently keeps the old copy.
+    _wasm_page = " ".join(str(ROOT / "tools" / "wasm" / f) for f in
+                          ("env_shim.js", "iso_fs.js", "shell.html", "node_shim.js"))
+    n += "build " + OUT_PATH + ": link " + out_objs + (" | " + _wasm_page if WASM else " | " + STATE_LD) + "\n"
     n += "  ldflags = $ldflags\n"
     n += "  libs = $libs\n\n"
     n += "default " + OUT_PATH + "\n\n"

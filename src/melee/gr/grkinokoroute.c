@@ -312,9 +312,23 @@ void grKinokoRoute_80207B28(Ground_GObj* arg) {}
 
 void grKinokoRoute_80207B2C(Ground_GObj* arg) {}
 
+#if BUILD_TARGET_PC
+/* The fighter-device pass calls this as ftDevice_Callback0, with a third
+ * argument this definition does not take. PowerPC and x86-64 ignore it;
+ * wasm traps on the first call. */
+static bool grKinokoRoute_80208660_pc(Ground_GObj* gobj, Fighter_GObj* fobj, Vec3* unused)
+{
+    return grKinokoRoute_80208660((uintptr_t) gobj, (void*) fobj);
+}
+#endif
+
 void grKinokoRoute_80207B30(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    ftCo_800C07F8(gobj, 6, grKinokoRoute_80208660_pc);
+#else
     ftCo_800C07F8(gobj, 6, grKinokoRoute_80208660);
+#endif
 }
 
 void grKinokoRoute_80207B5C(Ground_GObj* gobj)

@@ -29,7 +29,7 @@ target differs only in its window, graphics API and filesystem.
 |-|-|-|
 | Linux, x86-64 | SDL2 + OpenGL 3.3 core | Plays. Menus, character select, full matches, 60 fps |
 | Android, arm64 | SDL2 + OpenGL ES 3.2 | Plays. 60 fps on an Adreno 619 tablet, controller over Bluetooth |
-| WebAssembly | emscripten + WebGL2 | Bring-up. Boots, runs its frame loop and renders in a browser |
+| WebAssembly | emscripten + WebGL2 | Playable in a browser from your own disc image |
 
 ### Linux
 
@@ -64,19 +64,21 @@ screen. See **[port-android.md](port-android.md)**.
 ### WebAssembly
 
 ```sh
-tools/wasm/stage_assets.sh                       # your extraction, minus movies and music
-WASM_ASSETS=$PWD/build/wasm/stage WASM_LINK=1 EMSDK=/path/to/emsdk \
-    python3 configure_pc.py && ninja -f build.ninja.wasm
+WASM_LINK=1 EMSDK=/path/to/emsdk python3 configure_pc.py && ninja -f build.ninja.wasm
 python3 -m http.server -d build/wasm 8000 --bind 127.0.0.1   # open /melee.html
 ```
 
-This one is a bring-up rather than a way to play: it compiles, links, boots
-and runs its frame loop over WebGL2. Without `WASM_LINK=1` it builds objects
-only. Assets stay user-supplied there too — today they are packaged into the
-local page from your own extraction (never a hosted copy, and never
-committed); reading a folder you point the page at is the plan. The plan, and what the
-wasm toolchain's stricter type checking found in code the desktop had been
-running for months, are in **[port-wasm.md](port-wasm.md)**.
+The page asks for your own disc image (NTSC-U 1.02, `.iso`) and the game
+reads it in place, as it needs it: nothing is uploaded, packaged or hosted.
+Chromium remembers the file between visits. Keyboard and gamepads work, and
+so do music and the movies. The controls are on the page.
+
+It plays from the title screen through the menus into matches; every stage
+and character runs. Without `WASM_LINK=1` the build makes objects only.
+`WASM_DEBUG=1` keeps assertions and line information, and
+`tools/wasm/drive.js` scripts a session in headless Chromium. The plan, and
+what the wasm toolchain's stricter type checking found in code the desktop
+had been running for months, are in **[port-wasm.md](port-wasm.md)**.
 
 ## What works
 

@@ -76,26 +76,32 @@ s32 DVDConvertPathToEntrynum(const char* path)
     if (filename[0] == '/') filename++;
     
     
-    s32 entry = dvd_find_or_add_entry(filename);
-    if (entry < 0) {
-        return -1;
-    }
-    g_dvd_files[entry].entry_num = entry;
-    
-    /* Verify file exists — vf_resolve_path prepends asset dir */
+    /* Verify file exists — vf_resolve_path prepends asset dir.
+     *
+     * Checked before taking a table slot, and a miss only answers -1. It
+     * used to close every open entry, so the next files were handed the
+     * low entry numbers again -- and the sound driver identifies a bank
+     * load by its entry number. A web build staged without the movies
+     * and music misses files at boot; koopa.ssm then shared an entry
+     * number with a bank already loaded, its completion marked the other
+     * slot done, and it was requested again until bank 2 overflowed. */
     char resolved[512];
     char* rp = vf_resolve_path(filename, resolved, sizeof(resolved));
     if (!rp) {
-        dvd_close_all();
         return -1;
     }
     
     VfHandle h = vf_open(rp, "rb");
     if (!h) {
-        dvd_close_all();
         return -1;
     }
     vf_close(h);
+
+    s32 entry = dvd_find_or_add_entry(filename);
+    if (entry < 0) {
+        return -1;
+    }
+    g_dvd_files[entry].entry_num = entry;
     return entry;
 }
 

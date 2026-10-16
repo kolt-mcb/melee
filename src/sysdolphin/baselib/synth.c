@@ -198,13 +198,11 @@ static inline s32 SfxLoadStreamDataSize(s32 size)
 
 #if BUILD_TARGET_PC
 /* The completion callback's type is the one HSD_SynthSFXLoad declares:
- * int (*)(int, int). Storing it as void (*)(s32, s32) and calling it that way
- * discards a return value that was never read anyway, which costs nothing on
- * PowerPC or x86-64 -- the caller simply ignores r3/eax. wasm checks the
- * return type as part of the indirect call signature, so the two must agree.
- * The result stays discarded; only the type is corrected. */
+ * void (*)(int, int), as is its one caller's (lbAudioAx's fn_80026C04).
+ * wasm checks the return type as part of the indirect call signature, so
+ * storing it as int (*)(s32, s32) trapped on the first deferred load. */
 static struct {
-    int (*fn)(s32, s32);
+    void (*fn)(s32, s32);
     s32 a, b;
 } pc_synth_deferred[32];
 static int pc_synth_ndeferred;
@@ -213,12 +211,12 @@ static int pc_synth_ndeferred;
 void pc_synth_run_deferred(void)
 {
     while (pc_synth_ndeferred > 0) {
-        int (*fn)(s32, s32) = pc_synth_deferred[0].fn;
+        void (*fn)(s32, s32) = pc_synth_deferred[0].fn;
         s32 a = pc_synth_deferred[0].a, b = pc_synth_deferred[0].b;
         pc_synth_ndeferred--;
         memmove(&pc_synth_deferred[0], &pc_synth_deferred[1],
                 pc_synth_ndeferred * sizeof(pc_synth_deferred[0]));
-        (void) fn(a, b);
+        fn(a, b);
     }
 }
 #endif
@@ -494,7 +492,7 @@ static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
                                            sizeof(pc_synth_deferred[0])))
             {
                 pc_synth_deferred[pc_synth_ndeferred].fn =
-                    (int (*)(s32, s32)) HSD_Synth_804C2A60[0].x8;
+                    (void (*)(s32, s32)) HSD_Synth_804C2A60[0].x8;
                 pc_synth_deferred[pc_synth_ndeferred].a =
                     HSD_Synth_804C2A60[0].entrynum;
                 pc_synth_deferred[pc_synth_ndeferred].b =
