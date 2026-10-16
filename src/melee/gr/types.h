@@ -1770,7 +1770,8 @@ struct grCastle_GroundVars {
 
 struct grCastle_GroundVars3 {
 #if BUILD_TARGET_PC
-    u8 pad_0[0x28]; /* = castle9.dynamics on the host */
+    /* = castle9.dynamics: its three satellite slots are uintptr_t */
+    u8 pad_0[0x1C + 3 * (sizeof(uintptr_t) - 4)];
 #else
     /* +00 gp+C4 */ u8 pad_0[0x1C];
 #endif
@@ -1779,7 +1780,7 @@ struct grCastle_GroundVars3 {
 
 struct grCastle_GroundVars4 {
 #if BUILD_TARGET_PC
-    u8 pad_0[0x1E]; /* castle9's PC layout: xD6 at +0x1E */
+    u8 pad_0[0x12 + 3 * (sizeof(uintptr_t) - 4)]; /* castle9's xD6 */
 #else
     /* +00 gp+C4 */ u8 pad_0[0x12];
 #endif
