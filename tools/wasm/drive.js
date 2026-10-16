@@ -9,6 +9,9 @@
  *   up:NAME         release a held key
  *   shot:LABEL      screenshot the canvas to <outdir>/LABEL.png
  *   eval:JS         evaluate JS in the page (its result goes to the console log)
+ *   profile:start   start the CPU profiler (wasm functions by name)
+ *   profile:stop    stop it; the top functions by self time go to the
+ *                   console log and the whole profile to <outdir>/cpu.cpuprofile
  *   file:PATH       give the page's disc-image input this file (the shell's
  *                   picker, without a dialog)
  *
@@ -26,9 +29,14 @@ const PORT = parseInt(process.env.DRIVE_PORT || '9223', 10);
 fs.mkdirSync(outdir, { recursive: true });
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'melee-drive-'));
 
+/* DRIVE_GPU=1 renders on the machine's GPU (ANGLE over EGL, which needs no
+ * display) instead of SwiftShader: the only way to measure a frame rate. */
+const GL_FLAGS = process.env.DRIVE_GPU === '1'
+    ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist',
+       '--enable-gpu', '--disable-gpu-vsync', '--disable-frame-rate-limit']
+    : ['--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'];
 const chrome = spawn(process.env.CHROME || 'chromium', [
-    '--headless=new', '--no-sandbox', '--disable-gpu',
-    '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader',
+    '--headless=new', '--no-sandbox', ...GL_FLAGS,
     '--autoplay-policy=no-user-gesture-required',
     '--window-size=1280,800', '--hide-scrollbars',
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, 'about:blank',
@@ -117,7 +125,33 @@ function keyParams(code) {
     for (const step of steps) {
         const [op, arg, arg2] = step.split(':');
         stamp(step);
-        if (op === 'file') {
+        if (op === 'profile' && arg === 'start') {
+            await sendT('Profiler.enable', {});
+            await sendT('Profiler.setSamplingInterval', { interval: 200 });
+            await sendT('Profiler.start', {});
+        } else if (op === 'profile' && arg === 'stop') {
+            const r = await sendT('Profiler.stop', {}, 30000);
+            if (r && r.profile) {
+                const prof = r.profile;
+                fs.writeFileSync(path.join(outdir, 'cpu.cpuprofile'), JSON.stringify(prof));
+                const self = new Map();
+                const byId = new Map(prof.nodes.map((n) => [n.id, n]));
+                const counts = new Map();
+                for (const id of prof.samples) counts.set(id, (counts.get(id) || 0) + 1);
+                let total = 0;
+                for (const [id, c] of counts) {
+                    const n = byId.get(id);
+                    const name = n.callFrame.functionName || '(anonymous)';
+                    self.set(name, (self.get(name) || 0) + c);
+                    total += c;
+                }
+                const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 40);
+                log.push(`[profile] ${total} samples`);
+                for (const [name, c] of top) {
+                    log.push(`[profile] ${(100 * c / total).toFixed(1).padStart(5)}%  ${name}`);
+                }
+            }
+        } else if (op === 'file') {
             const doc = await sendT('DOM.getDocument', {});
             const q = await sendT('DOM.querySelector',
                 { nodeId: doc.root.nodeId, selector: 'input[type=file]' });

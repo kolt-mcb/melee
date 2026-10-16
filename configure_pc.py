@@ -475,7 +475,11 @@ elif WASM:
     # code (gm_1A45.c, gm_801A4D34) and cannot be inverted into
     # emscripten_set_main_loop. The single blocking site is render.c's 60 Hz
     # clock_nanosleep pacer, which is where the yield goes.
-    LDFLAGS = ("-sASYNCIFY=1 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
+    # WASM_JSPI=1 suspends with JSPI (WebAssembly.Suspending) instead of
+    # ASYNCIFY: no instrumentation of the whole module, but only browsers
+    # that ship JSPI can run it.
+    _suspend = "-sJSPI=1" if os.environ.get("WASM_JSPI") == "1" else "-sASYNCIFY=1"
+    LDFLAGS = (_suspend + " -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
                " -sSTACK_SIZE=16777216"
                " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
                # ASSERTIONS adds a runtime check to a great many operations
