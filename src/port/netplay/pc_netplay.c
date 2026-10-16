@@ -63,6 +63,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include <melee/ft/fighter.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gmvs.h>
@@ -341,6 +345,54 @@ static int net_is_remote(int slot)
 {
     return slot >= 0 && slot < net_players && slot != net_slot;
 }
+
+/* ---- the web build's transport (MELEE_NET=web) --------------------------
+ *
+ * A browser has no UDP. Every page holds one WebSocket to the relay on the
+ * host (tools/wasm/relay.js), which assigned the slots and the seed before
+ * the match booted and forwards each packet to every other player: a star
+ * through the relay, ordered and reliable, so the packets are this port's
+ * own and arrive in order. tools/wasm/net.js queues what arrives. There is
+ * no handshake to do -- the lobby did it -- so the state starts at NET_RUN.
+ *
+ * A player who leaves is announced by the relay as MSG_BYE carrying the
+ * last frame of that player's input it forwarded. Every remaining page has
+ * received exactly those frames (one ordered stream each), so all of them
+ * play that slot neutral from the same frame on and stay in step, instead
+ * of each dropping to NET_SOLO on its own. */
+static int net_web;
+static s32 net_gone_after[NET_SLOTS] = { 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+                                         0x7FFFFFFF };
+#ifdef __EMSCRIPTEN__
+EM_JS(void, web_net_send, (const void* buf, int len), {
+    if (Module.meleeNet) Module.meleeNet.send(HEAPU8.slice(buf, buf + len));
+});
+/* One queued packet into buf: its length, 0 if none, -1 if too long. */
+EM_JS(int, web_net_recv, (void* buf, int max), {
+    var q = Module.meleeNet && Module.meleeNet.inbox;
+    if (!q || !q.length) return 0;
+    var m = q.shift();
+    if (m.length > max) return -1;
+    HEAPU8.set(m, buf);
+    return m.length;
+});
+#else
+static void web_net_send(const void* buf, int len) { (void) buf; (void) len; }
+static int web_net_recv(void* buf, int max) { (void) buf; (void) max; return 0; }
+#endif
+
+/* Wait for the socket, or on the web, give the page its turn: the browser
+ * delivers WebSocket messages only between turns of its event loop, and
+ * ASYNCIFY returns to it across emscripten_sleep. */
+static void net_poll(struct pollfd* pfd, int ms)
+{
+#ifdef __EMSCRIPTEN__
+    (void) pfd;
+    emscripten_sleep((unsigned) ms);
+#else
+    poll(pfd, 1, ms);
+#endif
+}
 static int net_match;        /* a match is running */
 static s32 net_last_sent = -1;
 static s32 net_hashed = -1;   /* the last match frame hashed and compared */
@@ -492,6 +544,18 @@ static void net_config(void)
         s = getenv("MELEE_SEED");
     }
     net_seed = (s != NULL) ? (unsigned) strtoul(s, NULL, 16) : 0x3F2A1B0Cu;
+
+    if (strcmp(role, "web") == 0) {
+        int k;
+        net_web = 1;
+        for (k = 0; k < NET_SLOTS; k++) {
+            ring_clear(&net_in[k]);
+        }
+        net_state = NET_RUN;
+        fprintf(stderr, "[NET] web: slot %d of %d, delay %d frames, seed "
+                        "%08X\n", net_slot, net_players, net_delay, net_seed);
+        return;
+    }
 
     if (net_slippi_proto) {
         /* Slippi's transport replaces the UDP socket entirely; the handshake
@@ -1130,6 +1194,10 @@ static void slp_send_selections(void)
 
 static void net_send(const unsigned char* buf, size_t len)
 {
+    if (net_web) {
+        web_net_send(buf, (int) len);
+        return;
+    }
     if (net_slippi_proto) {
         slp_enet_send(buf, len);
         return;
@@ -1172,6 +1240,10 @@ static void send_hello(void)
  * plays, and with more than two players that is a different answer for each. */
 static void net_send_to(int slot, const unsigned char* buf, size_t len)
 {
+    if (net_web) {
+        web_net_send(buf, (int) len); /* the relay addresses nobody */
+        return;
+    }
     if (net_slippi_proto) {
         slp_enet_send_to(slot, buf, len);
         return;
@@ -1503,6 +1575,9 @@ static int remote_ready(int slot, s32 frame)
     NetPad tmp;
     if (ring_get(&net_in[slot], frame, &tmp)) {
         return 1;
+    }
+    if (frame > net_gone_after[slot]) {
+        return 1; /* left: neutral from here, on every page alike */
     }
     return net_first_seen[slot] >= 0 && frame < net_first_seen[slot];
 }
@@ -1946,7 +2021,7 @@ static void net_handle(const unsigned char* cbuf, ssize_t n,
             if (n < NET_HDR + 5) {
                 break;
             }
-            slot = (int) get_u8(buf + 5) & 1;
+            slot = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
             base = (s32) get_u32(p + 0);
             count = (int) get_u8(p + 4);
             if (count > NET_WINDOW ||
@@ -1971,6 +2046,16 @@ static void net_handle(const unsigned char* cbuf, ssize_t n,
             }
             break;
         case MSG_BYE:
+            if (net_web) {
+                int gone = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
+                s32 last = n >= NET_HDR + 4 ? (s32) get_u32(buf + NET_HDR) : -1;
+                if (gone != net_slot && net_gone_after[gone] == 0x7FFFFFFF) {
+                    net_gone_after[gone] = last;
+                    fprintf(stderr, "[NET] slot %d left after frame %d; it "
+                                    "stands still from here\n", gone, (int) last);
+                }
+                break;
+            }
             if (net_state == NET_RUN) {
                 fprintf(stderr, "[NET] the peer left\n");
                 net_state = NET_SOLO;
@@ -1988,6 +2073,15 @@ static void net_pump(void)
     socklen_t flen;
     ssize_t n;
 
+    if (net_web) {
+        memset(&from, 0, sizeof(from));
+        while ((n = web_net_recv(buf, (int) sizeof(buf))) != 0) {
+            if (n > 0) {
+                net_handle(buf, n, &from);
+            }
+        }
+        return;
+    }
     if (net_slippi_proto) {
         slp_enet_pump();
         return;
@@ -2167,6 +2261,13 @@ void pc_net_match_end(void)
             net_stalls, net_stall_ms, net_stall_worst,
             net_desynced ? ", AND THE SIDES DESYNCED" : ", no desync");
     fflush(stderr);
+#ifdef __EMSCRIPTEN__
+    if (net_web) {
+        /* The page offers the way back to the lobby. */
+        EM_ASM({ if (Module.meleeNet && Module.meleeNet.onMatchEnd)
+                     Module.meleeNet.onMatchEnd($0); }, net_desynced);
+    }
+#endif
 }
 
 /* The checksum, and where it is taken from matters under rollback.
@@ -2706,7 +2807,7 @@ void pc_net_pads(GCPadStatus* pads)
             pfd.fd = net_fd;
             pfd.events = POLLIN;
             if (!net_slippi_proto) {
-                poll(&pfd, 1, 4);
+                net_poll(&pfd, 4);
             }
             net_pump();
             if (!net_slippi_proto) {
@@ -2825,7 +2926,7 @@ void pc_net_pads(GCPadStatus* pads)
                 double t;
                 pfd.fd = net_fd;
                 pfd.events = POLLIN;
-                poll(&pfd, 1, 2);
+                net_poll(&pfd, 2);
                 net_pump();
                 t = now_ms();
                 if (t - began >= 16.0) {
@@ -2989,7 +3090,7 @@ void pc_net_pads(GCPadStatus* pads)
             double t;
             pfd.fd = net_fd;
             pfd.events = POLLIN;
-            poll(&pfd, 1, 2);
+            net_poll(&pfd, 2);
             net_pump();
             /* Repeat our own window occasionally while we wait: if the peer
              * is waiting on us for the same reason, a resend is what breaks
@@ -3109,9 +3210,9 @@ void pc_net_pads(GCPadStatus* pads)
     if (net_report_at > 0.0 && now_ms() >= net_report_at) {
         net_report_at = now_ms() + 5000.0;
         fprintf(stderr, "[NET] frame %d: %u stalls, %.0f ms waiting "
-                        "(worst %.1f ms)%s\n",
+                        "(worst %.1f ms); %u hashes compared%s\n",
                 (int) frame, net_stalls, net_stall_ms, net_stall_worst,
-                "");
+                net_hash_matched, net_desynced ? ", DESYNCED" : ", all equal");
         if (net_slippi_proto) {
             fprintf(stderr, "[SLP] tx %ld, rx %ld (%ld pad messages), "
                             "peer acked %d, last sent %d\n",
