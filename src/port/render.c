@@ -34,7 +34,12 @@ void pc_get_fb_size(float* w, float* h);
 #include <emscripten.h>
 /* Resolve on the first animation frame at or after target_ms (performance
  * clock, the one emscripten_get_now reads); see the pacer in render_present. */
-EM_ASYNC_JS(void, web_wait_frame, (double target_ms), {
+EM_ASYNC_JS(void, web_wait_frame, (double target_ms, int match_frame), {
+    /* Frames presented, for the page's frame-rate readout, and the match's
+     * own frame, which stays 0 through the stage load: the page shows its
+     * loading screen until it moves. */
+    Module.meleeFrames = (Module.meleeFrames | 0) + 1;
+    Module.meleeMatchFrame = match_frame;
     await new Promise(function (resolve) {
         function due() { return performance.now() >= target_ms - 2.0; }
         if (document.hidden) {
@@ -569,7 +574,8 @@ static void render_present_tail(int frame)
                 if (s_next_ms < now - 1000.0 / 60.0) {
                     s_next_ms = now;
                 }
-                web_wait_frame(s_next_ms);
+                extern u32 gm_GetFrameCount(void);
+                web_wait_frame(s_next_ms, (int) gm_GetFrameCount());
             }
 #else
             if (s_pace) {

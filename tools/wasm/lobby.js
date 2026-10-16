@@ -192,6 +192,24 @@
     console.log('[lobby] start', JSON.stringify(env));
     $('canvas').focus();
     resolveStart();
+    showLoading(humans > 1);
+  }
+
+  /* The loading screen: the disc read so far, then -- in netplay -- the wait
+   * for the slowest page, until the match's first frame is drawn. */
+  function showLoading(netplay) {
+    const t0 = performance.now();
+    const tick = setInterval(() => {
+      if ((Module.meleeMatchFrame | 0) > 0) {
+        $('loading').classList.add('done');
+        clearInterval(tick);
+        return;
+      }
+      const mb = (Module.meleeIsoBytes || 0) / 2 ** 20;
+      const secs = (performance.now() - t0) / 1000;
+      $('loading-detail').textContent = mb >= 0.1 ? `${mb.toFixed(1)} MB read from the disc` : '';
+      if (netplay && secs > 8) $('loading-text').textContent = 'Loading — and waiting for the other players…';
+    }, 250);
   }
   // The host's CPU choice travels with the rules; it fills only free slots.
   const isHostCpuCount = (msg) => Math.max(0, Math.min(4 - msg.players.length, msg.rules.cpus | 0));
@@ -233,6 +251,58 @@
    * used to be oncontextmenu="..." in the markup, which the CSP forbids (inline
    * handler attribute); this is the same suppression, from a file. */
   $('canvas').addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /* ---- graphics: say so when the browser is not using the GPU ----
+   * Chrome falls back to SwiftShader (WebGL drawn on the CPU) when hardware
+   * acceleration is off or the GPU is blocklisted. The game still runs, at a
+   * fraction of its speed and with no other symptom, so check for it here:
+   * failIfMajorPerformanceCaveat refuses exactly that kind of context. */
+  (function checkGpu() {
+    const probe = (opts) => {
+      let gl = null;
+      try { gl = document.createElement('canvas').getContext('webgl2', opts); } catch (e) { /* none */ }
+      if (!gl) return null;
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();      // a probe should not hold one of the page's contexts
+      return { renderer };
+    };
+    // No context at all is left to the game to report: it can be a GPU
+    // process still starting, and the game's own error is more specific.
+    const any = probe({});
+    if (!any) return;
+    console.log('[GPU] WebGL renderer:', any.renderer || '(hidden)');
+    const software = any.renderer
+      ? /swiftshader|llvmpipe|softpipe|software|basic render driver/i.test(any.renderer)
+      : !probe({ failIfMajorPerformanceCaveat: true });
+    if (software) {
+      $('gpu').innerHTML = '<b>Your browser is drawing without the graphics card</b>' +
+        (any.renderer ? ` (${escapeHtml(any.renderer)})` : '') + ', so the game will run slowly. ' +
+        'In Chrome: Settings → System → turn on <i>Use graphics acceleration when available</i>, ' +
+        'relaunch, then check that <code>chrome://gpu</code> lists WebGL as “Hardware accelerated”.';
+      $('gpu').classList.add('show');
+    }
+  })();
+
+  /* ---- frame rate: ?fps shows it always; otherwise it appears once a
+   * match has run well under 60 for a couple of seconds ---- */
+  (function fpsMeter() {
+    const always = new URLSearchParams(location.search).has('fps');
+    let last = 0, lastT = performance.now(), slow = 0;
+    setInterval(() => {
+      const n = Module.meleeFrames | 0, t = performance.now();
+      const fps = (n - last) * 1000 / (t - lastT);
+      last = n; lastT = t;
+      if (!started || !n) return;
+      const el = $('fps');
+      el.textContent = `${fps.toFixed(0)} fps`;
+      el.classList.toggle('slow', fps < 55);
+      // Two slow readings in a row, so a stage load's hitch does not count.
+      slow = fps < 50 ? slow + 1 : 0;
+      if (always || slow >= 2) el.classList.add('show');
+    }, 2000);
+  })();
 
   paintPicks();
   connect();

@@ -114,7 +114,10 @@ Module.meleeIsoOpenUrl = async function (url) {
                     if (b <= a) return new ArrayBuffer(0);
                     const r = await fetch(url, { headers: { Range: `bytes=${a}-${b - 1}` } });
                     if (r.status !== 206) throw new Error(`disc read ${a}-${b}: HTTP ${r.status}`);
-                    return r.arrayBuffer();
+                    const buf = await r.arrayBuffer();
+                    // Bytes fetched so far, for the page's loading screen.
+                    Module.meleeIsoBytes = (Module.meleeIsoBytes || 0) + buf.byteLength;
+                    return buf;
                 },
             };
         },
