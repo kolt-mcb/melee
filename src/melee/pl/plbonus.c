@@ -113,7 +113,7 @@ void pl_8003891C(int player)
     temp_r31->x0_staleMoveTable.xC6C = 0.0f;
     temp_r31->x0_staleMoveTable.xC70 = 0.0f;
     temp_r31->x0_staleMoveTable.xC74 = 0.0f;
-    for (i = 0; i < 6; ++i) {
+    for (i = 0; i < GM_MAX_PLAYERS; ++i) {
         temp_r31->x0_staleMoveTable.xC78[i] = 0.0f;
     }
     temp_r31->x0_staleMoveTable.xC90 = 0;
@@ -239,7 +239,7 @@ void pl_80038F10(int player)
     temp_r3->xD60 = 0;
     temp_r3->xD64 = 6;
 
-    for (i = 0; i < 6; ++i) {
+    for (i = 0; i < GM_MAX_PLAYERS; ++i) {
         temp_r3_2 = Player_GetStaleMoveTableIndexPtr2(i);
 
         if (player == temp_r3_2->xD64) {
@@ -477,7 +477,7 @@ void fn_80039618(int player)
             }
         }
     }
-    for (j = 0; j < 6; j++) {
+    for (j = 0; j < GM_MAX_PLAYERS; j++) {
         for (k = 1; k <= 0x10; k++) {
             if (!(pl_80037B2C(stats, j, k) != 0 || pl_80038628(gobj, k) == 0))
             {
@@ -686,7 +686,7 @@ void fn_80039618(int player)
     {
         f32 max_ratio = 0.0f;
         f32 sum_ratio = 0.0f;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (i != player) {
                 f32 val = Player_GetStaleMoveTableIndexPtr2(i)
                               ->x0_staleMoveTable.xC78[player];
@@ -711,7 +711,7 @@ void fn_80039618(int player)
     }
     if (gm_8016B558() >= 3) {
         int streak = 0;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (i != player) {
                 s32 kos = Player_GetKOsByPlayerIndex(player, i);
                 if (kos != 0) {
@@ -802,7 +802,7 @@ void fn_8003B044(int player)
         int i;
         var_f30 = 0.0f;
         var_r27 = 0;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (Player_8003221C(i)) {
                 var_f30 += Player_GetStaleMoveTableIndexPtr2(i)
                                ->x0_staleMoveTable.xC9C;
@@ -1199,7 +1199,7 @@ void fn_8003CC84(int player)
                 if (ft_80087988(temp_r29) != 0) {
                     setFlag(player, 0xA7);
                 }
-                for (i = 0; i < 6; i++) {
+                for (i = 0; i < GM_MAX_PLAYERS; i++) {
                     if (player == Player_GetStaleMoveTableIndexPtr2(i)
                                       ->x0_staleMoveTable.xCAC)
                     {

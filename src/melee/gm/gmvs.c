@@ -174,7 +174,7 @@ bool gm_8016B014(void)
     PAD_STACK(4);
 
     if (gm_GetStartMeleeRules()->x4_2 && !gm_8016A1F8()) {
-        for (i = 1; i < 6; i++) {
+        for (i = 1; i < GM_MAX_PLAYERS; i++) {
             if (Player_GetPlayerState(i) != 0) {
                 i = -1;
                 break;
@@ -424,7 +424,7 @@ int gm_8016B558(void)
     int i;
     int count;
     count = 0;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
             count++;
         }
@@ -452,7 +452,7 @@ float fn_8016B5B0(void)
     }
 
     count = 0;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
             count++;
         }
@@ -547,7 +547,7 @@ static inline int fn_8016B918_inline(int var_r31)
 {
     int team = Player_GetTeam(var_r31);
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != 3 && var_r31 != i &&
             team == Player_GetTeam(i) && Player_GetStocks(i) > 1)
         {
@@ -690,7 +690,7 @@ int gm_DefaultVSGetPauser(void)
                     mpPausePressed = mpPadStatus->trigger & HSD_PAD_START;
                 }
                 if (mpPausePressed) {
-                    for (mpPlayerSlot = 0; mpPlayerSlot < 6; mpPlayerSlot++) {
+                    for (mpPlayerSlot = 0; mpPlayerSlot < GM_MAX_PLAYERS; mpPlayerSlot++) {
                         if (Player_GetPlayerSlotType(mpPlayerSlot) !=
                                 Gm_PKind_NA &&
                             Player_GetEntity(mpPlayerSlot) != NULL &&
@@ -733,7 +733,7 @@ int gm_CameraModeVSGetPauser(void)
                 if (var_r30 == 3) {
                     return var_r30;
                 }
-                for (var_r29 = 0; var_r29 < 6; var_r29++) {
+                for (var_r29 = 0; var_r29 < GM_MAX_PLAYERS; var_r29++) {
                     if (var_r30 == Player_GetPadPort(var_r29) &&
                         Player_GetPlayerSlotType(var_r29) != Gm_PKind_NA)
                     {
@@ -781,7 +781,7 @@ MatchOutcome gm_GetFFAOutcome(void)
         int i;
         int eliminatedPlayers = 0;
         int playerCount = 0;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
                 if (Player_GetStocks(i) == 0) {
                     eliminatedPlayers += 1;
@@ -839,7 +839,7 @@ MatchOutcome gm_GetTeamBattleOutcome(void)
             notSinglePlayer = false;
         }
         if (notSinglePlayer && !controller.start.x5_1) {
-            for (slot = 0; slot < 6; slot++) {
+            for (slot = 0; slot < GM_MAX_PLAYERS; slot++) {
                 if (Player_GetFlagsBit1(slot) == 0 &&
                     Player_GetPlayerSlotType(slot) != Gm_PKind_NA &&
                     Player_GetEntity(slot) != NULL)
@@ -865,7 +865,7 @@ MatchOutcome gm_GetTeamBattleOutcome(void)
         eliminatedTeamCount = 0;
         memset(teamStocks, -1, sizeof(teamStocks));
 
-        for (slot_2 = 0; slot_2 < 6; slot_2++) {
+        for (slot_2 = 0; slot_2 < GM_MAX_PLAYERS; slot_2++) {
             if (Player_GetPlayerSlotType(slot_2) != Gm_PKind_NA) {
                 if (teamStocks[Player_GetTeam(slot_2)] == -1) {
                     teamStocks[Player_GetTeam(slot_2)] =
@@ -968,7 +968,7 @@ void fn_8016C4F4(MatchEnd* arg0)
     int i;
     int j;
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (arg0->player_standings[i].pkind != 3) {
             pl_80039450(i);
             for (j = 0; j < 0x101; j++) {
@@ -1121,7 +1121,7 @@ void fn_8016C7F0(void)
 static inline s8 gm_GetSlotByPlayerId(int pauserId)
 {
     int slot;
-    for (slot = 0; slot < 6; slot++) {
+    for (slot = 0; slot < GM_MAX_PLAYERS; slot++) {
         if (pauserId == Player_GetPadPort(slot) &&
             Player_GetPlayerSlotType(slot) == Gm_PKind_Human)
         {
@@ -1361,7 +1361,7 @@ static inline void fn_8016CFE0_inline(void)
     }
 
     tmp = &controller;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (tmp->state.fighters[i].respawn_timer != 0) {
             if (--tmp->state.fighters[i].respawn_timer == 0) {
                 fn_8016719C(i, tmp->state.fighters[i].xB);
@@ -1787,13 +1787,13 @@ void fn_8016DCC0(StartMeleeData* arg0)
     case 0:
     case 2:
     case 3:
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             fn_8016D8AC(i, &arg0->players[i]);
         }
         break;
     case 1:
         fn_8016D8AC(0, &arg0->players[0]);
-        for (i = 1; i < 6; i++) {
+        for (i = 1; i < GM_MAX_PLAYERS; i++) {
             Player_SetSlottype(i, Gm_PKind_NA);
         }
         if (arg0->rules.x54->x10_b1) {
@@ -1838,7 +1838,7 @@ void fn_8016DEEC(void)
 {
     VsSceneController* tmp = &controller;
     VsSceneController* tmp2 = &controller;
-    float sp18[6];
+    float sp18[GM_MAX_PLAYERS];
     Vec3 spC;
     float temp_f0;
     float var_f1;
@@ -1849,19 +1849,19 @@ void fn_8016DEEC(void)
     int j;
     int var_r23;
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
             getSpawnPoint(i, &spC);
             sp18[i] = spC.x;
         }
     }
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != 3 &&
             Player_GetFacingDirection(i) == 0.0F)
         {
             var_r23 = -1;
 
-            for (j = 0; j < 6; j++) {
+            for (j = 0; j < GM_MAX_PLAYERS; j++) {
                 if (j != i && Player_GetPlayerSlotType(j) != Gm_PKind_NA &&
                     (tmp->start.is_teams != true ||
                      Player_GetTeam(i) != Player_GetTeam(j)))
@@ -1908,7 +1908,7 @@ void fn_8016E124(void)
         sp10[i] = -1;
     }
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (Player_GetPlayerSlotType(i) != 3 &&
             Player_GetPlayerCharacter(i) == CKind_Kirby)
         {
@@ -1927,7 +1927,7 @@ void fn_8016E124(void)
         }
     }
     if (var_r27 > 0) {
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
                 temp_r3 = Player_80032610(i, 0);
                 if (temp_r3 != -1 && temp_r3 != 4) {
@@ -1988,7 +1988,7 @@ void fn_8016E2BC(void)
         fn_80169F50(Player_GetPlayerCharacter(0), Player_GetCostumeId(0));
     } else {
         fn_8016DEEC();
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
                 getSpawnPoint(i, &sp18);
                 tmp = &controller;
@@ -2052,7 +2052,7 @@ bool fn_8016E5C0(StartMeleeData* arg0)
     }
     var_r4 = false;
     var_r6 = false;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (arg0->players[i].slot_type == Gm_PKind_Human) {
             var_r4 = true;
             if (!(HSD_PadCopyStatus[(u8) i].button & (HSD_PAD_L | HSD_PAD_R)))
@@ -2225,7 +2225,7 @@ void gm_Scene_Vs_OnExit(void* user_data)
         if (controller.state.match_result != OUTCOME_NO_CONTEST &&
             controller.state.match_result != OUTCOME_RETRY)
         {
-            for (i = 0; i < 6; i++) {
+            for (i = 0; i < GM_MAX_PLAYERS; i++) {
                 if (Player_GetPlayerSlotType(i) == Gm_PKind_Human) {
                     gmMainLib_8015D00C(
                         gm_CKindToSelKind(Player_GetPlayerCharacter(i)));
@@ -2276,7 +2276,7 @@ float gm_8016ECE8(void)
 
     count = 0;
     var_f29 = 0.0F;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         CharacterKind kind = Player_GetPlayerCharacter(i);
         if (kind == CKind_MasterH || kind == CKind_CrezyH) {
             var_f29 +=
@@ -2355,7 +2355,7 @@ void fn_8016F030(StartMeleeData* arg0)
 {
     int i;
     gm_SetupRulesDefaults(&arg0->rules);
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         gm_SetupPlayerDefaults(&arg0->players[i]);
     }
 }

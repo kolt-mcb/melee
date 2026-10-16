@@ -313,7 +313,7 @@ void ifMagnify_802FBBDC(HSD_GObj* gobj, intptr_t code)
 
     (void) code;
     magnify = &ifMagnify_804A1DE0;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         magnify->player[i].state.is_offscreen = 0;
     }
 
@@ -325,7 +325,7 @@ void ifMagnify_802FBBDC(HSD_GObj* gobj, intptr_t code)
             HSD_CObjEndCurrent();
         }
 
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             player = &magnify->player[i];
             fighter_gobj = Player_GetEntity(i);
             if (player->state.ignore_offscreen || fighter_gobj == NULL ||
@@ -570,7 +570,7 @@ void ifMagnify_802FC750(void)
      * It is the HUD teardown at the end of a match, so it fired the moment a
      * match was won: GObj_RemoveUserData dereferenced 0xcc68cb8da0907 and the
      * game died on the results screen. It is player[i].gobj. */
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (base->player[i].gobj != NULL) {
             HSD_GObjFree(base->player[i].gobj);
             base->player[i].gobj = NULL;
@@ -578,7 +578,7 @@ void ifMagnify_802FC750(void)
     }
 #else
     /// @todo Member accesses in the body fold into the condition's address.
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (base->player[i].gobj != NULL) {
             HSD_GObjFree(*(HSD_GObj**) ((uintptr_t) base +
                                         i * (s32) sizeof(ifMagnifyPlayer) +
@@ -654,7 +654,7 @@ void ifMagnify_802FC870(void)
         ifMagnify_804A1DE0.model_desc = &ifMagnify_pc_model;
     }
 #endif
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         ifMagnify_802FC3C0(i);
     }
     ifMagnify_802FC618();
@@ -663,7 +663,7 @@ void ifMagnify_802FC870(void)
 void ifMagnify_802FC8E8(void)
 {
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         ifMagnify_804A1DE0.player[i].state.ignore_offscreen = 1;
     }
 }
@@ -671,7 +671,7 @@ void ifMagnify_802FC8E8(void)
 void ifMagnify_802FC940(void)
 {
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         ifMagnify_804A1DE0.player[i].state.ignore_offscreen = 0;
     }
 }

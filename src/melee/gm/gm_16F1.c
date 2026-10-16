@@ -31,7 +31,7 @@ static struct lbl_8046DBC8_t {
     struct lbl_8046DBC8_t_x2 {
         u8 x0;
         u8 x1;
-    } x2[6];
+    } x2[GM_MAX_PLAYERS];
 } lbl_8046DBC8;
 
 static int lbl_803D5648[] = {
@@ -818,11 +818,17 @@ int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
 {
     u8* tmp;
     const struct lbl_803B7A60_t* zeroes = &lbl_803B7A60;
-    u8* flags = (u8*) &rules->player_standings[6];
+    u8* flags = (u8*) &rules->player_standings[GM_MAX_PLAYERS];
     struct MatchPlayerData* x58 = rules->player_standings;
     s32 player_net;
+#if BUILD_TARGET_PC
+    /* One per slot: the console's four overflowed into the frame for
+     * slots 4 and 5. rankings[GM_MAX_PLAYERS] holds the highest rank. */
+    s32 scores[GM_MAX_PLAYERS];
+#else
     s32 scores[4];
-    u8 rankings[7] = { 0 };
+#endif
+    u8 rankings[GM_MAX_PLAYERS + 1] = { 0 };
 
     if (lbl_804D65A0.x0 != 0) {
         return 0;
@@ -836,7 +842,7 @@ int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
     } else {
         int k;
 
-        for (k = 0; k < 6; k++) {
+        for (k = 0; k < GM_MAX_PLAYERS; k++) {
             if (x58[k].pkind != 3) {
                 u16 xA = x58[k].self_destructs;
                 scores[k] =
@@ -846,11 +852,11 @@ int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
 
         {
             int idx;
-            for (idx = 0; idx < 6; idx++) {
+            for (idx = 0; idx < GM_MAX_PLAYERS; idx++) {
                 if (x58[idx].pkind != 3) {
                     int j;
 
-                    for (j = 0; j < 6; j++) {
+                    for (j = 0; j < GM_MAX_PLAYERS; j++) {
                         if (x58[j].pkind != 3 && idx != j &&
                             scores[idx] < scores[j])
                         {
@@ -858,8 +864,8 @@ int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
                         }
                     }
 
-                    if (rankings[6] < rankings[idx]) {
-                        rankings[6] = rankings[idx];
+                    if (rankings[GM_MAX_PLAYERS] < rankings[idx]) {
+                        rankings[GM_MAX_PLAYERS] = rankings[idx];
                     }
                 }
             }
@@ -892,13 +898,13 @@ int fn_801701C0(MatchEnd* rules, int arg1, int arg2)
             int i;
             for (i = 0; i < 4; i++) {
                 if (x58[i].pkind != Gm_PKind_NA && i != arg1 &&
-                    rankings[i] == rankings[6])
+                    rankings[i] == rankings[GM_MAX_PLAYERS])
                 {
                     return 0;
                 }
             }
         }
-        if (rankings[arg1] == rankings[6]) {
+        if (rankings[arg1] == rankings[GM_MAX_PLAYERS]) {
             return 1;
         }
         return 0;

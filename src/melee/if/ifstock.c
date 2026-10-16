@@ -29,7 +29,7 @@
 #include <sysdolphin/baselib/tobj.h>
 
 static struct ifStock_804A1378 ifStock_804A1378;
-static struct IfStockUserData ifStock_804A157C[6];
+static struct IfStockUserData ifStock_804A157C[GM_MAX_PLAYERS];
 static struct ifStock_804A1774 ifStock_804A1774;
 static HSD_GObj* ifStock_804A1A8C[16];
 static struct ifStock_804A1ACC ifStock_804A1ACC;

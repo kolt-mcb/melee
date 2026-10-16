@@ -182,7 +182,7 @@ static void func_8008688C_wrapper(StaticPlayer* player)
 void Player_80031900(void)
 {
     int slot;
-    for (slot = 0; slot < 6; slot++) {
+    for (slot = 0; slot < GM_MAX_PLAYERS; slot++) {
         StaticPlayer* player = &player_slots[slot];
         Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
@@ -339,7 +339,7 @@ void Player_80031DA8(s32 param_1, s32 param_2)
 void Player_80031DC8(void func_arg(s32, s32))
 {
     int slot;
-    for (slot = 0; slot < 6; slot++) {
+    for (slot = 0; slot < GM_MAX_PLAYERS; slot++) {
         Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
         /* PC port: the assert above is non-fatal here, so an out-of-range
@@ -2787,7 +2787,7 @@ void Player_InitOrResetPlayer(s32 slot)
     player->falls[player->transformed[0]] = 0;
     player->falls[player->transformed[1]] = 0;
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         player->kos_by_player[i] = 0;
     }
 

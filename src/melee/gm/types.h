@@ -634,7 +634,7 @@ struct MatchEnd {
     /* 0x1B */ struct MatchTeamData team_standings[GM_MAX_TEAMS];
     /* 0x58 */ struct MatchPlayerData player_standings[GM_MAX_PLAYERS];
     /* 0x448 */ u8 _x448[4]; // offset by 1 because of the previous struct
-    /* 0x44C */ struct UnkResultPlayerData x44C[6]; // 0x508 * 6 = 0x1820
+    /* 0x44C */ struct UnkResultPlayerData x44C[GM_MAX_PLAYERS]; // 0x508 * 6 = 0x1820
 };
 ASSERT_SIZE(struct MatchEnd, 0x227C);
 

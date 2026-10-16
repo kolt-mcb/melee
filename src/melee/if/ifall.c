@@ -32,7 +32,7 @@ static struct ifAll_804A0FD8_t {
     /* 0x04 */ HSD_GObj* gobj_2;
     /* 0x08 */ HSD_JObj* x8;
     /* 0x0C */ Vec3 xC;
-    /* 0x18 */ Vec3 x18[6];
+    /* 0x18 */ Vec3 x18[GM_MAX_PLAYERS];
     /* 0x60 */ Vec3 x60[3];
     /* 0x84 */ Vec3 x84[2];
 } ifAll_804A0FD8;
@@ -127,6 +127,26 @@ void ifAll_802F343C(int count)
             ifAll_802F343C_inline(i);
         }
         break;
+#if BUILD_TARGET_PC
+    case 7:
+    case 8:
+        /* PC: the HUD model has joints for six at most. Take the six-player
+         * row's outer ends and spread `count` displays evenly between them,
+         * at the inner displays' height. */
+        ifAll_802F343C(6);
+        {
+            Vec3 left = ifAll_804A0FD8.x18[0];
+            Vec3 right = ifAll_804A0FD8.x18[5];
+            Vec3 mid = ifAll_804A0FD8.x18[1];
+            for (i = 0; i < count; i++) {
+                f32 t = (f32) i / (f32) (count - 1);
+                ifAll_804A0FD8.x18[i].x = left.x + (right.x - left.x) * t;
+                ifAll_804A0FD8.x18[i].y = mid.y;
+                ifAll_804A0FD8.x18[i].z = mid.z;
+            }
+        }
+        break;
+#endif
     }
 }
 

@@ -9,7 +9,14 @@
 /// @todo Put in proper places. ::GM_MAX_PLAYERS is ::Gm_Player_NumMax but
 /// needs to be used for array size declarations.
 /// @{
+#if BUILD_TARGET_PC
+/* PC: eight fighters in a match. The console's six slots are the first six;
+ * the arrays sized by this grow at their ends, so offsets inside each slot
+ * are unchanged. */
+#define GM_MAX_PLAYERS 8
+#else
 #define GM_MAX_PLAYERS 6
+#endif
 #define GM_MAX_TEAMS 5
 #define GM_NAMETAG_COUNT 120
 #define GM_FPS 60

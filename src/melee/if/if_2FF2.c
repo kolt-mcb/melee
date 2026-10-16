@@ -85,7 +85,7 @@ struct un_804A1F58_x8_t {
 /* 4A1F58 */ static struct un_804A1F58_t {
     unsigned int x0;
     char pad_x4[4];
-    struct un_804A1F58_x8_t x8[6];
+    struct un_804A1F58_x8_t x8[GM_MAX_PLAYERS];
 } un_804A1F58;
 
 static inline struct un_804A1F58_x8_t* getEntry(int slot)
@@ -96,7 +96,7 @@ static inline struct un_804A1F58_x8_t* getEntry(int slot)
 static inline int findSlot(HSD_GObj* gobj)
 {
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (getEntry(i)->x0 == gobj) {
             return i;
         }
@@ -186,7 +186,7 @@ void un_802FF498(void)
 void un_802FF4FC(void)
 {
     int i;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         freeEntry(getEntry(i));
     }
 }
@@ -196,7 +196,7 @@ void un_802FF570(void)
     int i;
     struct un_804A1F58_x8_t* thing;
     HSD_Text* text;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         thing = getEntry(i);
         thing->x10 = 1;
         text = thing->x4;
@@ -210,7 +210,7 @@ void un_802FF620(void)
 {
     int i;
     struct un_804A1F58_x8_t* thing;
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         thing = getEntry(i);
         thing->x10 = 0;
         if (thing->x4 != NULL) {

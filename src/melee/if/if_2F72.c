@@ -39,7 +39,7 @@ struct ScInfStcSlot {
 /// ScInfStc_scene_models, plus the GObjs spawned from it per player slot.
 struct ScInfStcModels {
     DynamicModelDesc** scene_models;
-    struct ScInfStcSlot slots[6];
+    struct ScInfStcSlot slots[GM_MAX_PLAYERS];
 };
 
 static struct ScInfStcModels scinfstc_models;
@@ -154,7 +154,7 @@ void fn_802F75D4(HSD_GObj* gobj)
 
     if (lb_8000B09C(jobj) == 0) {
         models = &scinfstc_models;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (models->slots[i].gobj == gobj) {
                 models->slots[i].gobj = NULL;
                 break;
@@ -174,7 +174,7 @@ void fn_802F7670(HSD_GObj* gobj)
 
     if (lb_8000B09C(jobj) == 0) {
         models = &scinfstc_models;
-        for (i = 0; i < 6; i++) {
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
             if (models->slots[i].gobj2 == gobj) {
                 models->slots[i].gobj2 = NULL;
                 break;
@@ -191,7 +191,7 @@ static inline s32 GetSlot(HSD_GObj* gobj)
 {
     s32 i;
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (scinfstc_models.slots[i].gobj == gobj) {
             return i;
         }
@@ -394,7 +394,7 @@ void if_802F7E7C(void)
     s32 i;
     struct ScInfStcModels* models = &scinfstc_models;
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
         if (models->slots[i].gobj != NULL) {
             HSD_GObjFree(models->slots[i].gobj);
         }

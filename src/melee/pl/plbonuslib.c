@@ -112,7 +112,7 @@ void plBonusLib_8003D514(int arg0)
     RETURN_IF(ftLib_IsDeadUp(temp_r31) != 0);
     ftLib_GetPos(temp_r31, &sp18);
 
-    for (var_r29 = 0; var_r29 < 6; var_r29++) {
+    for (var_r29 = 0; var_r29 < GM_MAX_PLAYERS; var_r29++) {
         if (var_r29 == arg0) {
             continue;
         }
@@ -482,7 +482,7 @@ void pl_8003E17C(
             temp_r31->x0_staleMoveTable.x674[kind2] += 1;
         }
 
-        for (cnt = 0; cnt < 6; cnt++) {
+        for (cnt = 0; cnt < GM_MAX_PLAYERS; cnt++) {
             if (it_8026B774(item_gobj, cnt)) {
                 return;
             }
@@ -1211,7 +1211,7 @@ void pl_8003FE64(int arg0, int arg1)
 {
     int var_r31;
 
-    for (var_r31 = 0; var_r31 < 6; var_r31++) {
+    for (var_r31 = 0; var_r31 < GM_MAX_PLAYERS; var_r31++) {
         if (pl_80039418(var_r31, 0x1A) != 0U) {
             break;
         }
@@ -1225,7 +1225,7 @@ void pl_8003FED0(int arg0, int arg1)
     int var_r31;
     RETURN_IF(arg1 != 0);
 
-    for (var_r31 = 0; var_r31 < 6; var_r31++) {
+    for (var_r31 = 0; var_r31 < GM_MAX_PLAYERS; var_r31++) {
         if (pl_80039418(var_r31, 0x82) != 0U) {
             break;
         }
@@ -1291,7 +1291,7 @@ void pl_80040120(int arg0, int arg1)
         pl_80038824(arg0, 0x4D);
     }
 
-    for (var_r29 = 0; var_r29 < 6; ++var_r29) {
+    for (var_r29 = 0; var_r29 < GM_MAX_PLAYERS; ++var_r29) {
         if (!Player_8003221C(var_r29)) {
             continue;
         }

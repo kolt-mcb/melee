@@ -3,6 +3,7 @@
 
 #include <Runtime/platform.h>
 
+#include <melee/gm/forward.h> /* GM_MAX_PLAYERS */
 #include <melee/if/forward.h> // IWYU pragma: export
 #include <melee/sc/forward.h>
 #include <sysdolphin/baselib/forward.h>
@@ -61,7 +62,7 @@ struct IfDamageState {
 };
 
 struct HudIndex {
-    IfDamageState players[6];
+    IfDamageState players[GM_MAX_PLAYERS];
     /* +258 */ HSD_Joint* damage_num_joint;
     /* +25C */ HSD_AnimJoint** damage_num_anims;
     /* +260 */ HSD_MatAnimJoint** damage_num_matanims;
@@ -143,13 +144,13 @@ struct ifMagnify {
     GXColor x8;
     GXColor xC;
     GXColor x10;
-    ifMagnifyPlayer player[6];
+    ifMagnifyPlayer player[GM_MAX_PLAYERS];
     /* 5 * 0x18 would be five GameCube HSD_ImageDescs. The struct is bigger
      * here (image_ptr widens), and ifmagnify.c used to reach this array
      * through two overlay casts with hardcoded offsets -- which on x86_64
      * landed inside player[] and scribbled its gobj pointers. Upstream has
      * since named the array too, so let the compiler place it. */
-    HSD_ImageDesc image_descs[5];
+    HSD_ImageDesc image_descs[GM_MAX_PLAYERS - 1]; /* slots 1 and up */
     u8 pad[0xF0 - 0xEC];
 };
 
@@ -282,7 +283,7 @@ struct IfStockUserData {
 struct ifStock_804A1378 {
     DynamicModelDesc** x0;
     DynamicModelDesc* x4;
-    struct ifStock_804A1378_per_player player[6];
+    struct ifStock_804A1378_per_player player[GM_MAX_PLAYERS];
     HSD_GObj* gobj;
     HSD_JObj* jobj;
     char pad1F0[0x1F4 - 0x1F0];

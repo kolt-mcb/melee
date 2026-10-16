@@ -275,6 +275,11 @@ void onEnterDebugVs(GameModeState* state)
                     start->players[i].slot_type = Gm_PKind_NA;
                 }
                 pc_boot_players = n;
+                {
+                    /* The HUD lays out this many displays (ifstatus.c). */
+                    extern int pc_hud_count;
+                    pc_hud_count = n > 4 ? n : 0;
+                }
             }
         }
         /* A Slippi match plays the lineup the players selected, not the one
@@ -316,8 +321,22 @@ void onEnterDebugVs(GameModeState* state)
             const char* c = getenv("MELEE_BOOT_CPU");
             if (c != NULL) {
                 int lvl[Gm_Player_NumMax];
-                int n = sscanf(c, "%d,%d,%d,%d", &lvl[0], &lvl[1], &lvl[2],
-                               &lvl[3]);
+                int n = 0;
+                const char* q = c;
+                /* As many levels as there are slots, comma separated. */
+                while (n < Gm_Player_NumMax) {
+                    char* end;
+                    long v = strtol(q, &end, 10);
+                    if (end == q) {
+                        break;
+                    }
+                    lvl[n++] = (int) v;
+                    q = end;
+                    if (*q != ',') {
+                        break;
+                    }
+                    q++;
+                }
                 if (n == 1) {
                     lvl[1] = lvl[0]; /* one number: slot 1 only */
                     lvl[0] = 0;
@@ -334,6 +353,15 @@ void onEnterDebugVs(GameModeState* state)
                         start->players[i].cpu_level = (u8) lvl[i];
                     }
                 }
+            }
+        }
+        /* Four pad ports: a human past them would read pad state that does
+         * not exist. Until there is input for those slots they play as
+         * CPUs. */
+        for (i = PAD_MAX_CONTROLLERS; i < Gm_Player_NumMax; i++) {
+            if (start->players[i].slot_type == Gm_PKind_Human) {
+                start->players[i].slot_type = Gm_PKind_Cpu;
+                start->players[i].cpu_level = 9;
             }
         }
         /* MELEE_BOOT_METAL=<mask>: the slots in the bit mask play metal, as
@@ -452,9 +480,76 @@ void onExitSuddenDeath(GameModeState* state)
     gmVsMelee_ExitSuddenDeath(state);
 }
 
+#if BUILD_TARGET_PC
+/* The results screen has four panels, and its tables are indexed by a
+ * fighter's place (0-3). With more than four in the match it shows the top
+ * four: they move to slots 0-3 in finishing order, everyone else leaves the
+ * standings, and the winners list follows them. Free-for-all only; the team
+ * results are the console's. */
+static void pc_results_top_four(MatchEnd* me)
+{
+    struct MatchPlayerData kept[4];
+    struct UnkResultPlayerData kept_x44C[4];
+    s8 newslot[GM_MAX_PLAYERS];
+    int order[GM_MAX_PLAYERS];
+    int n = 0, i, j, w;
+
+    if (me->is_teams) {
+        return;
+    }
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
+        newslot[i] = -1;
+        if (me->player_standings[i].pkind != Gm_PKind_NA) {
+            order[n++] = i;
+        }
+    }
+    if (n <= 4) {
+        return;
+    }
+    /* Best place first; a tie keeps slot order. */
+    for (i = 1; i < n; i++) {
+        int v = order[i];
+        for (j = i; j > 0 && me->player_standings[order[j - 1]].is_big_loser >
+                                 me->player_standings[v].is_big_loser;
+             j--)
+        {
+            order[j] = order[j - 1];
+        }
+        order[j] = v;
+    }
+    for (i = 0; i < 4; i++) {
+        kept[i] = me->player_standings[order[i]];
+        kept_x44C[i] = me->x44C[order[i]];
+        newslot[order[i]] = (s8) i;
+        if (kept[i].is_big_loser > 3) {
+            kept[i].is_big_loser = 3;
+        }
+    }
+    for (i = 0; i < GM_MAX_PLAYERS; i++) {
+        if (i < 4) {
+            me->player_standings[i] = kept[i];
+            me->x44C[i] = kept_x44C[i];
+        } else {
+            me->player_standings[i].pkind = Gm_PKind_NA;
+        }
+    }
+    for (i = 0, w = 0; i < me->n_winners; i++) {
+        int s = me->winners[i];
+        if (s >= 0 && s < GM_MAX_PLAYERS && newslot[s] >= 0) {
+            me->winners[w++] = (u8) newslot[s];
+        }
+    }
+    me->n_winners = (u8) w;
+}
+#endif
+
 void onEnterResults(GameModeState* state)
 {
     gmVsMelee_EnterResults(state);
+#if BUILD_TARGET_PC
+    pc_results_top_four(
+        &((ResultsMatchInfo*) gm_GetGameModeStateEnterData(state))->match_end);
+#endif
 }
 
 void onExitResults(GameModeState* state)
