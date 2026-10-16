@@ -1164,8 +1164,15 @@ struct grZebes_GroundVars5 {
      * their reference points, so fighters fell through the platform. Here
      * the state is a real member, aligned, and the fields the console
      * shares with its head (xC8..xDC) alias it through an anonymous union;
-     * everything the console keeps after it comes after it. */
+     * everything the console keeps after it comes after it.
+     *
+     * The pad 8-aligns the union for those pointers; wasm32's are four
+     * bytes, the union needs no pad, and with one xC8..xDC sat four bytes
+     * late -- so 801DA254's LObj cache (zebes4.xDC, gp+DC) read the acid
+     * level float (xD8) as a pointer instead of sharing xDC with it. */
+#if !BUILD_TARGET_WASM
     u32 pc_align;
+#endif
     union {
         grZe_AcidState acid;
         struct {
