@@ -49,6 +49,16 @@ struct it_MObjInfo it_mobj = {
     { HSD_TE_CNST, NULL, NULL, HSD_TE_RGB, HSD_TE_U8, 0xFF, 0xFF },
 };
 
+#if BUILD_TARGET_PC
+/* HSD_DObjDisp calls a class's setup with (mobj, rendermode); this one is
+ * defined with a third, unread parameter. PowerPC and x86-64 ignore the
+ * mismatch; wasm traps on the first item drawn with it. */
+static void it_80277D8C_setup(HSD_MObj* mobj, u32 rendermode)
+{
+    fn_80277D8C(mobj, rendermode, 0);
+}
+#endif
+
 void it_80277D08(void)
 {
     hsdInitClassInfo(HSD_CLASS_INFO(&it_mobj), HSD_CLASS_INFO(&hsdMObj),
@@ -56,7 +66,11 @@ void it_80277D08(void)
                      sizeof(HSD_MObjInfo), sizeof(HSD_MObj));
     it_mobj.parent.release = hsdMObj.parent.release;
     it_mobj.parent.amnesia = hsdMObj.parent.amnesia;
+#if BUILD_TARGET_PC
+    it_mobj.setup = (it_MObjSetupFunc) it_80277D8C_setup;
+#else
     it_mobj.setup = (it_MObjSetupFunc) fn_80277D8C;
+#endif
     it_mobj.load = hsdMObj.load;
     it_mobj.make_texp = hsdMObj.make_texp;
 }
