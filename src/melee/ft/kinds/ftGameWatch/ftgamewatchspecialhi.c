@@ -29,8 +29,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define GW_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define GW_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define GW_FMA(a, b, c) ((a) * (b) + (c))
+#define GW_NMSUB(a, b, c) GW_FMA(-(a), (b), (c))
 #endif
 
 static void ftGw_SpecialHi_ItemRescueEnterHitlag(HSD_GObj* gobj);
@@ -47,7 +51,7 @@ void ftGw_SpecialHi_ItemRescueSetup(HSD_GObj* gobj)
     fp = GET_FIGHTER(gobj);
     if (fp->u.gw.x226C_rescueGObj == NULL) {
         lb_8000B1CC(fp->parts[FtPart_TopN].joint, NULL, &sp10);
-        sp10.y = GW_FMA(-2.5f, ftCommon_GetModelScale(fp), sp10.y); /* fnmsubs */
+        sp10.y = GW_NMSUB(2.5f, ftCommon_GetModelScale(fp), sp10.y); /* fnmsubs */
         rescueGObj = it_802C8038(gobj, &sp10, FtPart_TopN,
                                  fp->motion_id - ftGw_MS_SpecialHi,
                                  fp->facing_dir, 2.5f);

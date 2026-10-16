@@ -60,8 +60,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define KB_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define KB_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define KB_FMA(a, b, c) ((a) * (b) + (c))
+#define KB_NMSUB(a, b, c) KB_FMA(-(a), (b), (c))
 #endif
 
 /// @todo .sdata2 order hack
@@ -172,7 +176,7 @@ static inline void comboCount_Push(Fighter* fp)
         var_f2 = p_ftCommonData->x4D4;
     }
     temp_f2 = fp->facing_dir * var_f2;
-    fp->cur_pos.x = KB_FMA(-pos->y, temp_f2, fp->cur_pos.x); /* fnmsubs */
+    fp->cur_pos.x = KB_NMSUB(pos->y, temp_f2, fp->cur_pos.x); /* fnmsubs */
     fp->cur_pos.y = KB_FMA(pos->x, temp_f2, fp->cur_pos.y);
 }
 

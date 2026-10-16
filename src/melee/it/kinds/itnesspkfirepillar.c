@@ -11,8 +11,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define PF2_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define PF2_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define PF2_FMA(a, b, c) ((a) * (b) + (c))
+#define PF2_NMSUB(a, b, c) PF2_FMA(-(a), (b), (c))
 #endif
 
 /**
@@ -140,7 +144,7 @@ bool itNesspkfirepillar_Logic24_DmgReceived(Item_GObj* item_gobj)
     Item* item = GET_ITEM(item_gobj);
     itNessPKFirepillarAttributes* attrs =
         item->xC4_article_data->x4_specialAttributes;
-    item->xD44_lifeTimer = PF2_FMA(-(f32) item->xC9C, attrs->x4, item->xD44_lifeTimer); /* fnmsubs */
+    item->xD44_lifeTimer = PF2_NMSUB((f32) item->xC9C, attrs->x4, item->xD44_lifeTimer); /* fnmsubs */
     if (item->xD44_lifeTimer <= 0.0F) {
         item->xD44_lifeTimer = get_min_life();
     }

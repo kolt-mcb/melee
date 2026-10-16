@@ -21,9 +21,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define CS_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define CS_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define CS_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CS_FMA(a, b, c) ((a) * (b) + (c))
+#define CS_NMSUB(a, b, c) CS_FMA(-(a), (b), (c))
 #define CS_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -412,7 +416,7 @@ s32 it_802C30E8(ItemLink* link, Vec3* target,
     Fighter* fp = GET_FIGHTER(ip->xDD4_itemVar.climbersstring.xC);
     PAD_STACK(8);
 
-    link->vel.y = CS_FMA(-0.9f, attrs->x14, link->vel.y); /* fnmsubs */
+    link->vel.y = CS_NMSUB(0.9f, attrs->x14, link->vel.y); /* fnmsubs */
 
     if (fp->u.pp.x2240.x != 0.0f || fp->u.pp.x2240.y != 0.0f) {
         link->pos = fp->u.pp.x2240;

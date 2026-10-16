@@ -20,8 +20,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define EL_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define EL_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define EL_FMA(a, b, c) ((a) * (b) + (c))
+#define EL_NMSUB(a, b, c) EL_FMA(-(a), (b), (c))
 #endif
 
 ItemStateTable it_803F94A0[] = {
@@ -178,7 +182,7 @@ bool it_27CF_Logic114_DmgReceived(Item_GObj* item_gobj)
     Item* item;
 
     item = GET_ITEM(item_gobj);
-    item->xD44_lifeTimer = EL_FMA(-(f32) item->xCA0, item->xDD4_itemVar.yoshiegglay.x0, item->xD44_lifeTimer); /* fnmsubs */
+    item->xD44_lifeTimer = EL_NMSUB((f32) item->xCA0, item->xDD4_itemVar.yoshiegglay.x0, item->xD44_lifeTimer); /* fnmsubs */
     return false;
 }
 

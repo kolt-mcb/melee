@@ -24,8 +24,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define NT_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define NT_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define NT_FMA(a, b, c) ((a) * (b) + (c))
+#define NT_NMSUB(a, b, c) NT_FMA(-(a), (b), (c))
 #endif
 
 ItemStateTable it_803F6F50[] = {
@@ -139,9 +143,9 @@ void it_802AFF08(Item_GObj* gobj, Fighter_GObj* owner)
     ip->x40_vel.y = attr->x8 * sinf(ip->xDD4_itemVar.seakneedlethrown.xDF0);
     ip->x40_vel.z = 0.0f;
     ip->xDD4_itemVar.seakneedlethrown.xDE4.x =
-        NT_FMA(-3.0f, ip->x40_vel.x, ip->pos.x); /* fnmsubs */
+        NT_NMSUB(3.0f, ip->x40_vel.x, ip->pos.x); /* fnmsubs */
     ip->xDD4_itemVar.seakneedlethrown.xDE4.y =
-        NT_FMA(-3.0f, ip->x40_vel.y, ip->pos.y); /* fnmsubs */
+        NT_NMSUB(3.0f, ip->x40_vel.y, ip->pos.y); /* fnmsubs */
     ip->xDD4_itemVar.seakneedlethrown.xDE4.z = 0.0f;
     HSD_JObjSetRotationX(
         child,

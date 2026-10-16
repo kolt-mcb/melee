@@ -22,8 +22,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define EN_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define EN_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define EN_FMA(a, b, c) ((a) * (b) + (c))
+#define EN_NMSUB(a, b, c) EN_FMA(-(a), (b), (c))
 #endif
 
 /* 0C63BC */ static void fn_800C63BC(Fighter_GObj* gobj);
@@ -347,7 +351,7 @@ void fn_800C6F34(Fighter_GObj* gobj)
             }
         }
         fp = GET_FIGHTER(gobj);
-        sp20.x = EN_FMA(-fp->facing_dir, ftCommon_800804EC(fp), fp->cur_pos.x); /* fnmsubs */
+        sp20.x = EN_NMSUB(fp->facing_dir, ftCommon_800804EC(fp), fp->cur_pos.x); /* fnmsubs */
         sp20.y = fp->cur_pos.y;
         sp20.z = fp->cur_pos.z;
 

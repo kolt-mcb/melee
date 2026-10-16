@@ -71,8 +71,12 @@ typedef int (*GrIceMtCb)(Ground_GObj* gobj, int* out);
  * base height are fused on the console. */
 #include <math.h>
 #define IC_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define IC_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define IC_FMA(a, b, c) ((a) * (b) + (c))
+#define IC_NMSUB(a, b, c) IC_FMA(-(a), (b), (c))
 #endif
 
 struct grIceMt_YakumonoParam {
@@ -1390,7 +1394,7 @@ void stageGObj8_GObjProc(Ground_GObj* arg0)
     cur = HSD_JObjGetTranslationY(jobj);
     cur = cur - mul;
     if (cur > 0.5f * (3500.0f * Ground_801C0498())) {
-        cur = IC_FMA(-3500.0f, Ground_801C0498(), cur); /* fnmsubs */
+        cur = IC_NMSUB(3500.0f, Ground_801C0498(), cur); /* fnmsubs */
     } else if (cur < 0.5f * -(3500.0f * Ground_801C0498())) {
         cur = IC_FMA(3500.0f, Ground_801C0498(), cur);
     }

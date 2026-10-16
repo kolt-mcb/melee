@@ -245,9 +245,13 @@ static void sdata2_order(void)
  * x,x), and for three axes z fused on after that. */
 #if BUILD_TARGET_PC
 #define CO_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define CO_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define CO_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CO_FMA(a, b, c) ((a) * (b) + (c))
+#define CO_NMSUB(a, b, c) CO_FMA(-(a), (b), (c))
 #define CO_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -1369,14 +1373,14 @@ s32 ftCo_800A229C(Fighter* fp, Vec3* arg1)
             }
             goto block_18;
         }
-        if (fp->cur_pos.x > CO_FMA(-0.4f, w, Stage_GetBlastZoneRightOffset()) /* fnmsubs 800A2418 */) {
+        if (fp->cur_pos.x > CO_NMSUB(0.4f, w, Stage_GetBlastZoneRightOffset()) /* fnmsubs 800A2418 */) {
             *arg1 = fp->cur_pos;
             return 2;
         }
     block_18:
         h = Stage_GetBlastZoneTopOffset() - Stage_GetBlastZoneBottomOffset();
         if (sp2C.y > 0.0) {
-            if (fp->cur_pos.y > CO_FMA(-0.4f, h, Stage_GetBlastZoneTopOffset()) /* fnmsubs 800A2470 */) {
+            if (fp->cur_pos.y > CO_NMSUB(0.4f, h, Stage_GetBlastZoneTopOffset()) /* fnmsubs 800A2470 */) {
                 *arg1 = fp->cur_pos;
                 return 2;
             }

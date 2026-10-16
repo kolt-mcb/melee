@@ -36,9 +36,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define SC_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define SC_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define SC_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define SC_FMA(a, b, c) ((a) * (b) + (c))
+#define SC_NMSUB(a, b, c) SC_FMA(-(a), (b), (c))
 #define SC_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -490,7 +494,7 @@ enum_t it_802BBED0(ItemLink* link, Point3d* arg1, itSeakChain_Attrs* sa)
         float vel_scale = 1.0f;
         while (prev != NULL) {
             if (prev->x2C_b0) {
-                prev->vel.y = SC_FMA(-sa->x18, vel_scale, prev->vel.y); /* fnmsubs */
+                prev->vel.y = SC_NMSUB(sa->x18, vel_scale, prev->vel.y); /* fnmsubs */
                 vel_scale *= sa->x34;
                 it_802A4420(prev);
                 if (it_802A3C98(&prev->pos, &cur->pos, &pos) > sa->x4) {

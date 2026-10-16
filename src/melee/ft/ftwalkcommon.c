@@ -17,8 +17,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define WC_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define WC_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define WC_FMA(a, b, c) ((a) * (b) + (c))
+#define WC_NMSUB(a, b, c) WC_FMA(-(a), (b), (c))
 #endif
 
 FtWalkType ftWalkCommon_GetWalkType(HSD_GObj* gobj)
@@ -171,7 +175,7 @@ void ftWalkCommon_800DFEC8(HSD_GObj* gobj, void (*arg_cb)(HSD_GObj*, float))
         float_result = ftAnim_8006F484(gobj);
         init_animFrame = fp->cur_anim_frame;
         quotient = init_animFrame / float_result;
-        adjusted_animFrame = WC_FMA(-float_result, (f32) quotient, fp->cur_anim_frame); /* fnmsubs */
+        adjusted_animFrame = WC_NMSUB(float_result, (f32) quotient, fp->cur_anim_frame); /* fnmsubs */
         final_animFrame = frame * (adjusted_animFrame / float_result);
 #if BUILD_TARGET_PC
         /* MELEE_WALKFRAME=1: the animation frame a change of walk speed

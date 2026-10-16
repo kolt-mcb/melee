@@ -28,8 +28,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define PH_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define PH_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define PH_FMA(a, b, c) ((a) * (b) + (c))
+#define PH_NMSUB(a, b, c) PH_FMA(-(a), (b), (c))
 #endif
 
 #ifdef MUST_MATCH
@@ -75,7 +79,7 @@ void ftPp_SpecialS_80120E68(Fighter_GObj* gobj)
         fp->self_vel.x = fp2->cur_pos.x - fp->cur_pos.x;
         fp->self_vel.y = fp2->cur_pos.y - fp->cur_pos.y;
         fp->self_vel.z = 0.0F;
-        fp->self_vel.x = PH_FMA(-3.0F, fp2->facing_dir, fp->self_vel.x); /* fnmsubs */
+        fp->self_vel.x = PH_NMSUB(3.0F, fp2->facing_dir, fp->self_vel.x); /* fnmsubs */
         fp->self_vel.y += 5.0F;
         lbVector_Normalize(&fp->self_vel);
         dx = SQ(fp->cur_pos.x - fp2->cur_pos.x);

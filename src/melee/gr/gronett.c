@@ -31,8 +31,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define ON_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define ON_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define ON_FMA(a, b, c) ((a) * (b) + (c))
+#define ON_NMSUB(a, b, c) ON_FMA(-(a), (b), (c))
 #endif
 
 /* 1E40E4 */ static void grOnett_801E40E4(void* user_data, int joint_id,
@@ -866,7 +870,7 @@ void grOnett_801E5214(Ground_GObj* gobj)
         abs_ratio /= yakumono_param->max_displacement;
 
         if (error < 0.0) {
-            force = ON_FMA(-yakumono_param->spring_force, abs_ratio, force); /* fnmsubs */
+            force = ON_NMSUB(yakumono_param->spring_force, abs_ratio, force); /* fnmsubs */
         } else {
             force = ON_FMA(yakumono_param->spring_force, abs_ratio, force);
         }

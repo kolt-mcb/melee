@@ -17,8 +17,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define UN_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define UN_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define UN_FMA(a, b, c) ((a) * (b) + (c))
+#define UN_NMSUB(a, b, c) UN_FMA(-(a), (b), (c))
 #endif
 
 ItemStateTable it_803F7D60[] = {
@@ -233,13 +237,13 @@ void it_802CED54(Item_GObj* gobj)
         spawn.prev_pos.x = ip->xDD4_itemVar.unknown.x6C.x;
         spawn.prev_pos.y =
             ip->xDD4_itemVar.unknown.x6C.y +
-            UN_FMA(-range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
+            UN_NMSUB(range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
         break;
     case 2:
     case 3:
         spawn.prev_pos.x =
             ip->xDD4_itemVar.unknown.x6C.x +
-            UN_FMA(-range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
+            UN_NMSUB(range, 0.5f, (f32) randi_perm(range)); /* fnmsubs */
         spawn.prev_pos.y = ip->xDD4_itemVar.unknown.x6C.y;
         break;
     }

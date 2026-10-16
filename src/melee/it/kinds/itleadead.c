@@ -29,8 +29,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define LD_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define LD_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define LD_FMA(a, b, c) ((a) * (b) + (c))
+#define LD_NMSUB(a, b, c) LD_FMA(-(a), (b), (c))
 #endif
 
 ItemStateTable it_803F8EB0[] = {
@@ -977,7 +981,7 @@ s32 it_802EA6F4(Item_GObj* gobj)
 
 static inline f32 neg_dot(Vec3* a, Vec3* b)
 {
-    return LD_FMA(-a->z, b->z, LD_FMA(-a->y, b->y, -(a->x * b->x))); /* two fnmsubs */
+    return LD_NMSUB(a->z, b->z, LD_NMSUB(a->y, b->y, -(a->x * b->x))); /* two fnmsubs */
 }
 
 bool it_802EA804(Item_GObj* gobj, f32 range)

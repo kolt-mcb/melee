@@ -27,8 +27,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define NN_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define NN_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define NN_FMA(a, b, c) ((a) * (b) + (c))
+#define NN_NMSUB(a, b, c) NN_FMA(-(a), (b), (c))
 #endif
 
 /* 1230D0 */ static bool ftNn_Init_801230D0(Fighter_GObj* nana_gobj);
@@ -142,7 +146,7 @@ void ftPp_SpecialHi_0_Phys(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     if (!ftNn_Init_801230D0(gobj)) {
-        fp->cur_pos.x = NN_FMA(-8.0f, fp->facing_dir, fp->cur_pos.x); /* fnmsubs */
+        fp->cur_pos.x = NN_NMSUB(8.0f, fp->facing_dir, fp->cur_pos.x); /* fnmsubs */
         ftCo_Fall_Enter(gobj);
     }
 }

@@ -48,9 +48,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define ZB_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define ZB_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define ZB_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define ZB_FMA(a, b, c) ((a) * (b) + (c))
+#define ZB_NMSUB(a, b, c) ZB_FMA(-(a), (b), (c))
 #define ZB_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -2442,7 +2446,7 @@ void grZebes_801DC408(Ground_GObj* gobj)
                 f32 y_min = grZe_8049F158[0].y;
                 f32 bubble_r = yakumono_param->x74;
                 f32 x_base = grZe_8049F158[0].x + bubble_r;
-                f32 x_range = ZB_FMA(-2.0f, bubble_r, /* fnmsubs 801DC634 */
+                f32 x_range = ZB_NMSUB(2.0f, bubble_r, /* fnmsubs 801DC634 */
                                      grZe_8049F140[1].x - grZe_8049F158[0].x);
                 f32 y_range = grZe_8049F140[1].y - y_min;
                 f32 rscale = HSD_Randf();
@@ -2515,7 +2519,7 @@ void grZebes_801DC744(s32 arg0, u8 arg1)
 #endif
         f32 bubble_r = yakumono_param->x74;
         f32 x_base = p_x + bubble_r;
-        f32 x_range = ZB_FMA(-2.0f, bubble_r, base[1].x - p_x); /* fnmsubs */
+        f32 x_range = ZB_NMSUB(2.0f, bubble_r, base[1].x - p_x); /* fnmsubs */
         f32 y_range = base[1].y - y_min;
         f64 mid_x = ZB_FMAD(0.5, x_range, x_base);
         f64 lo_x, hi_x, lo_y, hi_y, near_max_y, max_y;

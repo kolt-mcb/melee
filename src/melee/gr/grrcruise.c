@@ -42,9 +42,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define RC_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define RC_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define RC_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define RC_FMA(a, b, c) ((a) * (b) + (c))
+#define RC_NMSUB(a, b, c) RC_FMA(-(a), (b), (c))
 #define RC_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -740,7 +744,7 @@ void grRCruise_801FFADC(Ground_GObj* arg0)
         lb_8000B1CC(cam_jobj, NULL, &sp24);
         lbVector_Diff(&sp24, &sp18, &diff);
         temp_f4 = sp18.z / diff.z;
-        sp64.x = RC_FMA(-diff.x, temp_f4, sp18.x); /* fnmsubs */
+        sp64.x = RC_NMSUB(diff.x, temp_f4, sp18.x); /* fnmsubs */
         sp64.y = RC_FMA(-diff.y, temp_f4, sp18.y);
         sp64.z = 0.0f;
         lbVector_Sub(&sp64, &cam_offset2);

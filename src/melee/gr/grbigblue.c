@@ -50,9 +50,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define BB_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define BB_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define BB_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define BB_FMA(a, b, c) ((a) * (b) + (c))
+#define BB_NMSUB(a, b, c) BB_FMA(-(a), (b), (c))
 #define BB_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -4541,7 +4545,7 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
         f32 lat = *(f32*) (lane_gp + 0xE4);
         f32 height = *(f32*) (lane_gp + 0xF8);
 
-        rank_factor = BB_FMA(-drag, scale, lat) - height - heading_osc; /* fnmsubs */
+        rank_factor = BB_NMSUB(drag, scale, lat) - height - heading_osc; /* fnmsubs */
     }
 
     /* Collision/grounding check. grBigBlue_801EC58C answers -F32_MAX when no
@@ -5443,7 +5447,7 @@ bool grBigBlue_801EEF00(Ground_GObj* gobj, s32 index)
                 predicted = BB_FMA(spd, norm, pos);
                 total = 0.5F * total;
                 total = norm * total;
-                predicted = BB_FMA(-norm, total, predicted); /* fnmsubs */
+                predicted = BB_NMSUB(norm, total, predicted); /* fnmsubs */
 
                 if (predicted < target) {
                     scale = Ground_801C0498();
@@ -5473,7 +5477,7 @@ bool grBigBlue_801EEF00(Ground_GObj* gobj, s32 index)
                 total = -total;
                 total = 0.5F * total;
                 total = norm * total;
-                predicted = BB_FMA(-norm, total, predicted); /* fnmsubs */
+                predicted = BB_NMSUB(norm, total, predicted); /* fnmsubs */
 
                 if (predicted < target) {
                     scale = Ground_801C0498();

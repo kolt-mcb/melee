@@ -20,8 +20,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define LG_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define LG_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define LG_FMA(a, b, c) ((a) * (b) + (c))
+#define LG_NMSUB(a, b, c) LG_FMA(-(a), (b), (c))
 #endif
 
 ItemStateTable it_803F7EE8[] = {
@@ -236,7 +240,7 @@ void it_802D1830(Item_GObj* gobj)
     disc = ip->pos.y - ip->xDD4_itemVar.lugia.x64.y;
     x18 = attrs->x18;
     prod = 8.0f * x18;
-    sqrtval = my_sqrtf_accurate(LG_FMA(-prod, -disc, x18 * x18)); /* fnmsubs */
+    sqrtval = my_sqrtf_accurate(LG_NMSUB(prod, -disc, x18 * x18)); /* fnmsubs */
     ip->xDD4_itemVar.lugia.xE50.x = -((-x18 + sqrtval) / 2);
 }
 

@@ -35,9 +35,13 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define KG_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define KG_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define KG_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define KG_FMA(a, b, c) ((a) * (b) + (c))
+#define KG_NMSUB(a, b, c) KG_FMA(-(a), (b), (c))
 #define KG_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -1448,7 +1452,7 @@ void grKongo_801D7BBC(Ground_GObj* gobj)
                     }
                     event_kind = 3;
                 } else {
-                    roll = KG_FMA(-base_weight, 1.0f - box_rate, roll); /* fnmsubs */
+                    roll = KG_NMSUB(base_weight, 1.0f - box_rate, roll); /* fnmsubs */
                     if (roll < zero) {
                         rand_kind = HSD_Randi(3);
                         if (rand_kind == 0) {

@@ -67,9 +67,13 @@ const Vec3 it_803B8674 = { 0.0f, 0.0f, 0.0f };
 #if BUILD_TARGET_PC
 #include <math.h>
 #define SG_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define SG_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define SG_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define SG_FMA(a, b, c) ((a) * (b) + (c))
+#define SG_NMSUB(a, b, c) SG_FMA(-(a), (b), (c))
 #define SG_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -100,7 +104,7 @@ static inline f32 samus_grapple_calc_grav(f32 vel_y)
 {
     if (HSD_Randf() > 0.9) {
         if (vel_y < 0.0) {
-            return SG_FMA(-0.6f, HSD_Randf(), vel_y); /* fnmsubs */
+            return SG_NMSUB(0.6f, HSD_Randf(), vel_y); /* fnmsubs */
         } else {
             return SG_FMA(0.6f, HSD_Randf(), vel_y);
         }
@@ -1064,7 +1068,7 @@ static inline f32 it_802B9328_grav(f32 vely)
 
     if (HSD_Randf() > 0.9) {
         if (vely < 0.0) {
-            return SG_FMA(-one, HSD_Randf(), vely); /* fnmsubs */
+            return SG_NMSUB(one, HSD_Randf(), vely); /* fnmsubs */
         } else {
             return SG_FMA(one, HSD_Randf(), vely);
         }

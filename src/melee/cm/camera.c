@@ -488,9 +488,13 @@ void Camera_800293E0(void)
 #if BUILD_TARGET_PC
 #include <math.h>
 #define CM_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define CM_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #define CM_FMAD(a, b, c) fma((a), (b), (c))
 #else
 #define CM_FMA(a, b, c) ((a) * (b) + (c))
+#define CM_NMSUB(a, b, c) CM_FMA(-(a), (b), (c))
 #define CM_FMAD(a, b, c) ((a) * (b) + (c))
 #endif
 
@@ -1631,7 +1635,7 @@ void Camera_8002B0E0(void)
         } else {
             game_camera.x2BA = cm_803BCCA0.xE0;
         }
-        game_camera.x2BC = CM_FMA(-var_f2, cm_803BCCA0.xD4, game_camera.x2BC); /* fnmsubs 8002B1B4 */
+        game_camera.x2BC = CM_NMSUB(var_f2, cm_803BCCA0.xD4, game_camera.x2BC); /* fnmsubs 8002B1B4 */
         if (game_camera.x2BC < cm_803BCCA0.xDC) {
             game_camera.x2BC = cm_803BCCA0.xDC;
             return;

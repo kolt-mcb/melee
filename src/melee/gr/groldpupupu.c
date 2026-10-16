@@ -26,8 +26,12 @@
 #if BUILD_TARGET_PC
 #include <math.h>
 #define OP_FMA(a, b, c) fmaf((a), (b), (c))
+/* fnmsubs computes -(a*b - c): an exact-zero result is -0, where
+ * fmaf(-a, b, c) gives +0 -- and atan2f and friends tell them apart. */
+#define OP_NMSUB(a, b, c) (-fmaf((a), (b), -(c)))
 #else
 #define OP_FMA(a, b, c) ((a) * (b) + (c))
+#define OP_NMSUB(a, b, c) OP_FMA(-(a), (b), (c))
 #endif
 
 struct grOldpupupu_YakumonoParam {
@@ -399,7 +403,7 @@ void grOldPupupu_80210D10(Ground_GObj* gobj)
             if (cam_right < 200.0F) {
                 cam_right = 200.0F;
             }
-            x = OP_FMA(-(f32) count, step, 50.0F + cam_right); /* fnmsubs */
+            x = OP_NMSUB((f32) count, step, 50.0F + cam_right); /* fnmsubs */
         } else {
             step = 10.0F;
             if (cam_left > -200.0F) {
