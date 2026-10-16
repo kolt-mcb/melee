@@ -346,27 +346,43 @@ void grRCruise_801FF43C(Ground_GObj* arg) {}
 
 void grRCruise_801FF440(Ground_GObj* arg) {}
 
+#if BUILD_TARGET_PC
+/* mpColl calls a joint callback with all six of
+ * mpLib_JointCollisionCallback's arguments; grRCruise_802010A4 is defined
+ * with the first three. PowerPC and x86-64 ignore the rest; wasm traps the
+ * first time a fighter lands on one of the ship's platforms. */
+static void grRCruise_802010A4_cb(void* gobj, int id, CollData* coll,
+                                  int coll_x50, mpLib_GroundEnum kind,
+                                  float delta_y)
+{
+    grRCruise_802010A4(gobj, id, coll);
+}
+#define RCRUISE_JOINT_CB grRCruise_802010A4_cb
+#else
+#define RCRUISE_JOINT_CB (mpColl_Callback) (Event) grRCruise_802010A4
+#endif
+
 void grRCruise_801FF444(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     mpJointSetCb1(5, gobj, grRCruise_80200578);
-    mpJointSetCb1(27, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(36, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(37, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(38, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(39, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(40, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(41, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(42, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(43, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(28, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(29, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(30, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(31, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(32, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(33, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(34, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
-    mpJointSetCb1(35, gobj, (mpColl_Callback) (Event) grRCruise_802010A4);
+    mpJointSetCb1(27, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(36, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(37, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(38, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(39, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(40, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(41, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(42, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(43, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(28, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(29, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(30, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(31, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(32, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(33, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(34, gobj, RCRUISE_JOINT_CB);
+    mpJointSetCb1(35, gobj, RCRUISE_JOINT_CB);
     gp->u.rcruise.x10 = 0;
 }
 
