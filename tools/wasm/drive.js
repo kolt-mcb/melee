@@ -12,6 +12,9 @@
  *   profile:start   start the CPU profiler (wasm functions by name)
  *   profile:stop    stop it; the top functions by self time go to the
  *                   console log and the whole profile to <outdir>/cpu.cpuprofile
+ *   stacks:N        pause the page N times, half a second apart, and log
+ *                   where it was each time (the profiler cannot start on a
+ *                   page whose thread never yields; a debugger pause can)
  *   file:PATH       give the page's disc-image input this file (the shell's
  *                   picker, without a dialog)
  *
@@ -86,11 +89,14 @@ function keyParams(code) {
         Promise.race([send(method, params), sleep(ms).then(() => null)]);
 
     const log = [];
+    let onPaused = null;
     await new Promise(r => ws.onopen = r);
     ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data);
         if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); return; }
-        if (m.method === 'Runtime.consoleAPICalled') {
+        if (m.method === 'Debugger.paused') {
+            if (onPaused) onPaused(m.params);
+        } else if (m.method === 'Runtime.consoleAPICalled') {
             const text = (m.params.args || [])
                 .map(a => a.value !== undefined ? a.value : (a.description || '')).join(' ');
             log.push(`[${m.params.type}] ${text}`);
@@ -151,6 +157,20 @@ function keyParams(code) {
                     log.push(`[profile] ${(100 * c / total).toFixed(1).padStart(5)}%  ${name}`);
                 }
             }
+        } else if (op === 'stacks') {
+            await sendT('Debugger.enable', {});
+            for (let i = 0; i < parseInt(arg || '10', 10); i++) {
+                const paused = new Promise((res) => { onPaused = res; });
+                await sendT('Debugger.pause', {});
+                const p = await Promise.race([paused, sleep(10000).then(() => null)]);
+                onPaused = null;
+                if (!p) { log.push(`[stack] ${i}: no pause within 10 s`); continue; }
+                log.push(`[stack] ${i}: ` + p.callFrames.slice(0, 14)
+                    .map((f) => f.functionName || '(anon)').join(' < '));
+                await sendT('Debugger.resume', {});
+                await sleep(500);
+            }
+            await sendT('Debugger.disable', {});
         } else if (op === 'file') {
             const doc = await sendT('DOM.getDocument', {});
             const q = await sendT('DOM.querySelector',

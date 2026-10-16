@@ -2100,6 +2100,51 @@ static GLsizeiptr g_vbo_seg_bytes;
 static GLsync g_vbo_fence[PC_VBO_SEGS];
 static unsigned g_vbo_seg;
 
+#if defined(__EMSCRIPTEN__)
+/* The web ring is a CPU copy, sent to the GPU as one fresh store per draw.
+ *
+ * Writing the ring with glBufferSubData -- about 400 calls a match frame,
+ * each into a store an earlier draw of the same frame still reads -- is
+ * cheap on most drivers but not behind ANGLE's Metal backend (Chrome on a
+ * Mac), which keeps a buffer the GPU is using intact by copying it whole
+ * before the write: 400 copies of 3.5 MB a frame. A MacBook ran a match at
+ * 2 fps with the page's own thread idle; the GPU process was the one busy.
+ *
+ * So the streams land in g_web_ring, and pc_web_vbo_commit -- called before
+ * every draw that reads the ring -- hands the GPU what was written since
+ * the last commit with glBufferData: a new store exactly that size, which
+ * no draw can be using, so nothing is copied but the data itself. Each
+ * commit ends a "unit"; the next write starts the ring again at offset 0
+ * and moves the lap on, which makes pc_ubo_commit stream the uniform block
+ * again rather than point into a store that has been replaced. */
+static unsigned char* g_web_ring;
+static int g_web_pending;   /* bytes written since the last commit */
+static int g_web_committed; /* a commit since the last write: start a unit */
+static void pc_web_unit_begin(void)
+{
+    if (g_web_committed) {
+        g_web_committed = 0;
+        g_vbo_off = 0;
+        g_vbo_lap++;
+    }
+}
+static void pc_web_vbo_commit(void)
+{
+    if (!g_web_pending || g_web_ring == NULL) return;
+    /* The copy target: binding g_vbo there disturbs neither the array
+     * binding the state shadow tracks nor any VAO, and WebGL allows it
+     * for a buffer that also holds indices. */
+    glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
+    glBufferData(GL_COPY_WRITE_BUFFER, g_vbo_off, g_web_ring, GL_STREAM_DRAW);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+    g_web_pending = 0;
+    g_web_committed = 1;
+}
+#define PC_VBO_COMMIT() pc_web_vbo_commit()
+#else
+#define PC_VBO_COMMIT() ((void) 0)
+#endif
+
 /* An extension entry point is not in the ES link surface on Android. */
 extern void* SDL_GL_GetProcAddress(const char* proc);
 
@@ -2362,6 +2407,12 @@ static void pc_vbo_alloc(void)
         glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, GL_STREAM_DRAW);
     }
     g_vbo_seg_bytes = g_vbo_ring_bytes / (GLsizeiptr) PC_VBO_SEGS;
+#if defined(__EMSCRIPTEN__)
+    free(g_web_ring);
+    g_web_ring = (unsigned char*) malloc((size_t) g_vbo_ring_bytes);
+    g_web_pending = 0;
+    g_web_committed = 0;
+#endif
     fprintf(stderr, "[VBO] mode %s, ring %ld KB (EXT_buffer_storage %s)\n",
             g_vbo_mode == PC_VBO_PERSIST ? "persist" :
             g_vbo_mode == PC_VBO_SUBDATA ? "subdata" : "map",
@@ -2464,12 +2515,21 @@ static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 static GLintptr g_ubo_reserve(void);
 static void pc_vbo_ring_reserve(GLintptr bytes)
 {
+#if defined(__EMSCRIPTEN__)
+    pc_web_unit_begin();
+#endif
     g_vbo_off = (g_vbo_off + 7) & ~(GLintptr) 7;
     if (bytes > g_vbo_ring_bytes) return; /* the streams clamp; not this path's problem */
     if (g_vbo_off + bytes > g_vbo_ring_bytes) {
+#if defined(__EMSCRIPTEN__)
+        /* As the orphan does natively: what was written and not yet drawn
+         * is dropped. */
+        g_web_pending = 0;
+#else
         if (g_vbo_mode != PC_VBO_PERSIST) {
             glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, GL_STREAM_DRAW);
         }
+#endif
         g_vbo_off = 0;
         g_vbo_lap++;
     }
@@ -2541,6 +2601,7 @@ static void pc_batch_flush(void)
         if (ok && n > 0) {
             GLintptr ioff = pc_vbo_stream_raw(g_istage, (GLsizeiptr) (n * sizeof(u16)));
             pc_gl_crumb_draw();
+            PC_VBO_COMMIT();
             glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT,
                                      (const void*) ioff, base);
             pc_gl_crumb_after();
@@ -2554,6 +2615,7 @@ static void pc_batch_flush(void)
     for (i = 0; i < g_batch_n; i++) {
         g_batch_first[i] += base;
     }
+    PC_VBO_COMMIT();
     if (g_batch_n == 1) {
         pc_gl_crumb_draw();
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
@@ -2731,6 +2793,9 @@ static GLint pc_vbo_stream(const Vertex* src, unsigned count)
 static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
 {
     GLintptr off;
+#if defined(__EMSCRIPTEN__)
+    pc_web_unit_begin();
+#endif
     g_vbo_off = (g_vbo_off + 7) & ~(GLintptr) 7;
     if (bytes > g_vbo_ring_bytes) {
         if (!g_batch_flushing) pc_batch_flush();
@@ -2744,12 +2809,19 @@ static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
          * staged vertices, and those are being written fresh, so it must not
          * re-enter here. */
         if (!g_batch_flushing) pc_batch_flush();
+#if defined(__EMSCRIPTEN__)
+        /* The flush committed (a new unit at offset 0 is due) or there was
+         * nothing to flush; either way the copy starts over. */
+        g_web_pending = 0;
+        g_web_committed = 0;
+#else
         /* Immutable storage cannot be orphaned -- the segment fences are
          * what make recycling safe there. */
         if (g_vbo_mode != PC_VBO_PERSIST) {
             glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL,
                          GL_STREAM_DRAW);
         }
+#endif
         g_vbo_off = 0;
         g_vbo_lap++;
     }
@@ -2764,8 +2836,11 @@ static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes)
      * The fallback below is what the emulation would have degenerated into
      * anyway, so call it directly. The ring still earns its keep: writes go
      * to fresh bytes and the orphan-on-wrap above still lets the driver hand
-     * back new storage rather than wait on frames in flight. */
-    glBufferSubData(GL_ARRAY_BUFFER, g_vbo_off, bytes, src);
+     * back new storage rather than wait on frames in flight.
+     *
+     * Into the CPU copy, not the GPU: pc_web_vbo_commit sends it. */
+    memcpy(g_web_ring + g_vbo_off, src, (size_t) bytes);
+    g_web_pending = 1;
 #else
     if (g_vbo_mode == PC_VBO_PERSIST) {
         pc_vbo_seg_sync(g_vbo_off);
@@ -8257,6 +8332,7 @@ static void bridge_upload_and_draw(void)
                               (void *)(uintptr_t)offsetof(Vertex, col));
         
         pc_ubo_commit();
+        PC_VBO_COMMIT();
         glDrawArrays(GL_TRIANGLES, g_vbo_first, 6);
         pc_frame_trace("quad4");
         /* PC diag: quad draw summary (MELEE_MTR) */
@@ -11911,6 +11987,7 @@ static void dl_gpu_emit(void)
     if (absent & 4) dl_gpu_attrib(3, g_state.last_tex0[0], g_state.last_tex0[1], 0.0f, 1.0f);
     if (absent & 8) dl_gpu_attrib(4, g_state.last_tex1[0], g_state.last_tex1[1], 0.0f, 1.0f);
     pc_gl_crumb_draw();
+    PC_VBO_COMMIT();
     glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) e->gpu_icount, GL_UNSIGNED_SHORT,
                              (const void*) (uintptr_t) e->gpu_ioff, e->gpu_vbase);
     pc_gl_crumb_after();
