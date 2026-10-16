@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "grinishie2.h"
 
 #include <Runtime/platform.h>
@@ -359,6 +361,16 @@ void grInishie2_801FD018(HSD_GObj* gobj)
 void grInishie2_801FD0B4(HSD_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_I2TIMER") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr, "[I2TIMER] gframe=%u map=%d b1=%d b2=%d xC6=%d xC8=%d\n",
+                (unsigned) gm_GetFrameCount(), (int) gp->map_id,
+                (int) gp->u.inishie2.xC4_flags.b1,
+                (int) gp->u.inishie2.xC4_flags.b2, (int) gp->u.inishie2.xC6,
+                (int) gp->u.inishie2.xC8);
+    }
+#endif
 
     if (gp->u.inishie2.xC4_flags.b1) {
         s16 timer = gp->u.inishie2.xC6--;
@@ -407,6 +419,15 @@ bool grInishie2_801FD21C(Ground_GObj* gobj)
 void grInishie2_801FD224(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
+#if BUILD_TARGET_PC
+    if (getenv("MELEE_I2TIMER") != NULL) {
+        extern u32 gm_GetFrameCount(void);
+        fprintf(stderr, "[I2PLAT] gframe=%u map=%d b0=%d xC6=%d xC8=%d\n",
+                (unsigned) gm_GetFrameCount(), (int) gp->map_id,
+                (int) gp->u.inishie2.xC4_flags.b0, (int) gp->u.inishie2.xC6,
+                (int) gp->u.inishie2.xC8);
+    }
+#endif
 
     if (!gp->u.inishie2.xC4_flags.b0) {
         s16 counter = gp->u.inishie2.xC6;
