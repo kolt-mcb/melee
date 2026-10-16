@@ -2239,7 +2239,13 @@ void lbAudioAx_8002785C(void)
             }
         }
     } else {
+#if BUILD_TARGET_PC
+        /* Every fighter slot: a character only in slots five to eight had no
+         * sound bank and made no sound. */
+        for (i = 0; i < GM_MAX_PLAYERS; i++) {
+#else
         for (i = 0; i < 4; i++) {
+#endif
             if (Player_GetPlayerSlotType(i) != Gm_PKind_NA) {
                 result |= lbAudioAx_80026E84(Player_GetPlayerCharacter(i));
             }
