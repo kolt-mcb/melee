@@ -1084,6 +1084,17 @@ int lb_8001BFD8(int chan, lbCardNew_SnapshotEntry* snapshot_entries,
     s32 result;
     u8 _[0x18];
 
+#if BUILD_TARGET_PC
+    /* There is no memory card here, and more to the point nothing ever says
+     * so: the CARD*Async stubs return success and never call the completion
+     * callback, so the busy flag this function waits on below is never
+     * cleared and the wait does not end -- camera mode and the snapshot
+     * screen both hung here until the frame watchdog fired. Report the card
+     * as absent (LbCardResult_DeviceError, 0xF, is what the result mapping
+     * turns CARD_RESULT_NOCARD into), which every caller already handles:
+     * the snapshot list stays empty. */
+    return LbCardResult_DeviceError;
+#endif
     resetState(chan, 0, 0, 0);
     setupTask(LbCardNewTask_Mount, resultMask_16);
     setupTask(LbCardNewTask_Check, resultMask_Ready | resultMask_Malformed);

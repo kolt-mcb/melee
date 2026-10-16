@@ -789,7 +789,7 @@ HSD_JObj* mnName_802388D4(HSD_GObj* gobj, u8 index)
     HSD_JObj* result;
 
     if (index < 0x18) {
-        HSD_JObj* jobj = *(HSD_JObj**) (p + 0x30);
+        HSD_JObj* jobj = MNNAME_JOBJ(p, 10);
         s32 i;
 
         result = (jobj == NULL) ? NULL : jobj->child;
@@ -803,11 +803,11 @@ HSD_JObj* mnName_802388D4(HSD_GObj* gobj, u8 index)
 
     switch (index) {
     case 0x18:
-        return *(HSD_JObj**) (p + 0x24);
+        return MNNAME_JOBJ(p, 7);
     case 0x19:
-        return *(HSD_JObj**) (p + 0x18);
+        return MNNAME_JOBJ(p, 4);
     case 0x1A:
-        return *(HSD_JObj**) (p + 0x1C);
+        return MNNAME_JOBJ(p, 5);
     }
 
     return (HSD_JObj*) gobj;
@@ -1548,7 +1548,13 @@ HSD_GObj* mnName_8023A59C(u8 arg0)
                        archive->matanim_joint, archive->shapeanim_joint);
     HSD_JObjReqAnimAll(root_jobj[0], 0.0f);
     HSD_JObjAnimAll(root_jobj[0]);
+#if BUILD_TARGET_PC
+    user_data = (MnName_GObj*) HSD_MemAlloc(sizeof(MnName_GObj));
+#else
+    /* Not sizeof: HSD_GObj holds a u64, so the struct is padded out to
+     * 0x48 and the console asked for 0x44. */
     user_data = (MnName_GObj*) HSD_MemAlloc(0x44);
+#endif
     HSD_ASSERTREPORT(0x67CU, user_data, "Can't get user_data.\n");
     GObj_InitUserData(gobj, 0U, HSD_Free, user_data);
     *(u8*) &user_data->gobj.classifier = (u8) mn_804A04F0.cur_menu;
@@ -1560,8 +1566,12 @@ HSD_GObj* mnName_8023A59C(u8 arg0)
     user_data->text = NULL;
     user_data->text2 = NULL;
     for (i = 0; i < 0xD; i++) {
+#if BUILD_TARGET_PC
+        lb_80011E24(root_jobj[0], &MNNAME_JOBJ(user_data, i), i, -1);
+#else
         lb_80011E24(root_jobj[0],
                     (HSD_JObj**) ((u8*) user_data + (i << 2) + 8), i, -1);
+#endif
     }
     if (mn_804A04F0.x10 == 1) {
         struct mn_80231634_t* p =
@@ -1588,7 +1598,13 @@ HSD_GObj* mnName_8023A59C(u8 arg0)
         mnName_80239A24((HSD_GObj*) user_data);
         mnName_80238754_noinline((HSD_GObj*) user_data);
     }
+#if BUILD_TARGET_PC
+    /* Word 9 of the user_data on the console is joint 7 (+0x24); see
+     * MNNAME_JOBJ. */
+    jobj7[0] = MNNAME_JOBJ(user_data, 7);
+#else
     jobj7[0] = ((HSD_JObj**) user_data)[9];
+#endif
     HSD_JObjReqAnimAll(jobj7[0],
                        mnName_804D4BD0[mn_804A04F0.hovered_selection == 0x18]);
     HSD_JObjAnimAll(jobj7[0]);
@@ -1690,6 +1706,14 @@ static inline void mnName_InitNameDisplayOrder(void)
     HSD_GObj_80390CD4(mnName_8023A59C(1U));
 }
 
+#if BUILD_TARGET_PC
+/* Defined below, where the console's data order puts them. */
+static char mnName_AutoNameUsName[];
+static char mnName_RefuseNameUsName[];
+static char mnName_AutoNameName[];
+static char mnName_RefuseNameName[];
+#endif
+
 s32 mnName_8023AC40(void)
 {
     HSD_Archive* archive = mn_804D6BB8;
@@ -1730,6 +1754,23 @@ s32 mnName_8023AC40(void)
         &mnNameNew_804A0720[0].shapeanim_joint,
         "MenMainSbaseEtNw_Top_shapeanim_joint", NULL);
 
+#if BUILD_TARGET_PC
+    /* The four symbol names, by name. mnName_803ED538 is 0x30 bytes of
+     * AnimLoopSettings; +0x4D0 is a console address that happens to be the
+     * string mnName_AutoNameUsName, and here it is 1232 bytes past the end
+     * of an object. The strings are in this file already. */
+    if (lbLang_IsSavedLanguageUS()) {
+        lbArchive_LoadSections(archive, (void**) &AutoNamesList,
+                               mnName_AutoNameUsName,
+                               (void**) &NotAllowedNamesList,
+                               mnName_RefuseNameUsName, NULL);
+    } else {
+        lbArchive_LoadSections(archive, (void**) &AutoNamesList,
+                               mnName_AutoNameName,
+                               (void**) &NotAllowedNamesList,
+                               mnName_RefuseNameName, NULL);
+    }
+#else
     if (lbLang_IsSavedLanguageUS()) {
         lbArchive_LoadSections(
             archive, (void**) &AutoNamesList, (char*) mnName_803ED538 + 0x4D0,
@@ -1739,6 +1780,7 @@ s32 mnName_8023AC40(void)
             archive, (void**) &AutoNamesList, (char*) mnName_803ED538 + 0x4F8,
             (void**) &NotAllowedNamesList, (char*) mnName_803ED538 + 0x508, NULL);
     }
+#endif
 
     mn_804A04F0.prev_menu = mn_804A04F0.cur_menu;
     mn_804A04F0.cur_menu = 0x12;

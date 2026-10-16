@@ -242,7 +242,20 @@ void fn_8025A090(HSD_GObj* gobj)
     jobj = GET_JOBJ(gobj);
     temp_r30 = HSD_GObjGetUserData(gobj);
     var_r3 = mnStageSel_804D6CAE;
-    if (mnStageSel_803F06D0[mnStageSel_804D6CAE].x8 < 2) {
+#if BUILD_TARGET_PC
+    /* 0x1E is the stage select's "nothing hovered" value and the table has
+     * exactly 0x1E entries, so this reads one past the end of it every frame
+     * the ring is between panels. The game bounds the same index itself
+     * thirty lines up (`mnStageSel_804D6CAE < 0x1E && ...`); this is that
+     * test, and it cannot change the outcome -- the console's read lands in
+     * whatever global follows and has always given < 2, which is why the
+     * missing bound has never mattered there. */
+    if (mnStageSel_804D6CAE >= 0x1E ||
+        mnStageSel_803F06D0[mnStageSel_804D6CAE].x8 < 2)
+#else
+    if (mnStageSel_803F06D0[mnStageSel_804D6CAE].x8 < 2)
+#endif
+    {
         var_r3 = 0x1E;
     }
     if (temp_r30->x0 != var_r3) {
@@ -261,8 +274,17 @@ void fn_8025A090(HSD_GObj* gobj)
     if (temp_r30->x4 < 0x5A) {
         temp_r30->x4++;
         if (temp_r30->x4 == 0x14) {
-            HSD_JObjReqAnimAll(jobj,
-                               50.0F * mnStageSel_803F06D0[temp_r30->x0].x9);
+#if BUILD_TARGET_PC
+            /* Same one-past-the-end index as thirty lines up: x0 holds the
+             * "nothing hovered" value 0x1E, which is also the table's
+             * length. The console reads the global that follows; here it is
+             * the end of the object. */
+            if (temp_r30->x0 < 0x1E)
+#endif
+            {
+                HSD_JObjReqAnimAll(
+                    jobj, 50.0F * mnStageSel_803F06D0[temp_r30->x0].x9);
+            }
         }
         if (temp_r30->x4 == 0x45) {
             HSD_ForeachAnim(jobj, JOBJ_TYPE, ALL_TYPE_MASK, HSD_AObjStopAnim,

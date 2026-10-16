@@ -83,8 +83,23 @@ static u16 mnDataDel_803EF8C8[] = {
     0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC6,
 };
 static Vec3 lbl_803EF8D4 = { -5.5F, -2.8F, 23 };
+#if BUILD_TARGET_PC
+/* One array, not three globals. They are consecutive on the console --
+ * 0x804A0918, +0x10, +0x20 -- and mndatadel.c indexes across them from the
+ * first, which is a valid address there only because the console's linker
+ * put them 0x10 apart in that order. A StaticModelDesc is four pointers, so
+ * the stride here is 0x20 and the order is the host linker's business;
+ * `assets[1]` and `assets[2]` addressed other objects entirely, and
+ * lbArchive_LoadSections wrote eight archive symbols into them. Same shape
+ * as mnVibration_804A0868 in mnvibration.c. */
+static StaticModelDesc mnDataDel_assets[3];
+#define mnDataDel_804A0918 (mnDataDel_assets[0])
+#define mnDataDel_804A0928 (mnDataDel_assets[1])
+#define mnDataDel_804A0938 (mnDataDel_assets[2])
+#else
 static StaticModelDesc mnDataDel_804A0918;
 static StaticModelDesc mnDataDel_804A0928;
 static StaticModelDesc mnDataDel_804A0938;
+#endif
 
 #endif

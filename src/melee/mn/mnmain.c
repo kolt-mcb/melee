@@ -1036,7 +1036,18 @@ void mn_8022A440(HSD_GObj* gp, HSD_JObj* root, MainMenuSelection selection)
 void mn_8022A5D0(HSD_GObj* gp, MainMenuSelection selection)
 {
     u8 _[8];
+#if BUILD_TARGET_PC
+    /* Ten, not seven: the loop below fills one entry per option of the menu
+     * being drawn, and Special Melee has ten (mn_803EB6B0[12], and
+     * mn_803EAE68 lists ten joints to match). On the console the three extra
+     * writes land in this frame's padding and are read back from it, so the
+     * screen works; here they were three live locals further down the frame.
+     * The size is PC-only because the GameCube build's frame layout is part
+     * of what makes this function match. */
+    HSD_JObj* spA0[10];
+#else
     HSD_JObj* spA0[7];
+#endif
     HSD_JObj* sp84[7];
     HSD_JObj* sp80;
     Vec3 sp74;

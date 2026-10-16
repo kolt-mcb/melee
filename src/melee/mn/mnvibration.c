@@ -127,6 +127,55 @@ static u16 mnVibration_PortPanelJointIds[4] = { 0x16, 0x15, 0x14, 0x13 };
 s32 mnVibration_804D4FF0 = 0x20010000;
 SDATA char mnVibration_804D4FF4[] = "jobj.h";
 SDATA char mnVibration_804D4FFC[] = "jobj";
+#if BUILD_TARGET_PC
+/* One object, not twenty globals. This file reads its archive symbol names
+ * (and the floats around them) through
+ *
+ *     strings = (MnVibrationDataLayout*) &mnVibration_803EECE0;
+ *
+ * and mnVibration_803EECE0 is twelve bytes long. On the console that cast is
+ * sound: the nineteen objects after it -- two more AnimLoopSettings, the
+ * name position, and the sixteen archive symbol names -- are laid out in
+ * .data in exactly the order MnVibrationDataLayout declares, ending where
+ * mnSound_803EEED8 begins. The struct IS the console's layout, written down.
+ *
+ * Here they are twenty separate globals and the host linker owes nothing
+ * about their order, so every `strings->...` read past the first twelve
+ * bytes was whatever happened to follow -- which is how the rumble screen
+ * came to ask the archive for a symbol called "jobj.h" and then use what it
+ * got back.
+ *
+ * Defining the layout for real and pointing each console name at its member
+ * fixes the cast and every name at once, and leaves the GameCube build with
+ * the objects it has to have. */
+static MnVibrationDataLayout mnVibration_layout = {
+    { 0.0f, 20.0f, -0.1f },
+    { 50.0f, 70.0f, -0.1f },
+    { 0.0f, 14.0f, -0.1f },
+    { -0.4f, 0.5f, 0.0f },
+    "Can't get user_data.\n",
+    "mnvibration.c",
+    "user_data",
+    "MenMainConVi_Top_joint",
+    "MenMainConVi_Top_animjoint",
+    "MenMainConVi_Top_matanim_joint",
+    "MenMainConVi_Top_shapeanim_joint",
+    "MenMainCtlVi_Top_joint",
+    "MenMainCtlVi_Top_animjoint",
+    "MenMainCtlVi_Top_matanim_joint",
+    "MenMainCtlVi_Top_shapeanim_joint",
+    "MenMainOnoffVi_Top_joint",
+    "MenMainOnoffVi_Top_animjoint",
+    "MenMainOnoffVi_Top_matanim_joint",
+    "MenMainOnoffVi_Top_shapeanim_joint",
+    "MenMainCursorVi_Top_joint",
+};
+
+#define mnVibration_803EECE0 (mnVibration_layout.intro_anim)
+#define mnVibration_803EECEC (mnVibration_layout.main_anim)
+#define mnVibration_803EECF8 (mnVibration_layout.cursor_anim)
+#define mnVibration_803EED04 (mnVibration_layout.name_pos)
+#else
 AnimLoopSettings mnVibration_803EECE0 = { 0.0f, 20.0f, -0.1f };
 AnimLoopSettings mnVibration_803EECEC = { 50.0f, 70.0f, -0.1f };
 AnimLoopSettings mnVibration_803EECF8 = { 0.0f, 14.0f, -0.1f };
@@ -155,6 +204,7 @@ static char mnVibration_803EEEB8[0x20] = "MenMainCursorVi_Top_joint";
 
 #ifdef MUST_MATCH
 #pragma pop
+#endif
 #endif
 
 // --- Globals ---
@@ -185,10 +235,31 @@ typedef struct MnVibrationData {
 } MnVibrationData;
 
 // The asset blocks are also addressed as a contiguous array in Init.
+#if BUILD_TARGET_PC
+/* One array, not four globals. The four are consecutive on the console --
+ * 0x804A0868, +0x10, +0x20, +0x30 -- and this file indexes across them from
+ * the first (`assets = &mnVibration_804A0868; ... &assets[3].shapeanim`),
+ * which is only a valid address because the console's linker put them 0x10
+ * apart in that order.
+ *
+ * Here the struct is four pointers of eight bytes, so the stride is 0x20,
+ * and the host linker owes nothing about order or spacing. `assets[3]` then
+ * addressed memory belonging to something else entirely, and
+ * lbArchive_LoadSections wrote four archive symbols into it -- which is what
+ * killed the rumble screen before it drew a frame. Making them one array
+ * makes the indexing mean what it means on the console, whatever the stride
+ * turns out to be. */
+static MnVibrationJointAssets mnVibration_assets[4];
+#define mnVibration_804A0868 (mnVibration_assets[0])
+#define mnVibration_804A0878 (mnVibration_assets[1])
+#define mnVibration_804A0888 (mnVibration_assets[2])
+#define mnVibration_804A0898 (mnVibration_assets[3])
+#else
 static MnVibrationJointAssets mnVibration_804A0868;
 static MnVibrationJointAssets mnVibration_804A0878;
 static MnVibrationJointAssets mnVibration_804A0888;
 static MnVibrationJointAssets mnVibration_804A0898;
+#endif
 
 /// --- Function Implementation ---
 
