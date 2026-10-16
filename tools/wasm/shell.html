@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melee (web port)</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #151922; --line: #2a3140; --text: #e6e9ef;
+    --muted: #9aa3b2; --accent: #e8b931; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  /* The game draws 4:3 inside a 16:9 surface; fit it whole, letterboxed. The
+   * canvas must have no border or padding. */
+  #canvas { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important;
+    object-fit: contain; background: #000; border: 0; outline: none; display: block; }
+  #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(ellipse at top, #1b2130, var(--bg) 70%); z-index: 2; }
+  #overlay.hidden { display: none; }
+  .card { width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 28px; box-shadow: 0 20px 60px #0008; }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .2px; }
+  .sub { margin: 0 0 20px; color: var(--muted); }
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center;
+    transition: border-color .15s, background .15s; }
+  .drop.over { border-color: var(--accent); background: #e8b93112; }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+    background: #222938; color: var(--text); padding: 10px 16px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 14px; }
+  #status { min-height: 1.5em; margin-top: 14px; text-align: center; color: var(--muted); }
+  #status.bad { color: var(--bad); }
+  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  td { padding: 3px 4px; border-bottom: 1px solid #ffffff0d; }
+  td:first-child { color: var(--muted); width: 45%; }
+  kbd { font: 12px ui-monospace, monospace; background: #0b0d12; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+  #hud { position: fixed; top: 10px; right: 10px; z-index: 3; display: flex; gap: 6px; opacity: 0;
+    transition: opacity .3s; }
+  body:hover #hud { opacity: .85; }
+  #hud button { padding: 6px 10px; font-size: 13px; background: #000a; }
+  #help { position: fixed; inset: 0; display: none; place-items: center; z-index: 4; background: #0009; padding: 16px; }
+  #help.open { display: grid; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+
+<div id="hud">
+  <button id="btn-help" title="Controls">Controls</button>
+  <button id="btn-full" title="Fullscreen">Fullscreen</button>
+</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>Super Smash Bros. Melee</h1>
+    <p class="sub">An unofficial port of the decompilation, running in your browser.
+      It needs your own disc image: NTSC-U, revision 1.02 (GALE01).</p>
+    <div class="drop" id="drop">
+      <div>Drop your <b>.iso</b> here, or</div>
+      <div class="row">
+        <button class="primary" id="btn-pick">Choose disc image…</button>
+        <button id="btn-resume" hidden></button>
+      </div>
+      <input type="file" id="file" accept=".iso,.gcm" hidden>
+    </div>
+    <div id="status">Loading the engine…</div>
+    <p class="note">The file never leaves your computer: the game reads it in place,
+      piece by piece, as it needs it. Nothing is uploaded and no game data is hosted here.</p>
+    <details>
+      <summary>Controls</summary>
+      <table id="controls"></table>
+    </details>
+  </div>
+</div>
+
+<div id="help"><div class="card"><h1>Controls</h1><table id="controls2"></table>
+  <div class="row"><button id="btn-help-close">Close</button></div></div></div>
+
+<script>
+  /* Keyboard map: src/pc_stub/undef_stubs.c, poll_keyboard_to_pad. */
+  const CONTROLS = [
+    ['Move (control stick)', '<kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>'],
+    ['C-stick', '<kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd>'],
+    ['A (attack, confirm)', '<kbd>Z</kbd>'],
+    ['B (special, back)', '<kbd>X</kbd>'],
+    ['X / Y (jump)', '<kbd>Space</kbd> / <kbd>V</kbd>'],
+    ['L / R (shield)', '<kbd>Shift</kbd> / <kbd>Alt</kbd>'],
+    ['Z (grab)', '<kbd>C</kbd> or <kbd>/</kbd>'],
+    ['Start', '<kbd>Enter</kbd>'],
+    ['Gamepad', 'Plug it in and press a button; it takes over player 1.'],
+  ];
+  for (const id of ['controls', 'controls2']) {
+    document.getElementById(id).innerHTML =
+      CONTROLS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $('status');
+  const setStatus = (text, bad) => { statusEl.textContent = text; statusEl.classList.toggle('bad', !!bad); };
+
+  let resolveIso;
+  const isoReady = new Promise((r) => { resolveIso = r; });
+  let engineLoaded = false;
+
+  var Module = {
+    canvas: $('canvas'),
+    meleeIsoReady: isoReady,
+    print: (t) => console.log(t),
+    printErr: (t) => console.error(t),
+    setStatus: (t) => { if (t && !engineLoaded) setStatus(t); },
+    onRuntimeInitialized: () => {},
+  };
+
+  /* Chromium can remember the file between visits; others ask each time. */
+  const canRemember = 'showOpenFilePicker' in window && 'indexedDB' in window;
+  function idb(mode, fn) {
+    return new Promise((res, rej) => {
+      const open = indexedDB.open('melee-web', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('kv');
+      open.onerror = () => rej(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction('kv', mode);
+        const req = fn(tx.objectStore('kv'));
+        tx.oncomplete = () => res(req && req.result);
+        tx.onerror = () => rej(tx.error);
+      };
+    });
+  }
+  const saveHandle = (h) => idb('readwrite', (s) => s.put(h, 'iso')).catch(() => {});
+  const loadHandle = () => idb('readonly', (s) => s.get('iso')).catch(() => null);
+
+  function whenEngine() {
+    return new Promise((res) => {
+      const t = () => (Module.meleeIsoOpen ? res() : setTimeout(t, 50));
+      t();
+    });
+  }
+
+  let busy = false;
+  async function useFile(file, handle) {
+    if (busy) return;
+    busy = true;
+    try {
+      setStatus(`Reading ${file.name}…`);
+      await whenEngine();
+      await Module.meleeIsoOpen(file);
+      if (handle) saveHandle(handle);
+      setStatus('Starting…');
+      $('overlay').classList.add('hidden');
+      engineLoaded = true;
+      $('canvas').focus();
+      resolveIso();
+    } catch (e) {
+      setStatus(e.message || String(e), true);
+      busy = false;
+    }
+  }
+
+  $('btn-pick').onclick = async () => {
+    if (canRemember) {
+      try {
+        const [h] = await showOpenFilePicker({
+          types: [{ description: 'GameCube disc image', accept: { 'application/octet-stream': ['.iso', '.gcm'] } }],
+        });
+        return useFile(await h.getFile(), h);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+    $('file').click();
+  };
+  $('file').onchange = (e) => e.target.files[0] && useFile(e.target.files[0]);
+
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => {
+    e.preventDefault(); drop.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => {
+    e.preventDefault(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', async (e) => {
+    const item = e.dataTransfer.items && e.dataTransfer.items[0];
+    if (item && item.getAsFileSystemHandle) {
+      try {
+        const h = await item.getAsFileSystemHandle();
+        if (h && h.kind === 'file') return useFile(await h.getFile(), h);
+      } catch (err) { /* fall through to the plain File */ }
+    }
+    const f = e.dataTransfer.files[0];
+    if (f) useFile(f);
+  });
+
+  if (canRemember) {
+    loadHandle().then((h) => {
+      if (!h) return;
+      const b = $('btn-resume');
+      b.textContent = `Continue with ${h.name}`;
+      b.hidden = false;
+      b.onclick = async () => {
+        try {
+          if ((await h.queryPermission({ mode: 'read' })) !== 'granted' &&
+              (await h.requestPermission({ mode: 'read' })) !== 'granted') return;
+          useFile(await h.getFile(), h);
+        } catch (e) {
+          setStatus('That file is no longer available; choose it again.', true);
+          b.hidden = true;
+        }
+      };
+    });
+  }
+
+  $('btn-full').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+    $('canvas').focus();
+  };
+  $('btn-help').onclick = () => $('help').classList.add('open');
+  $('btn-help-close').onclick = () => { $('help').classList.remove('open'); $('canvas').focus(); };
+
+  window.addEventListener('error', (e) => setStatus(`Error: ${e.message}`, true));
+  /* Browsers keep audio suspended until a gesture; the click that chose the
+   * disc counts, but resume on any key too in case the context began later. */
+  const resumeAudio = () => {
+    const ctx = Module.SDL2 && Module.SDL2.audioContext;
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+  };
+  window.addEventListener('keydown', resumeAudio);
+  window.addEventListener('pointerdown', resumeAudio);
+
+  whenEngine().then(() => setStatus(''));
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>
