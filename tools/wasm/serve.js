@@ -173,7 +173,15 @@ function wsAccept(req, socket) {
 
 const server = PLAIN ? http.createServer(handler) : https.createServer(certificate(), handler);
 server.on('upgrade', (req, socket) => {
-    if (new URL(req.url, 'http://x').pathname !== '/net') return socket.destroy();
+    const p = new URL(req.url, 'http://x').pathname;
+    if (p === '/probe') {
+        // Echo endpoint: proves the socket survives whatever proxy sits in
+        // front (Caddy + the SSO gate) without touching the netplay relay.
+        const conn = wsAccept(req, socket);
+        if (conn) conn.onmessage = (msg) => conn.send(Buffer.concat([Buffer.from('echo:'), msg]));
+        return;
+    }
+    if (p !== '/net') return socket.destroy();
     const conn = wsAccept(req, socket);
     if (conn) relay.join(conn, req);
 });
