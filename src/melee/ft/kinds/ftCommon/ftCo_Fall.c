@@ -34,7 +34,7 @@
 static inline bool ftCo_Fall_inline(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (fp->x2224_b2) {
+    if (fp->stamina_dead) {
         ftCo_80090780(gobj);
         return true;
     }

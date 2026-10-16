@@ -698,7 +698,7 @@ HSD_SObj* lbMthp_8001F624(HSD_GObj* gobj, int width, int height)
     return sobj;
 }
 
-void lbMthp_8001F67C(HSD_GObj* gobj, int arg1)
+void lbMthp_8001F67C(HSD_GObj* gobj, intptr_t arg1)
 {
 #if BUILD_TARGET_PC
     /* The console binds Y/Cb/Cr as three I8 texture maps and lets the TEV

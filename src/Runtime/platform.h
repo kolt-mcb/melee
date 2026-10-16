@@ -15,6 +15,7 @@
 #include <stddef.h>  // IWYU pragma: export
 
 #include <dolphin/types.h> // IWYU pragma: export
+#include <sys/types.h>     // IWYU pragma: export
 
 /// @typedef bool
 /// @note Dolphin's #BOOL macro is not supported.
@@ -36,16 +37,6 @@
 
 /// The underlying type of an @c enum, used as a placeholder
 typedef int enum_t;
-
-/// Signed variant of ::size_t
-#if BUILD_TARGET_PC
-/* The host already has ssize_t, and on LP64 it is long -- a second typedef
- * as int is a hard conflict, and the game's uses of it are sizes and
- * indices, which want the host's width anyway. <sys/types.h> arrives with
- * the prelude. */
-#else
-typedef signed int ssize_t;
-#endif
 
 /// A @c void callback with no arguments.
 typedef void (*Event)(void);
@@ -156,8 +147,10 @@ typedef unsigned int usize_t;
 #elif defined(BUILD_TARGET_PC)
 /* On PC port, skip static assertions -- struct sizes differ on 64-bit */
 #define STATIC_ASSERT(cond)
-#else
+#elif defined(LINT)
 #define STATIC_ASSERT(cond) _Static_assert((cond), "(" #cond ") failed")
+#else
+#define STATIC_ASSERT(cond)
 #endif
 
 #if defined(MUST_MATCH) || defined(LINT)
@@ -192,6 +185,21 @@ typedef unsigned int usize_t;
 #define SECTION_CTORS
 #define SECTION_DTORS
 #define ATTRIBUTE_RESTRICT
+#endif
+
+#if BUILD_TARGET_PC
+/* The host's <math.h> (in via the prelude) spells these its own way; a
+ * second, differently-spelled definition is a redefinition warning in
+ * every file. The values are the same. */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#ifndef M_PI_2
+#define M_PI_2 (M_PI / 2)
+#endif
+#else
+#define M_PI 3.14159265358979323846
+#define M_PI_2 (M_PI / 2)
 #endif
 
 #define M_TAU 6.283185307179586

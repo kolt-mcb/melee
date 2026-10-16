@@ -1056,13 +1056,14 @@ static ItemDynamics* conv_dynamics(const struct arch* a, u32 off)
             }
         }
     }
-    out->dyn_descs = zalloc(sizeof(BoneDynamicsDesc) * (unsigned long) count);
+    out->dyn_descs =
+        zalloc(sizeof(BoneDynamicsTemplate) * (unsigned long) count);
     if (out->dyn_descs == NULL) {
         return NULL;
     }
     for (i = 0; i < count; i++) {
         const u8* e = a->base + doff + (u32) i * 0x18;
-        BoneDynamicsDesc* d = &out->dyn_descs[i];
+        BoneDynamicsTemplate* d = &out->dyn_descs[i];
         u32 field = doff + (u32) i * 0x18 + 4;
         u32 data_off = be32(e + 4);
         u32 n = be32(e + 8);

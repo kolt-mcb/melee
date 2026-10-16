@@ -35,12 +35,13 @@ HSD_GObj* it_802C837C(Item_GObj* parent, Vec3* pos, enum_t kind, u32 arg3,
     spawn.vel.x = 0.0f;
     spawn.x0_parent_gobj = parent;
     spawn.x4_parent_gobj2 = spawn.x0_parent_gobj;
-    spawn.x44_flag.b0 = true;
+    spawn.x44_flag.x0.b0 = true;
     spawn.x40 = 0;
     gobj = Item_80268B18(&spawn);
     if (gobj != NULL) {
         itGamewatchchefAttributes* attrs =
-            GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes;
+            &GET_ITEM(gobj)
+                 ->xC4_article_data->x4_specialAttributes->gamewatchchef;
         it_802C84A0(gobj, arg3);
         db_80225DD8(gobj, parent);
 #if BUILD_TARGET_PC
@@ -63,7 +64,7 @@ void it_802C84A0(Item_GObj* gobj, s32 index)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     ip->xDD4_itemVar.gamewatchchef.x4 = index;
     it_80275158(gobj, attrs->x8);
     ip->xD5C = 0;
@@ -79,7 +80,7 @@ bool itGamewatchchef_UnkMotion0_Anim(Item_GObj* gobj)
     Item* ip = gobj->user_data;
     HSD_JObj* jobj = gobj->hsd_obj;
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     f32 rot_x;
     PAD_STACK(8);
     rot_x = HSD_JObjGetRotationX(jobj);
@@ -97,7 +98,7 @@ void itGamewatchchef_UnkMotion0_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     s32 index = ip->xDD4_itemVar.gamewatchchef.x4;
     it_80272860(gobj, attrs->entries[index].x8, attrs->entries[index].xC);
 }
@@ -106,7 +107,7 @@ bool itGamewatchchef_UnkMotion0_Coll(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     if (0.0f != ip->x40_vel.x) {
         s32 result = it_8026DAA8(gobj);
         if (result & 0xC) {
@@ -123,7 +124,7 @@ void it_802C875C(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     PAD_STACK(8);
     ip->x40_vel.y = 0.0f;
     ip->x40_vel.x = 0.0f;
@@ -159,7 +160,7 @@ bool it_2725_Logic112_Clanked(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     PAD_STACK(16);
     ip->x40_vel.y = 0.0f;
     ip->x40_vel.x = 0.0f;
@@ -172,7 +173,7 @@ bool it_2725_Logic112_HitShield(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     PAD_STACK(16);
     ip->x40_vel.y = 0.0f;
     ip->x40_vel.x = 0.0f;
@@ -185,7 +186,7 @@ bool it_2725_Logic112_Absorbed(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itGamewatchchefAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->gamewatchchef;
     PAD_STACK(24);
     ip->x40_vel.y = 0.0f;
     ip->x40_vel.x = 0.0f;

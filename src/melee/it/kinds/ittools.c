@@ -100,7 +100,7 @@ Item_GObj* it_802EEFA8(Vec3* pos, s32 arg1, f32 facing_dir)
     spawn.vel.x = 0.0f;
     spawn.x0_parent_gobj = NULL;
     spawn.x4_parent_gobj2 = spawn.x0_parent_gobj;
-    spawn.x44_flag.b0 = true;
+    spawn.x44_flag.x0.b0 = true;
     spawn.x40 = 0;
     gobj = Item_80268B18(&spawn);
     if (gobj != NULL) {
@@ -119,7 +119,8 @@ bool itTools_Logic22_DmgDealt(Item_GObj* gobj)
 void it_802EF098(Item_GObj* gobj, s32 arg1)
 {
     Item* ip = GET_ITEM(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     ip->xDD4_itemVar.tools.x0 = arg1;
     it_80275158(gobj, attrs->x0);
     ip->xD5C = 0;
@@ -133,7 +134,8 @@ bool itTools_UnkMotion4_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     f32 rz = HSD_JObjGetRotationZ(jobj);
     rz = TL_FMA(attrs->motions[ip->xDD4_itemVar.tools.x0].xC, ip->facing_dir, rz);
     HSD_JObjSetRotationZ(jobj, rz);
@@ -148,7 +150,8 @@ bool itTools_UnkMotion4_Anim(Item_GObj* gobj)
 void itTools_UnkMotion4_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     it_80272860(gobj, attrs->motions[ip->xDD4_itemVar.tools.x0].x4,
                 attrs->motions[ip->xDD4_itemVar.tools.x0].x8);
 }
@@ -168,7 +171,8 @@ bool itTools_UnkMotion4_Coll(Item_GObj* gobj)
 void it_802EF320(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     PAD_STACK(8);
     it_802756D0(gobj);
     it_8026B3A8(gobj);
@@ -200,7 +204,8 @@ void itTools_UnkMotion9_Phys(Item_GObj* gobj) {}
 static inline void itTools_UnkMotion9_Coll_inline(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     it_802756D0(gobj);
     it_8026B3A8(gobj);
     ip->x40_vel.y = 0.0f;
@@ -224,7 +229,8 @@ bool itTools_UnkMotion9_Coll(Item_GObj* gobj)
 void it_802EF548(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itToolsAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itToolsAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->tools;
     Fighter_GObj* fighter;
     f32 new_damage;
     Vec3 fighter_pos;
@@ -243,8 +249,8 @@ void it_802EF548(Item_GObj* gobj)
     new_damage = ip->xCA0;
     dir = -1.0f * ip->xCCC_incDamageDirection;
     if (fighter != NULL) {
-        if (ftLib_80086960(fighter)) {
-            ftLib_800866DC(fighter, &fighter_pos);
+        if (ftLib_IsFighter(fighter)) {
+            ftLib_GetCameraBonePos(fighter, &fighter_pos);
         } else {
             return;
         }
@@ -277,7 +283,7 @@ bool it_2725_Logic22_Clanked(Item_GObj* gobj)
 {
     itToolsAttributes* attrs;
     Item* ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->tools;
     PAD_STACK(16);
     it_802756D0(gobj);
     it_8026B3A8(gobj);
@@ -292,7 +298,7 @@ bool it_2725_Logic22_HitShield(Item_GObj* gobj)
 {
     itToolsAttributes* attrs;
     Item* ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->tools;
     PAD_STACK(16);
     it_802756D0(gobj);
     it_8026B3A8(gobj);
@@ -307,7 +313,7 @@ bool it_2725_Logic22_Absorbed(Item_GObj* gobj)
 {
     itToolsAttributes* attrs;
     Item* ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->tools;
     PAD_STACK(24);
     it_802756D0(gobj);
     it_8026B3A8(gobj);

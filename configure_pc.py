@@ -67,6 +67,9 @@ G_OBJ_SOURCES = [
     str(BASELIB_SRC / "gobjgxlink.c"),
     str(BASELIB_SRC / "gobjplink.c"),
     str(BASELIB_SRC / "gobjuserdata.c"),
+    # Upstream moved the camera/light/jobj/fog render callbacks and the
+    # HSD_GObj_*Kind registration out of gobj.c into hsd_3910.c.
+    str(BASELIB_SRC / "hsd_3910.c"),
 ]
 # Rendering pipeline: displayfunc + all its baselib dependencies
 DISPLAY_MODULES = [
@@ -203,7 +206,7 @@ INCLUDE_DIRS = [
     SRC, SRC / "sysdolphin", MELEE,
     SRC / "melee" / "ft" / "kinds", SRC / "MSL" / "PPC_EABI",
     SRC / "port", SRC / "Runtime", SRC / "MetroTRK",
-    ROOT / "libs" / "dolphin" / "include",
+    ROOT / "libs" / "dolphin" / "include", ROOT / "libs" / "doldecomp" / "include",
 ]
 
 inc = " ".join("-I" + str(p) for p in INCLUDE_DIRS)

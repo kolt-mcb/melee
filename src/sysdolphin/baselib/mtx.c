@@ -342,7 +342,6 @@ void HSD_MtxInverse(Mtx src, Mtx dest)
 #endif
 }
 
-/// https://decomp.me/scratch/kalJY
 void HSD_MtxInverseConcat(Mtx inv, Mtx src, Mtx dest)
 {
     Mtx m;

@@ -27,31 +27,6 @@
 #define ZG2_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-typedef struct itGShell_Attrs {
-    float x0;
-    float x4;
-    float x8;
-    float xC;
-    float x10;
-    float x14;
-    float x18;
-    float x1C;
-    float x20;
-    float x24;
-    float x28;
-    float x2C;
-    float x30;
-    float x34;
-    float x38;
-    Vec x3C;
-} itGShell_Attrs;
-
-typedef struct itZGShell_Attrs {
-    char pad0[0x38];
-    float x38;
-    Vec x3C;
-} itZGShell_Attrs;
-
 /* 2DFFA0 */ static void it_802DFFA0(Item_GObj* gobj);
 
 ItemStateTable it_803F86C8[] = {
@@ -83,15 +58,17 @@ ItemStateTable it_803F86C8[] = {
 void it_802DDB38(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itZGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes->zg_shell;
+    f32 temp;
     Vec v;
     HSD_JObj* jobj;
-    PAD_STACK(4);
     /// @todo Shared code with #it_8028B8D8.
     if (ip->xDD4_itemVar.zgshell.xDF8 <= 0.0f) {
         jobj = GET_JOBJ(gobj);
         v = attrs->x3C;
-        v.x *= -ip->facing_dir;
+        temp = -ip->facing_dir;
+        v.x *= temp;
         efAsync_Spawn(gobj, &GET_ITEM(gobj)->xBC0, 2, 1029, jobj, &v);
         ip->xDD4_itemVar.zgshell.xDF8 = attrs->x38;
     } else {
@@ -102,7 +79,8 @@ void it_802DDB38(Item_GObj* gobj)
 void it_802DDBE8(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if (ip->xDD4_itemVar.zgshell.xE08_b0) {
         ip->xDD4_itemVar.zgshell.xDFC -= 1.0f;
         if (ip->xDD4_itemVar.zgshell.xDFC <= 0.0f) {
@@ -119,7 +97,8 @@ void it_802DDBE8(Item_GObj* gobj)
 void fn_802DDC8C(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     it_80275D5C(gobj, &ip->xC0C);
     if (ABS(ip->x40_vel.x) < attrs->x8) {
         ip->x40_vel.x = ip->x40_vel.y = ip->x40_vel.z = 0.0f;
@@ -136,7 +115,8 @@ void fn_802DDC8C(Item_GObj* gobj)
 void it_802DDD38(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
 
     switch (ip->msid) {
     case 0:
@@ -176,15 +156,15 @@ void it_802DDD38(Item_GObj* gobj)
 }
 
 // permuterslop
-static inline itGShell_Attrs* get_attrs(Item* arg0)
+static inline itZGShell_Attrs* get_attrs(Item* arg0)
 {
-    return arg0->xC4_article_data->x4_specialAttributes;
+    return &arg0->xC4_article_data->x4_specialAttributes->zg_shell;
 }
 
 void it_802DDEB4(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
-    itGShell_Attrs* attrs = get_attrs(ip);
+    itZGShell_Attrs* attrs = get_attrs(ip);
 
     switch (ip->msid) {
     case 5:
@@ -193,7 +173,7 @@ void it_802DDEB4(Item_GObj* gobj)
     case 8:
     case 10: {
         Item* ip = gobj->user_data;
-        itGShell_Attrs* attrs = get_attrs(ip);
+        itZGShell_Attrs* attrs = get_attrs(ip);
         it_802756D0(gobj);
         it_80275444(gobj);
         ip->x40_vel.x = -ip->x40_vel.x * attrs->xC * HSD_Randf();
@@ -236,7 +216,8 @@ void it_802DDEB4(Item_GObj* gobj)
 void it_802DE040(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     it_8027B730(gobj);
     it_80275210(gobj);
     ip->xDD4_itemVar.zgshell.xE08_b0 = 0;
@@ -277,7 +258,8 @@ void itZrshell_UnkMotion0_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     int counter = ip->xDD4_itemVar.zgshell.xE0C;
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if ((f32) counter > attrs->x2C) {
         it_802DF230(gobj);
     } else {
@@ -287,13 +269,13 @@ void itZrshell_UnkMotion0_Phys(Item_GObj* gobj)
 
 bool itZrshell_UnkMotion0_Coll(Item_GObj* gobj)
 {
-    itGShell_Attrs* attrs;
+    itZGShell_Attrs* attrs;
     Item* ip;
     HSD_JObj* jobj;
     it_8026D62C(gobj, it_802DE320);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if (ip->ground_or_air == GA_Ground) {
         Item_UpdateRollingShellRotation(gobj, ip, jobj, &attrs->x20);
     }
@@ -309,7 +291,7 @@ void it_802DE320(Item_GObj* gobj)
 bool itZrshell_UnkMotion1_Anim(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
-    if (ip->xDD4_itemVar.zgshell.xE1C_b0 && ip->xDD0_flag.b0 != 1) {
+    if (ip->xDD4_itemVar.zgshell.xE1C_b0 && ip->xDD0_flag.x0.b0 != 1) {
         if (ip->xDD4_itemVar.zgshell.xE04 <= 0.0f) {
             it_80274CAC(gobj);
             ip->jumped_on = fn_802DFE7C;
@@ -351,7 +333,8 @@ void itZrshell_UnkMotion2_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     int counter = ip->xDD4_itemVar.zgshell.xE0C;
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if ((f32) counter > attrs->x2C) {
         it_802DF230(gobj);
     } else {
@@ -369,19 +352,7 @@ void itZGShell_Logic11_Thrown(Item_GObj* gobj)
 
 bool itZrshell_UnkMotion3_Anim(Item_GObj* gobj)
 {
-    Item* ip = gobj->user_data;
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
-    if (ip->xDD4_itemVar.zgshell.xE08_b0) {
-        ip->xDD4_itemVar.zgshell.xDFC -= 1.0f;
-        if (ip->xDD4_itemVar.zgshell.xDFC <= 0.0f) {
-            ip->xDD4_itemVar.zgshell.xE08_b0 = 0;
-            ip->xDD4_itemVar.zgshell.xDFC = attrs->x28;
-            it_8027572C(gobj, 0);
-            if (ip->xDD4_itemVar.zgshell.xE08_b1) {
-                it_802756E0(gobj);
-            }
-        }
-    }
+    it_802DDBE8(gobj);
     return false;
 }
 
@@ -403,18 +374,10 @@ void itZGShell_Logic11_Dropped(Item_GObj* gobj)
     Item_80268E5C(gobj, 4, 6);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool itZrshell_UnkMotion4_Anim(Item_GObj* gobj)
 {
-    it_802DDBE8(gobj);
-    return false;
+    return itZrshell_UnkMotion3_Anim(gobj);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void itZrshell_UnkMotion4_Phys(Item_GObj* gobj)
 {
@@ -432,7 +395,8 @@ bool itZrshell_UnkMotion4_Coll(Item_GObj* gobj)
 void it_802DE6F0(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     PAD_STACK(8);
 
     it_8026B3A8(gobj);
@@ -461,30 +425,11 @@ void it_802DE6F0(Item_GObj* gobj)
     ip->jumped_on = fn_802DFE7C;
 }
 
-static inline void it_802DDB38_inline(Item_GObj* gobj, Vec* v)
-{
-    Item* ip = GET_ITEM(gobj);
-    itZGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
-    HSD_JObj* jobj;
-    /// @todo Inlined version of #it_802DDB38.
-    if (ip->xDD4_itemVar.zgshell.xDF8 <= 0.0f) {
-        jobj = GET_JOBJ(gobj);
-        *v = attrs->x3C;
-        v->x *= -ip->facing_dir;
-        efAsync_Spawn(gobj, &GET_ITEM(gobj)->xBC0, 2, 1029, jobj, v);
-        ip->xDD4_itemVar.zgshell.xDF8 = attrs->x38;
-    } else {
-        ip->xDD4_itemVar.zgshell.xDF8 -= 1.0f;
-    }
-}
-
 bool itZrshell_UnkMotion6_Anim(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
-    Vec v;
-    PAD_STACK(8);
     if (ip->xDD4_itemVar.zgshell.xDF4 <= 0.0f) {
-        if (!ip->xDCD_flag.b5) {
+        if (!ip->xDCD_flag.x0.b5) {
             it_80275444(gobj);
         }
     } else {
@@ -492,7 +437,7 @@ bool itZrshell_UnkMotion6_Anim(Item_GObj* gobj)
     }
     it_802DDBE8(gobj);
     if (ip->msid == 6 || ip->msid == 5) {
-        it_802DDB38_inline(gobj, &v);
+        it_802DDB38(gobj);
     }
     return false;
 }
@@ -500,7 +445,8 @@ bool itZrshell_UnkMotion6_Anim(Item_GObj* gobj)
 void itZrshell_UnkMotion6_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
 
     if (ABS(ip->x40_vel.x) < attrs->x8) {
         if (!ip->xDC8_word.flags.x15) {
@@ -531,14 +477,14 @@ void itZrshell_UnkMotion6_Phys(Item_GObj* gobj)
 
 bool itZrshell_UnkMotion6_Coll(Item_GObj* gobj)
 {
-    itGShell_Attrs* attrs;
+    itZGShell_Attrs* attrs;
     Item* ip;
     HSD_JObj* jobj;
     PAD_STACK(8);
     it_8026D62C(gobj, it_802DEC80);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if (ip->ground_or_air == GA_Ground) {
         Item_UpdateRollingShellRotation(gobj, ip, jobj, &attrs->x20);
     }
@@ -551,7 +497,8 @@ bool itZrshell_UnkMotion6_Coll(Item_GObj* gobj)
 void it_802DEC80(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     PAD_STACK(8);
 
     it_8026B3A8(gobj);
@@ -578,29 +525,10 @@ void it_802DEC80(Item_GObj* gobj)
     ip->jumped_on = fn_802DFE7C;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool itZrshell_UnkMotion8_Anim(Item_GObj* gobj)
 {
-    Item* ip = gobj->user_data;
-    if (ip->xDD4_itemVar.zgshell.xDF4 <= 0.0f) {
-        if (!ip->xDCD_flag.b5) {
-            it_80275444(gobj);
-        }
-    } else {
-        ip->xDD4_itemVar.zgshell.xDF4 -= 1.0f;
-    }
-    it_802DDBE8(gobj);
-    if (ip->msid == 6 || ip->msid == 5) {
-        it_802DDB38(gobj);
-    }
-    return false;
+    return itZrshell_UnkMotion6_Anim(gobj);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void itZrshell_UnkMotion8_Phys(Item_GObj* gobj)
 {
@@ -649,7 +577,8 @@ static inline void itZGShell_StopAndIdle(Item_GObj* gobj)
 void itZrshell_UnkMotion9_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itZGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     PAD_STACK(8);
 
     if (ABS(ip->x40_vel.x) < attrs->x30) {
@@ -668,14 +597,14 @@ void itZrshell_UnkMotion9_Phys(Item_GObj* gobj)
 
 bool itZrshell_UnkMotion9_Coll(Item_GObj* gobj)
 {
-    itGShell_Attrs* attrs;
+    itZGShell_Attrs* attrs;
     Item* ip;
     HSD_JObj* jobj;
     PAD_STACK(8);
     it_8026E8C4(gobj, it_802DE0F0, it_802DE320);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     if (ip->ground_or_air == GA_Ground) {
         it_80276CB8(gobj);
         jobj = HSD_JObjGetChild(jobj);
@@ -900,9 +829,9 @@ bool itZGShell_Logic11_Reflected(Item_GObj* gobj)
 
 bool it_2725_Logic11_Clanked(Item_GObj* gobj)
 {
-    itGShell_Attrs* attrs;
+    itZGShell_Attrs* attrs;
     Item* ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->zg_shell;
     it_802756D0(gobj);
     it_80275444(gobj);
     ip->x40_vel.x = -ip->x40_vel.x * attrs->xC * HSD_Randf();

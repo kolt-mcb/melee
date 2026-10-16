@@ -65,7 +65,7 @@ typedef struct grMc_CarEntry {
     /* 0x10 */ f32 x10;
     /* 0x14 */ Vec3 pos;
     /* 0x20 */ u16 x20;
-    struct {
+    struct grMc_CarEntry_x22_flags {
         u8 b0 : 1;
         u8 b1 : 1;
     } x22_flags;
@@ -378,33 +378,13 @@ StageData grMc_StageData = {
     ARRAY_SIZE(grMc_803E30B0),
 };
 
-struct grMc_YakumonoParam {
-    /* A colour-overlay script pointer the original passed through an int;
-     * upstream types it as a pointer, which is also what the host needs so a
-     * stage's script survives. */
-    void* x0;
-    void* x4;
-    DynamicsDesc* x8;
-    DynamicsDesc* xC;
-    u8 pad10[0x1C];
-    f32 x2C;
-    f32 x30;
-    f32 x34;
-    f32 x38;
-    f32 x3C;
-    f32 x40;
-    f32 x44;
-    f32 x48;
-    f32 x4C;
-};
-
 static struct grMc_YakumonoParam* yakumono_param;
 
 #if BUILD_TARGET_PC
 /* Mute City's yakumono_param, read out of GrMc.dat: four relocated pointers
  * -- two colour-overlay scripts (x0 for the road, x4 for the background) and
  * two nine-word touch-line hit descriptors (x8 for lines 0x31/0x35, xC for
- * 0x32..0x34; they are typed DynamicsDesc* but ftCo_Bury reads them as
+ * 0x32..0x34, which ftCo_Bury reads as
  * lbColl_80008D30_arg1) -- then the car and lighting scalars from 0x2C. The
  * scripts stay raw pointers into the file image, which is what the colour
  * interpreter byteswaps on first use; the descriptors become host arrays. */
@@ -435,8 +415,8 @@ static struct grMc_YakumonoParam* pc_mutecity_param(const void* raw)
     memset(&buf, 0, sizeof(buf));
     buf.x0 = (void*) pc_grconv_raw(ar, pc_mc_be32(p + 0x0), 4);
     buf.x4 = (void*) pc_grconv_raw(ar, pc_mc_be32(p + 0x4), 4);
-    buf.x8 = (DynamicsDesc*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0x8), 9);
-    buf.xC = (DynamicsDesc*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0xC), 9);
+    buf.x8 = (lbColl_80008D30_arg1*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0x8), 9);
+    buf.xC = (lbColl_80008D30_arg1*) pc_grconv_u32_table(ar, pc_mc_be32(p + 0xC), 9);
     if (buf.x8 == NULL || buf.xC == NULL) {
         port_guard_warn("grmutecity.c:touch-line descriptor did not convert");
     }
@@ -2064,7 +2044,7 @@ void fn_801F2B58(void* user_data, int joint_id, CollData* coll, int coll_x50,
     coll->x34_flags.b7 = 1;
 }
 
-DynamicsDesc* grMuteCity_801F2BBC(enum_t arg0)
+lbColl_80008D30_arg1* grMuteCity_801F2BBC(enum_t arg0)
 {
     if (grMc_804D69D4 == 1) {
         if (arg0 == 0x31) {

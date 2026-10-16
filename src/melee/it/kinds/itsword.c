@@ -13,7 +13,6 @@
 #include <melee/it/inlines.h>
 #include <melee/it/it_26B1.h>
 #include <melee/it/it_2725.h>
-#include <melee/it/itCommonItems.h>
 #include <melee/it/itdraw.h>
 #include <melee/it/item.h>
 #include <melee/it/itgroundcoll.h>
@@ -76,7 +75,7 @@ Item_GObj* itSword_Spawn(Vec3* pos)
     }
 }
 
-void it_80284E10(HSD_GObj* gobj, int arg1)
+void it_80284E10(HSD_GObj* gobj, intptr_t arg1)
 {
     it_8026EECC(gobj, arg1);
 }
@@ -234,8 +233,8 @@ void it_802852B8(Item_GObj* gobj, float* arg1, float* arg2)
 
 itSword_UnkBytes* it_80285300(Item_GObj* gobj)
 {
-    itSword_UnkArticle1* attrs =
-        GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes;
+    itSwordAttributes* attrs =
+        &GET_ITEM(gobj)->xC4_article_data->x4_specialAttributes->sword;
     return &attrs->x1C;
 }
 
@@ -247,7 +246,8 @@ HSD_JObj* it_80285314(Item_GObj* gobj)
 void itSword_Logic12_Spawned(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itSword_UnkArticle1* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itSwordAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->sword;
     PAD_STACK(8);
     it_8026B390(gobj);
     ip->x40_vel.x = 0.0f;
@@ -333,7 +333,8 @@ static inline void inlineC1(Item_GObj* gobj)
 static inline void inlineA3(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itSword_UnkArticle1* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itSwordAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->sword;
     ip->xDD4_itemVar.sword.x34 = attrs->x18;
     ip->xDD4_itemVar.sword.x38 = 0;
     ip->xDD4_itemVar.sword.x3C = -1;
@@ -345,7 +346,8 @@ static inline void inlineA3(Item_GObj* gobj)
 static inline void inlineD1(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itSword_UnkArticle1* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itSwordAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->sword;
     ip->xDD4_itemVar.sword.x34 = 0;
     ip->xDD4_itemVar.sword.x38 = attrs->x18;
     ip->xDD4_itemVar.sword.x3C = 1;
@@ -427,8 +429,9 @@ void itSword_Logic12_PickedUp(Item_GObj* gobj)
 bool itSword_UnkMotion2_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itSword_UnkArticle1* attrs = ip->xC4_article_data->x4_specialAttributes;
-    if (ip->owner != NULL && ftLib_80086FA8(ip->owner) != 1) {
+    itSwordAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->sword;
+    if (ip->owner != NULL && ftLib_IsSwordSwing(ip->owner) != true) {
         inlineA1(gobj);
     }
     if (ip->xDD4_itemVar.sword.x3C == 0) {

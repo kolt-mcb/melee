@@ -23,7 +23,7 @@
 #include <sysdolphin/baselib/wobj.h>
 
 /* 09F480 */ static void ftCo_8009F480(Fighter_GObj* gobj);
-/* 09F54C */ static void ftCo_8009F54C(HSD_GObj* gobj, int code);
+/* 09F54C */ static void ftCo_8009F54C(HSD_GObj* gobj, intptr_t code);
 
 static HSD_LObj* lobj0;
 static HSD_LObj* lobj1;
@@ -75,7 +75,7 @@ void ftCo_8009F4A4(void)
     HSD_GObj_SetupProc(gobj, ftCo_8009F480, 1);
 }
 
-void ftCo_8009F54C(HSD_GObj* gobj, int code)
+void ftCo_8009F54C(HSD_GObj* gobj, intptr_t code)
 {
 #if BUILD_TARGET_PC
     /* PC port: this is the fighter light GObj's render callback, and its

@@ -25,7 +25,6 @@
 #define NP_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-/// https://decomp.me/scratch/apf7Y
 void ftNs_SpecialS_ItemPKFireSpawn(
     HSD_GObj* gobj) //* Ness's PK Fire spawn function, stored as Accessory4
                     // and summoned with Subaction Event 0x60 *//
@@ -43,8 +42,8 @@ void ftNs_SpecialS_ItemPKFireSpawn(
     float PKFireLaunch;
     float PKFireVel;
 
-    if (fp->throw_flags_b0 != 0) {
-        fp->throw_flags_b0 = 0;
+    if (fp->x2210.x0.throw_flags_b0 != 0) {
+        fp->x2210.x0.throw_flags_b0 = 0;
         FlagResult = true;
     } else {
         FlagResult = false;
@@ -81,40 +80,37 @@ void ftNs_SpecialS_ItemPKFireSpawn(
 }
 
 /// 0x80116C94
-/// https://decomp.me/scratch/XdzmF
 void ftNs_SpecialS_Enter(
     HSD_GObj* gobj) // Ness's grounded PK Fire Motion State handler
 {
     Fighter* fp;
 
     fp = GET_FIGHTER(gobj);
-    fp->throw_flags = 0; // Set projectile summon flag to 0
-    fp->cmd_vars[0] = 0; // Set ftcmd flag0 to 0; _ in PK Fire?
-    Fighter_ChangeMotionState(gobj, ftNs_MS_SpecialS, 0, 0.0f, 1.0f, 0.0f,
-                              NULL);
+    fp->x2210.throw_flags = 0; // Set projectile summon flag to 0
+    fp->cmd_vars[0] = 0;       // Set ftcmd flag0 to 0; _ in PK Fire?
+    Fighter_ChangeMotionState(gobj, ftNs_MS_SpecialS, Ft_MF_None, 0.0f, 1.0f,
+                              0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->accessory4_cb =
         ftNs_SpecialS_ItemPKFireSpawn; // Store PK Fire spawn function
 }
 
 /// 0x80116D04
-/// https://decomp.me/scratch/fnaSW
 void ftNs_SpecialAirS_Enter(
     HSD_GObj* gobj) // Ness's aerial PK Fire Motion State handler
 {
     Fighter* fp;
 
     fp = GET_FIGHTER(gobj);
-    fp->throw_flags = 0; // Set projectile summon flag to 0
-    fp->cmd_vars[0] = 0; // Set ftcmd flag0 to 0; _ in PK Fire?
-    Fighter_ChangeMotionState(gobj, ftNs_MS_SpecialAirS, 0, 0.0f, 1.0f, 0.0f,
-                              NULL);
+    fp->x2210.throw_flags = 0; // Set projectile summon flag to 0
+    fp->cmd_vars[0] = 0;       // Set ftcmd flag0 to 0; _ in PK Fire?
+    Fighter_ChangeMotionState(gobj, ftNs_MS_SpecialAirS, Ft_MF_None, 0.0f,
+                              1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->accessory4_cb = ftNs_SpecialS_ItemPKFireSpawn;
 }
 
 /// 0x80116D74
-/// https://decomp.me/scratch/5NxzS
 void ftNs_SpecialS_Anim(
     HSD_GObj* gobj) // Ness's grounded PK Fire Animation callback
 {
@@ -124,7 +120,6 @@ void ftNs_SpecialS_Anim(
 }
 
 /// 0x80116DB0
-/// https://decomp.me/scratch/iFFHn
 void ftNs_SpecialAirS_Anim(
     HSD_GObj* gobj) // Ness's aerial PK Fire Animation callback
 {
@@ -134,7 +129,6 @@ void ftNs_SpecialAirS_Anim(
 }
 
 /// 0x80116DEC
-/// https://decomp.me/scratch/iCZHk
 void ftNs_SpecialS_Phys(
     HSD_GObj* gobj) // Ness's grounded PK Fire Physics callback
 {
@@ -142,7 +136,6 @@ void ftNs_SpecialS_Phys(
 }
 
 /// 0x80116E0C
-/// https://decomp.me/scratch/ATut0
 void ftNs_SpecialAirS_Phys(
     HSD_GObj* gobj) // Ness's aerial PK Fire Physics callback
 {
@@ -150,7 +143,6 @@ void ftNs_SpecialAirS_Phys(
 }
 
 /// 0x80116E2C
-/// https://decomp.me/scratch/gi1NE
 void ftNs_SpecialS_Coll(
     HSD_GObj* gobj) // Ness's grounded PK Fire Collision callback
 {
@@ -160,7 +152,6 @@ void ftNs_SpecialS_Coll(
 }
 
 /// 0x80116E68
-/// https://decomp.me/scratch/AEWUO
 void ftNs_SpecialAirS_Coll(
     HSD_GObj* gobj) // Ness's aerial PK Fire Collision callback
 {

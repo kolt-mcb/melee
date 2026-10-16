@@ -22,18 +22,17 @@
 #endif
 
 /* 3F9628 */ Element_803F9628 ifStatus_803F9628[8] = {
-    { NULL, 0, if_802F74D0, 0x7C860U, 8, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F73C4, 0xC351U, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F74D0, 0x7C85EU, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F73C4, 0x7C85DU, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F73C4, 0x7C857U, 10, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F74D0, 0x7C855U, 8, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F74D0, 0x9C48U, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
-    { NULL, 0, if_802F74D0, 0x9C46U, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F74D0, 0x7C860, 8, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F73C4, 0xC351, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F74D0, 0x7C85E, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F73C4, 0x7C85D, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F73C4, 0x7C857, 10, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F74D0, 0x7C855, 8, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F74D0, 0x9C48, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
+    { NULL, 0, if_802F74D0, 0x9C46, 0, 0, { 0 }, 0, NULL, NULL, 0, 0 },
 };
 
-void ifStatus_802F6EA4(int arg0, int arg1, int arg2, int arg3,
-                       IfStatusCb arg4,
+void ifStatus_802F6EA4(int arg0, int arg1, int arg2, int arg3, IfStatusCb arg4,
                        IfStatusCb arg5)
 {
     HSD_GObj* gobj;
@@ -81,7 +80,7 @@ void ifStatus_802F6EA4(int arg0, int arg1, int arg2, int arg3,
     }
 }
 
-void ifStatus_802F7034(UNK_T arg0)
+void ifStatus_802F7034(IfStatusCb arg0)
 {
     VsSceneController* big_thing;
     int a;
@@ -141,8 +140,8 @@ void ifStatus_802F7134(void)
     }
 
     archive = ifAll_GetArchive();
-    lbArchive_LoadSections(*archive, (void**) &models, "ScInfCnt_scene_models",
-                           NULL);
+    lbArchive_LoadSections(*archive, (DynamicModelDesc***) &models,
+                           "ScInfCnt_scene_models", NULL);
 #if BUILD_TARGET_PC
     /* The archive hands back a NULL-terminated array of 32-bit
      * DynamicModelDesc offsets, unrelocated and big-endian. */

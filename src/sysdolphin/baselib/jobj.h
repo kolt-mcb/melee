@@ -5,6 +5,8 @@
 
 #include <sysdolphin/baselib/forward.h>
 
+#include <dat_macros.h>
+
 #include <dolphin/mtx.h>
 #include <sysdolphin/baselib/class.h>
 #include <sysdolphin/baselib/debug.h>
@@ -147,7 +149,7 @@ typedef struct HSD_JObj {
     /*  +C */ HSD_JObj* parent;
     /* +10 */ HSD_JObj* child;
     /* +14 */ u32 flags;
-    /* +18 */ union {
+    /* +18 */ union HSD_JObj_u {
         HSD_SList* ptcl;
         struct HSD_DObj* dobj;
         HSD_Spline* spline;
@@ -169,10 +171,10 @@ typedef struct HSD_Joint {
     /* +4 */ u32 flags;
     /* +8 */ HSD_Joint* child;
     /* +C */ HSD_Joint* next;
-    /* +10 */ union {
-        HSD_DObjDesc* dobjdesc;
-        HSD_Spline* spline;
-        HSD_SList* ptcl;
+    /* +10 */ union HSD_Joint_u {
+        HSD_DObjDesc* dobjdesc DAT_IF(!(flags & (JOBJ_PTCL | JOBJ_SPLINE)));
+        HSD_Spline* spline DAT_IF((flags & JOBJ_SPLINE) != 0);
+        HSD_SList* ptcl DAT_IF((flags & JOBJ_PTCL) != 0);
     } u;
     /* +14 */ Vec3 rotation;
     /* +20 */ Vec3 scale;
@@ -837,7 +839,6 @@ static inline void HSD_JObjRefThis(HSD_JObj* jobj)
 
 void HSD_JObjResolveRefs(HSD_JObj* jobj, HSD_Joint* joint);
 void HSD_JObjUnrefThis(HSD_JObj* jobj);
-void HSD_JObjRefThis(HSD_JObj* jobj);
 void HSD_JObjMakeMatrix(HSD_JObj* jobj);
 void RecalcParentTrspBits(HSD_JObj* jobj);
 void HSD_JObjAddChild(HSD_JObj* jobj, HSD_JObj* child);

@@ -5,6 +5,8 @@
 
 #include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
+#include <dat_macros.h>
+
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/fobj.h>
 #include <sysdolphin/baselib/objalloc.h>
@@ -51,7 +53,11 @@ struct HSD_AObjDesc {
     u32 flags;
     f32 end_frame;
     HSD_FObjDesc* fobjdesc;
-    HSD_IDKey obj_id;
+    /// The descriptor of the object to animate, whose address is the key
+    /// that object is registered under once loaded (#HSD_IDGetDataFromTable):
+    /// a joint, a material, or another kind. Loaded as a joint if nothing is
+    /// registered under it yet.
+    void* obj_id DAT_TYPE(HSD_Joint);
 };
 
 struct HSD_AnimJoint {

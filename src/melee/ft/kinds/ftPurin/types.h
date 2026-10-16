@@ -5,8 +5,6 @@
 
 #include <sysdolphin/baselib/forward.h>
 
-#include <placeholder.h>
-
 #include <dolphin/mtx.h>
 #include <melee/ft/dobjlist.h> // IWYU pragma: keep
 
@@ -97,12 +95,8 @@ typedef struct _ftPurinAttributes {
     float xDC;
     float xE0;
     float xE4;
-    /* Unknown words in a file-loaded block: four bytes each. As UNK_T
-     * (void*) they were eight on the host and pushed xF0/xF4 -- Pound's
-     * launch speed and its decay -- to 0xF8/0xFC, which read 0.0, so Pound
-     * never moved Jigglypuff. */
-    UNK4_T xE8;
-    UNK4_T xEC;
+    float xE8;
+    float xEC;
     float xF0;
     float xF4;
     u8 _F8[0x100 - 0xF8];

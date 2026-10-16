@@ -1,7 +1,4 @@
 #include "itfoods.h"
-#if BUILD_TARGET_PC
-#include <string.h>
-#endif
 
 #include "types.h"
 #include <melee/it/inlines.h>
@@ -47,30 +44,17 @@ ItemStateTable it_803F5DB0[] = {
 void it_8028F9D8(Item_GObj* arg0, Vec3* arg1, f32 arg8)
 {
     Item* temp_r30 = GET_ITEM(arg0);
-    Vec4* temp_r6 = temp_r30->xC4_article_data->x4_specialAttributes;
+    itFoodsAttributes* attrs =
+        &temp_r30->xC4_article_data->x4_specialAttributes->foods;
     f32 var_2;
-#if BUILD_TARGET_PC
-    /* The console reads the 16-byte variant table through a Vec4 view:
-     * word 3 of entry i is the x offset, word 0 of entry i+1 the y offset.
-     * pc_itconv widens the table to itFoodsAttributes (24 bytes, pointer
-     * at +8), so the Vec4 stride read other words and a carried food sat
-     * about a unit off -- off the ledge, on Yoshi's Story, where the
-     * console's landed. Same words, read by field. */
-    {
-        const itFoodsAttributes* fa =
-            (const itFoodsAttributes*) temp_r6;
-        s32 v = temp_r30->xDD4_itemVar.foods.x0;
-        f32 offx, offy;
-        memcpy(&offx, &fa[v].xC, 4);
-        memcpy(&offy, &fa[v + 1].x0, 4);
-        temp_r30->pos.x = FO_FMA(arg8, offx, arg1->x);
-        var_2 = offy;
-    }
-#else
-    temp_r30->pos.x =
-        FO_FMA(arg8, temp_r6[temp_r30->xDD4_itemVar.foods.x0].w, arg1->x);
-    var_2 = temp_r6[temp_r30->xDD4_itemVar.foods.x0 + 1].x;
-#endif
+    /* On the port, pc_itconv builds this table with the 8-byte joint
+     * pointer, and the typed view lands on the same words the console reads:
+     * offset.y is word 0 of the old "next entry" view, so pc_itconv's extra
+     * trailing word still backs the last variant's read. */
+    temp_r30->pos.x = FO_FMA(
+        arg8, attrs->entries[temp_r30->xDD4_itemVar.foods.x0].offset.x,
+        arg1->x);
+    var_2 = attrs->entries[temp_r30->xDD4_itemVar.foods.x0].offset.y;
     temp_r30->pos.y = var_2 + arg1->y;
     temp_r30->pos.z = arg1->z;
     HSD_JObjSetTranslate(arg0->hsd_obj, &temp_r30->pos);
@@ -95,7 +79,7 @@ HSD_GObj* it_8028FAF4(Item_GObj* arg0, Vec3* arg1)
     spawn.x3C_damage = 0;
     spawn.x0_parent_gobj = NULL;
     spawn.x4_parent_gobj2 = NULL;
-    spawn.x44_flag.b0 = true;
+    spawn.x44_flag.x0.b0 = true;
     spawn.x40 = 0.0F;
     gobj = Item_80268B18(&spawn);
     if (gobj != NULL) {
@@ -106,21 +90,22 @@ HSD_GObj* it_8028FAF4(Item_GObj* arg0, Vec3* arg1)
 
 static inline u32 getRandMax(Article* article)
 {
-    itFoodsAttributes* attr = article->x4_specialAttributes;
-    return attr->x0;
+    itFoodsAttributes* attr = &article->x4_specialAttributes->foods;
+    return attr->count;
 }
 
 void itFoods_Logic18_Spawned(HSD_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itFoodsAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itFoodsAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->foods;
     s32 rand = HSD_Randi(getRandMax(ip->xC4_article_data));
     s32 temp;
 
-    ip->xDD4_itemVar.foods.heal_amount = attr[rand].x8;
+    ip->xDD4_itemVar.foods.heal_amount = attr->entries[rand].heal_amount;
     ip->xDD4_itemVar.foods.x0 = rand;
     temp = rand;
-    it_80273318(gobj, attr[temp].x4);
+    it_80273318(gobj, attr->entries[temp].joint);
     it_8028FC5C(gobj);
 }
 

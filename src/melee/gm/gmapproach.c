@@ -19,7 +19,7 @@
 #include <sysdolphin/baselib/gobjproc.h>
 #include <sysdolphin/baselib/jobj.h>
 
-static struct {
+static struct gm_80480D98_t {
     HSD_Archive* x0;
     int x4;
     u16 x8;
@@ -28,7 +28,7 @@ static struct {
     u8 xE;
 } gm_80480D98;
 
-UNK_T gmVsMelee_ApproachData[2];
+struct VsApproachData gmVsMelee_ApproachData;
 
 static void fn_801AD920(HSD_GObj* gobj)
 {

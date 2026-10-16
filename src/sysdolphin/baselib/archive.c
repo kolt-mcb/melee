@@ -6,6 +6,8 @@
 
 #include <dolphin/os.h>
 
+// Native builds use the generated reader adapter in tools/dat-cli/native.
+#ifndef TARGET_PC
 #if BUILD_TARGET_PC
 /* Byte-swap 32-bit value (big-endian to little-endian) */
 static inline u32 swap32(u32 x)
@@ -29,7 +31,7 @@ static inline void Locate(HSD_Archive* archive)
 
     for (i = 0; i < archive->header.nb_reloc; i++) {
         ptr = (u32*) (archive->data + archive->reloc_info[i].offset);
-        *ptr += (u32) archive->data;
+        *ptr += (uintptr_t) archive->data;
     }
 #endif
 }
@@ -69,8 +71,7 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
         offset = archive->header.data_size + sizeof(HSD_ArchiveHeader);
     }
     if (archive->header.nb_reloc != 0) { // Relocation Size
-        archive->reloc_info =
-            (HSD_ArchiveRelocationInfo*) ((uintptr_t) src + offset);
+        archive->reloc_info = (HSD_ArchiveRelocationInfo*) (src + offset);
 #if BUILD_TARGET_PC
         /* PC port: byte-swap relocation offsets */
         for (u32 j = 0; j < archive->header.nb_reloc; j++) {
@@ -81,8 +82,7 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
                  archive->header.nb_reloc * sizeof(HSD_ArchiveRelocationInfo);
     }
     if (archive->header.nb_public != 0) { // Root Size
-        archive->public_info =
-            (HSD_ArchivePublicInfo*) ((uintptr_t) src + offset);
+        archive->public_info = (HSD_ArchivePublicInfo*) (src + offset);
 #if BUILD_TARGET_PC
         /* PC port: byte-swap public info offsets and symbol indices */
         for (u32 j = 0; j < archive->header.nb_public; j++) {
@@ -94,8 +94,7 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
             offset + archive->header.nb_public * sizeof(HSD_ArchivePublicInfo);
     }
     if (archive->header.nb_extern != 0) { // XRef Size
-        archive->extern_info =
-            (HSD_ArchiveExternInfo*) ((uintptr_t) src + offset);
+        archive->extern_info = (HSD_ArchiveExternInfo*) (src + offset);
 #if BUILD_TARGET_PC
         /* PC port: byte-swap extern info offsets and symbol indices */
         for (u32 j = 0; j < archive->header.nb_extern; j++) {
@@ -107,10 +106,10 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
             offset + archive->header.nb_extern * sizeof(HSD_ArchiveExternInfo);
     }
     if (offset < archive->header.file_size) { // File Size
-        archive->symbols = (char*) ((uintptr_t) src + offset);
+        archive->symbols = (char*) (src + offset);
     }
 
-    archive->top_ptr = (void*) src;
+    archive->top_ptr = src;
     Locate(archive);
 
     return 0;
@@ -151,20 +150,19 @@ void* HSD_ArchiveGetPublicAddress(HSD_Archive* archive, const char* symbols)
 #endif
 }
 
-char* HSD_ArchiveGetExtern(HSD_Archive* archive, int offset)
+char* HSD_ArchiveGetExtern(HSD_Archive* archive, int index)
 {
-    if (offset < 0 || archive->header.nb_extern <= (unsigned) offset) {
+    if (index < 0 || archive->header.nb_extern <= (u32) index) {
         return NULL;
     }
 
-    return archive->symbols + archive->extern_info[offset].symbol;
+    return archive->symbols + archive->extern_info[index].symbol;
 }
 
 void HSD_ArchiveLocateExtern(HSD_Archive* archive, const char* symbols,
                              void* addr)
 {
-    uintptr_t next;
-    uintptr_t offset = -1;
+    u32 offset = -1U;
     u32 i;
 
     for (i = 0; i < archive->header.nb_extern; i++) {
@@ -182,8 +180,11 @@ void HSD_ArchiveLocateExtern(HSD_Archive* archive, const char* symbols,
     }
 
     while (offset != -1U && offset < archive->header.data_size) {
-        next = *(uintptr_t*) ((uintptr_t) archive->data + offset);
-        *(u32*) ((uintptr_t) archive->data + offset) = (uintptr_t) addr;
+        u32* slot = (u32*) (archive->data + offset);
+        u32 next = *slot;
+        *slot = (uintptr_t) addr;
         offset = next;
     }
 }
+
+#endif

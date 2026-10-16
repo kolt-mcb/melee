@@ -9,6 +9,8 @@
 #endif
 #include "grdatfiles.h"
 
+#include <stdbool.h>
+
 #include "ground.h"
 #include "types.h"
 #include <dolphin/gx.h>
@@ -69,12 +71,11 @@ static int grdat_trace_on(void)
 
 void grDatFiles_801C5FC0(HSD_Archive* archive, void* data, size_t length)
 {
-
-    HSD_Archive* map_ptcl;
-    HSD_Archive* map_texg;
+    int* map_ptcl;
+    int* map_texg;
     lbArchive_InitializeDAT(archive, data, length);
-    map_ptcl = HSD_ArchiveGetPublicAddress(archive, "map_ptcl");
-    map_texg = HSD_ArchiveGetPublicAddress(archive, "map_texg");
+    map_ptcl = HSD_ArchiveGetPublicAs(int, archive, "map_ptcl");
+    map_texg = HSD_ArchiveGetPublicAs(int, archive, "map_texg");
 
     if (map_ptcl != NULL && map_texg != NULL) {
         psInitDataBankLocate(map_ptcl, map_texg, NULL);
@@ -3247,15 +3248,15 @@ UnkArchiveStruct* pc_LoadStageFromBuffer(const void* data, size_t length)
 }
 #endif /* BUILD_TARGET_PC */
 
-void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
+void grDatFiles_801C6038(char* filename, bool bool1, bool bool2)
 {
     UnkArchiveStruct* temp_r3 = grDatFiles_801C62B4();
-    if (arg0 != NULL) {
+    if (filename != NULL) {
         HSD_Archive* sp14;
-        s32 phi_r28;
-        void* r4 = arg0;
+        bool phi_r28;
+        char* r4 = filename;
 #if BUILD_TARGET_PC
-        if (arg2 != 0) {
+        if (bool2 != false) {
             /* PC port: avoid variadic call crash - load archive then get symbol directly */
             void* data;
             size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
@@ -3278,7 +3279,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                     temp_r3->unk8 = x64Arc->unk8;
                 }
             }
-            phi_r28 = 1;
+            phi_r28 = true;
         } else {
             /* PC port: avoid variadic call crash - load archive then get symbol directly */
             void* data;
@@ -3301,22 +3302,21 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                     temp_r3->unk8 = x64Arc->unk8;
                 }
             }
-            phi_r28 = 0;
+            phi_r28 = false;
         }
 #else
-        if (arg2 != 0) {
+        if (bool2 != false) {
             phi_r28 =
-                lbArchive_800171CC(&sp14, r4, &temp_r3->unk4, "map_head", NULL);
+                lbArchive_800171CC(&sp14, r4, &temp_r3->unk4, "map_head", 0);
         } else {
-            sp14 =
-                lbArchive_80016DBC(r4, (void**) &temp_r3->unk4, "map_head", NULL);
-            phi_r28 = 0;
+            sp14 = lbArchive_80016DBC(r4, &temp_r3->unk4, "map_head", 0);
+            phi_r28 = false;
         }
 #endif /* BUILD_TARGET_PC */
         temp_r3->unk8 = 0;
-        if (arg1 == 0) {
+        if (bool1 == false) {
             stage_info.coll_data =
-                HSD_ArchiveGetPublicAddress(sp14, "coll_data");
+                HSD_ArchiveGetPublicAs(MapCollData, sp14, "coll_data");
 #if BUILD_TARGET_PC
             /* PC port: that pointer is raw big-endian archive data. Convert
              * it, or mpLibLoad reads garbage counts and indexes wildly --
@@ -3331,7 +3331,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             }
 #endif
             stage_info.param =
-                HSD_ArchiveGetPublicAddress(sp14, "grGroundParam");
+                HSD_ArchiveGetPublicAs(GroundParam, sp14, "grGroundParam");
 #if BUILD_TARGET_PC
             /* PC port: grGroundParam is raw big-endian. Everything below
              * offset 0xB0 is scalar (no pointers), so GCN and x86_64 layouts
@@ -3374,10 +3374,10 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                 }
             }
 #endif
-            stage_info.itemdata =
-                HSD_ArchiveGetPublicAddress(sp14, "itemdata");
+            stage_info.itemdata = HSD_ArchiveGetPublicAs(
+                struct GroundItemData*, sp14, "itemdata");
             stage_info.ald_yaku_all =
-                HSD_ArchiveGetPublicAddress(sp14, "ALDYakuAll");
+                HSD_ArchiveGetPublicAs(GroundItemScript, sp14, "ALDYakuAll");
 #if BUILD_TARGET_PC
             /* Both are arrays of big-endian file offsets, so walking them as
              * host pointers reads garbage -- which is why they used to be
@@ -3402,7 +3402,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
             stage_info.yakumono_param =
                 HSD_ArchiveGetPublicAddress(sp14, "yakumono_param");
             stage_info.map_plit =
-                HSD_ArchiveGetPublicAddress(sp14, "map_plit");
+                HSD_ArchiveGetPublicAs(LightList*, sp14, "map_plit");
 #if BUILD_TARGET_PC
             /* The stage's light list, read back by Ground_801C49B4 for the
              * fighters' light (ftCo_8009F4A4) and so for the shadow pass,
@@ -3416,8 +3416,8 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
                     stage_info.map_plit, sp14->data);
             }
 #endif
-            stage_info.quake_model_set =
-                HSD_ArchiveGetPublicAddress(sp14, "quake_model_set");
+            stage_info.quake_model_set = HSD_ArchiveGetPublicAs(
+                DynamicModelDesc, sp14, "quake_model_set");
 #if BUILD_TARGET_PC
             /* Raw big-endian like itemdata and ald_yaku_all: grLib_801C9CEC
              * walks ->joint and ->anims[] as native pointers and those are
@@ -3435,7 +3435,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         }
         temp_r3->unk0 = sp14;
         if (stage_info.map_ptcl != NULL && stage_info.map_texg != NULL) {
-            if (phi_r28 != 0) {
+            if (phi_r28 != false) {
                 psInitDataBankLoad(0x40, stage_info.map_ptcl,
                                    stage_info.map_texg, 0, 0);
             } else {
@@ -3446,7 +3446,7 @@ void grDatFiles_801C6038(void* arg0, s32 arg1, s32 arg2)
         grDatFiles_801C6228(temp_r3->unk4);
     } else {
         temp_r3->unk4 = &grDatFiles_803E0924;
-        if (arg1 == 0) {
+        if (bool1 == false) {
             stage_info.coll_data = NULL;
             stage_info.param = &grDatFiles_803E0848;
             stage_info.itemdata = NULL;
@@ -3467,9 +3467,9 @@ void grDatFiles_801C6228(UnkStageDat* arg0)
     if (arg0->unk28 != NULL && arg0->unk2C != 0) {
         s32 i;
         for (i = 0; i < arg0->unk2C; i++) {
-            UnkStageDatInternal* temp_r4 = arg0->unk28[i];
-            if (temp_r4 != NULL) {
-                temp_r4->unk4 |= 0x4000000;
+            HSD_MObjDesc* mobj = arg0->unk28[i];
+            if (mobj != NULL) {
+                mobj->rendermode |= RENDER_SHADOW;
             }
         }
     }
@@ -3515,7 +3515,7 @@ UnkArchiveStruct* grDatFiles_801C6330(s32 arg0)
             if (grDatFiles_8049EE10[i].unk0 != NULL) {
                 UnkStageDat* temp_r7 = grDatFiles_8049EE10[i].unk4;
                 if (temp_r7 != NULL && temp_r7->unkC > arg0 &&
-                    temp_r7->unk8[arg0].unk0 != 0)
+                    temp_r7->unk8[arg0].joint != 0)
                 {
                     return &grDatFiles_8049EE10[i];
                 }
@@ -3549,7 +3549,7 @@ UnkArchiveStruct* grDatFiles_801C6478(void* data, s32 length)
         arc->unk4 = x64 != NULL ? x64->unk4 : NULL;
     }
 #else
-    arc->unk4 = HSD_ArchiveGetPublicAddress(archive, "map_head");
+    arc->unk4 = HSD_ArchiveGetPublicAs(UnkStageDat, archive, "map_head");
 #endif
     arc->unk8 = 1;
 

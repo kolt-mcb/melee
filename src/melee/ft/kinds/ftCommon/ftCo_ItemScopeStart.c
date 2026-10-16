@@ -14,10 +14,16 @@ typedef struct {
     void* x1A58; // 0x1A58
     u8 pad_2340[0x2340 - 0x1A5C];
     f32 x2340; // 0x2340
-    f32 x2344; // 0x2344
+    s32 x2344; // 0x2344
     s32 x2348; // 0x2348
     u8 x234C;  // 0x234C
 } FighterOverlay;
+
+typedef struct {
+    u8 pad[0x2340];
+    f32 timer; // 0x2340
+    s32 flag;  // 0x2344
+} ItemScopeVars;
 
 FtMotionId fn_800D769C(Fighter* ft, FtMotionId msid)
 {
@@ -40,24 +46,19 @@ void ft_800D76B8(Fighter_GObj* gobj)
     }
 
     {
-        typedef struct {
-            u8 x0[0x2340];
-            f32 x2340;
-            s32 x2344;
-        } ItemScopeVars;
 #if BUILD_TARGET_PC
         /* mv.co+0/+4, as fn_800D79B4 reads them. Cast onto fp itself these
          * landed on fp->x1980 (an HSD_GObj*) on the host, zeroing it, and
          * the charge timer and released flag were never reset. */
         ItemScopeVars* vars = (ItemScopeVars*) ((char*) &fp->mv.co -
-                                                offsetof(ItemScopeVars, x2340));
+                                                offsetof(ItemScopeVars, timer));
 #else
         ItemScopeVars* vars = (ItemScopeVars*) fp;
 #endif
 
         ftAnim_8006EBA4(gobj);
-        vars->x2340 = 0.0F;
-        vars->x2344 = 0;
+        vars->timer = 0.0F;
+        vars->flag = 0;
     }
 
     ftCommon_8007E79C(fp->gobj, 1);
@@ -77,25 +78,20 @@ void ft_800D7770(Fighter_GObj* gobj)
     }
 
     {
-        typedef struct {
-            u8 x0[0x2340];
-            f32 x2340;
-            s32 x2344;
-        } ItemScopeVars;
 #if BUILD_TARGET_PC
         /* mv.co+0/+4, as fn_800D79B4 reads them. Cast onto fp itself these
          * landed on fp->x1980 (an HSD_GObj*) on the host, zeroing it, and
          * the charge timer and released flag were never reset. */
         ItemScopeVars* vars = (ItemScopeVars*) ((char*) &fp->mv.co -
-                                                offsetof(ItemScopeVars, x2340));
+                                                offsetof(ItemScopeVars, timer));
 #else
         ItemScopeVars* vars = (ItemScopeVars*) fp;
 #endif
 
         ftAnim_8006EBA4(gobj);
         ftCommon_ClampAirDrift(fp);
-        vars->x2340 = 0.0F;
-        vars->x2344 = 0;
+        vars->timer = 0.0F;
+        vars->flag = 0;
     }
 
     ftCommon_8007E79C(fp->gobj, 1);
@@ -171,11 +167,6 @@ void fn_800D79B4(HSD_GObj* gobj, void (*cb_ground)(HSD_GObj*),
 
     // Define an overlay struct to force direct offset access (prevents address
     // caching in r26/r27)
-    typedef struct {
-        u8 pad[0x2340];
-        f32 timer; // 0x2340
-        s32 flag;  // 0x2344
-    } FighterOverlay;
 #if BUILD_TARGET_PC
     /* The overlay's offsets are the console's: fp+0x2340 and fp+0x2344 are
      * mv.co+0 and mv.co+4, where the scope's charge timer and its
@@ -190,10 +181,10 @@ void fn_800D79B4(HSD_GObj* gobj, void (*cb_ground)(HSD_GObj*),
      *
      * Anchored on mv.co so the same offsets mean the same fields on both
      * targets. The GameCube arm is the original cast verbatim. */
-    FighterOverlay* fp_ovl = (FighterOverlay*) ((char*) &fp->mv.co -
-                                                offsetof(FighterOverlay, timer));
+    ItemScopeVars* fp_ovl = (ItemScopeVars*) ((char*) &fp->mv.co -
+                                              offsetof(ItemScopeVars, timer));
 #else
-    FighterOverlay* fp_ovl = (FighterOverlay*) fp;
+    ItemScopeVars* fp_ovl = (ItemScopeVars*) fp;
 #endif
 
     // Use this specific cast to generate the correct 'lfs' instruction for the

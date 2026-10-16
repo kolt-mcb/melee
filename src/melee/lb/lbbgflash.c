@@ -80,7 +80,7 @@ HSD_CameraDescPerspective lbl_803BB028 = {
 
 void fn_8001FC08(void)
 {
-    // TODO: Un-unroll this somehow?
+    /// @TODO: Un-unroll this somehow?
     // When I try it just stays a loop in the asm
     BgFlashData* data = &lbl_80433658;
     f32 val;
@@ -170,7 +170,7 @@ static void sdata2_order(void)
 }
 #endif
 
-void fn_8001FEC4(HSD_GObj* gobj, s32 code)
+void fn_8001FEC4(HSD_GObj* gobj, intptr_t code)
 {
     BgFlashData* data = &lbl_80433658;
     s32 mode;
@@ -466,8 +466,7 @@ void lbBgFlash_800208EC(int arg0)
     flash->x40 = GObj_Create(0x15, 0x16, 2);
 
     gobj2_slot = &flash->x40;
-    GObj_SetupGXLink(*gobj2_slot, (GObj_RenderFunc) fn_8001FEC4, 0x10,
-                     (u8) arg0);
+    GObj_SetupGXLink(*gobj2_slot, fn_8001FEC4, 0x10, (u8) arg0);
     HSD_GObj_SetupProc(*gobj2_slot, fn_800204C8, 0);
 
     lbl_80433658.state.active = 1;
@@ -497,7 +496,7 @@ void lbBgFlash_800209F4(void)
     // This is flash->x40
     lbl_80433658.x40 = GObj_Create(0x15, 0x16, 2);
     gobj2_slot = &flash->x40;
-    GObj_SetupGXLink(*gobj2_slot, (GObj_RenderFunc) fn_8001FEC4, 0x10, 0xa);
+    GObj_SetupGXLink(*gobj2_slot, fn_8001FEC4, 0x10, 0xa);
     temp = *gobj2_slot;
     HSD_GObj_SetupProc(temp, fn_800204C8, 0);
     lbl_80433658.state.active = 1;

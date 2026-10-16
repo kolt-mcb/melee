@@ -78,7 +78,7 @@ static struct ParticleConsoleState hsd_804CF7E8;
  * by the same name. psFormGroupArray keeps its own slot (4D0A4C), which the
  * GameCube bank loader writes. */
 HSD_PSFormGroup** psNumCmdList[65];     /* shared with psdisp.c */
-HSD_PSFormGroup** psFormGroupArray[65]; /* 4D0A4C, the bank loader's slot */
+int psFormGroupArray[65];               /* 4D0A4C, the bank loader's slot */
 void* hsd_804D0908[146];                /* shared with psdisp.c */
 HSD_PSTexGroup** psTexGroupArray[65];   /* shared with psdisp.c */
 HSD_PSCmdList** ptclref_804D0E5C[65];   /* shared with ef/ */

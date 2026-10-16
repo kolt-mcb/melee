@@ -28,22 +28,6 @@
 #define GS_FMA(a, b, c) ((a) * (b) + (c))
 #endif
 
-typedef struct itGShell_Attrs {
-    float x0;
-    float x4;
-    float x8;
-    float xC;
-    float x10;
-    float x14;
-    char pad18[0x1C - 0x18];
-    float x1C;
-    float x20;
-    float x24;
-    float x28;
-    float x2C;
-    float x30;
-    Vec x34;
-} itGShell_Attrs;
 ASSERT_SIZE(itGShell_Attrs, 64);
 
 ItemStateTable it_803F5BA8[] = {
@@ -71,7 +55,8 @@ ItemStateTable it_803F5BA8[] = {
 void it_8028B8D8(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     f32 temp;
     Vec v;
     HSD_JObj* jobj;
@@ -93,7 +78,8 @@ void it_8028B8D8(Item_GObj* gobj)
 void it_8028B988(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     if (ip->xDD4_itemVar.gshell.xDEC_b1) {
         ip->xDD4_itemVar.gshell.xDE0 -= 1.0f;
         if (ip->xDD4_itemVar.gshell.xDE0 <= 0.0f) {
@@ -110,7 +96,8 @@ void it_8028B988(Item_GObj* gobj)
 void it_8028BA2C(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     it_80275D5C(gobj, &ip->xC0C);
     if (ABS(ip->x40_vel.x) < attrs->x8) {
         ip->x40_vel.x = ip->x40_vel.y = ip->x40_vel.z = 0.0f;
@@ -127,7 +114,8 @@ void it_8028BA2C(Item_GObj* gobj)
 void it_8028BAD8(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     switch (ip->msid) {
     case 0:
     case 1:
@@ -162,7 +150,8 @@ void it_8028BAD8(Item_GObj* gobj)
 void it_8028BC2C(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     PAD_STACK(8);
     switch (ip->msid) {
     case 5:
@@ -211,7 +200,8 @@ void it_8028BC2C(Item_GObj* gobj)
 void itGShell_Logic14_Spawned(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     ip->xDD4_itemVar.gshell.xDD4 = attrs->x0;
     it_80275174(gobj, ip->xDD4_itemVar.gshell.xDD4);
     ip->xDD4_itemVar.gshell.xDE8 = 1;
@@ -257,7 +247,7 @@ bool itGshell_UnkMotion0_Coll(Item_GObj* gobj)
     it_8026D62C(gobj, it_8028C018);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->g_shell;
     if (ip->ground_or_air == GA_Ground) {
         Item_UpdateRollingShellRotation(gobj, ip, jobj, &attrs->x20);
     }
@@ -273,7 +263,7 @@ void it_8028C018(Item_GObj* gobj)
 bool itGshell_UnkMotion1_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    if (ip->xDD4_itemVar.gshell.xDEC_b3 && ip->xDD0_flag.b0 != 1) {
+    if (ip->xDD4_itemVar.gshell.xDEC_b3 && ip->xDD0_flag.x0.b0 != 1) {
         if (ip->xDD4_itemVar.gshell.xDE4 <= 0.0f) {
             it_80274CAC(gobj);
             ip->jumped_on = it_8028CF68;
@@ -330,19 +320,7 @@ void itGShell_Logic14_Thrown(Item_GObj* gobj)
 
 bool itGshell_UnkMotion3_Anim(Item_GObj* gobj)
 {
-    Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
-    if (ip->xDD4_itemVar.gshell.xDEC_b1) {
-        ip->xDD4_itemVar.gshell.xDE0 -= 1.0f;
-        if (ip->xDD4_itemVar.gshell.xDE0 <= 0.0f) {
-            ip->xDD4_itemVar.gshell.xDEC_b1 = 0;
-            ip->xDD4_itemVar.gshell.xDE0 = attrs->x28;
-            it_8027572C(gobj, 0);
-            if (ip->xDD4_itemVar.gshell.xDEC_b2) {
-                it_802756E0(gobj);
-            }
-        }
-    }
+    it_8028B988(gobj);
     return false;
 }
 
@@ -364,18 +342,10 @@ void itGShell_Logic14_Dropped(Item_GObj* gobj)
     Item_80268E5C(gobj, 4, 6);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool itGshell_UnkMotion4_Anim(Item_GObj* gobj)
 {
-    it_8028B988(gobj);
-    return false;
+    return itGshell_UnkMotion3_Anim(gobj);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void itGshell_UnkMotion4_Phys(Item_GObj* gobj)
 {
@@ -393,7 +363,8 @@ bool itGshell_UnkMotion4_Coll(Item_GObj* gobj)
 void it_8028C3A8(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     PAD_STACK(8);
     it_8026B3A8(gobj);
     it_80275474(gobj);
@@ -429,15 +400,15 @@ bool itGshell_UnkMotion6_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     if (ip->xDD4_itemVar.gshell.xDD8 <= 0.0f) {
-        if (!ip->xDCD_flag.b5) {
+        if (!ip->xDCD_flag.x0.b5) {
             it_80275444(gobj);
         }
     } else {
         ip->xDD4_itemVar.gshell.xDD8 -= 1.0f;
     }
-    it_8028B988(gobj); // inlined
+    it_8028B988(gobj);
     if (ip->msid == 6 || ip->msid == 5) {
-        it_8028B8D8(gobj); // inlined
+        it_8028B8D8(gobj);
     }
     if (ip->xDD4_itemVar.gshell.xDD4 <= 0.0f) {
         return true;
@@ -449,7 +420,8 @@ bool itGshell_UnkMotion6_Anim(Item_GObj* gobj)
 void itGshell_UnkMotion6_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     if (ABS(ip->x40_vel.x) < attrs->x8 && !ip->xDC8_word.flags.x15) {
         it_8026B390(gobj);
         it_802725D4(gobj);
@@ -466,7 +438,7 @@ bool itGshell_UnkMotion6_Coll(Item_GObj* gobj)
     it_8026D62C(gobj, it_8028C898);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->g_shell;
     if (ip->ground_or_air == GA_Ground) {
         Item_UpdateRollingShellRotation(gobj, ip, jobj, &attrs->x20);
     }
@@ -479,7 +451,8 @@ bool itGshell_UnkMotion6_Coll(Item_GObj* gobj)
 void it_8028C898(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     PAD_STACK(8);
     it_8026B3A8(gobj);
     it_80275474(gobj);
@@ -510,34 +483,11 @@ void it_8028C898(Item_GObj* gobj)
     ip->jumped_on = it_8028CF68;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool itGshell_UnkMotion8_Anim(Item_GObj* gobj)
 {
-    Item* ip = gobj->user_data; // GET_ITEM(gobj);
-    if (ip->xDD4_itemVar.gshell.xDD8 <= 0.0f) {
-        if (!ip->xDCD_flag.b5) {
-            it_80275444(gobj);
-        }
-    } else {
-        ip->xDD4_itemVar.gshell.xDD8 -= 1.0f;
-    }
-    it_8028B988(gobj);
-    if (ip->msid == 6 || ip->msid == 5) {
-        it_8028B8D8(gobj);
-    }
-    if (ip->xDD4_itemVar.gshell.xDD4 <= 0.0f) {
-        ;
-    } else {
-        ip->xDD4_itemVar.gshell.xDD4 -= 1.0f;
-    }
+    itGshell_UnkMotion6_Anim(gobj);
     return false;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void itGshell_UnkMotion8_Phys(Item_GObj* gobj)
 {
@@ -579,7 +529,7 @@ bool itGshell_UnkMotion9_Coll(Item_GObj* gobj)
     it_8026E8C4(gobj, it_8028BE54, it_8028C018);
     ip = GET_ITEM(gobj);
     jobj = GET_JOBJ(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->g_shell;
     if (ip->ground_or_air == GA_Ground) {
         it_80276CB8(gobj);
         jobj = HSD_JObjGetChild(jobj);
@@ -613,7 +563,8 @@ bool itGShell_Logic14_Reflected(Item_GObj* gobj)
 static inline void shellHit(HSD_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itGShell_Attrs* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itGShell_Attrs* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->g_shell;
     it_802756D0(gobj);
     it_80275444(gobj);
     ip->x40_vel.x = -ip->x40_vel.x * attrs->xC * HSD_Randf();

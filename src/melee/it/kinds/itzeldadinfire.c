@@ -35,21 +35,6 @@ ItemStateTable ItemStateTable_ZeldaDinFire[] = {
       itZeldadinfire_UnkMotion1_Coll },
 };
 
-typedef struct {
-    float x0;
-    float x4;
-    float x8;
-    float xC;
-    float x10;
-    float x14;
-    float x18;
-    float x1C;
-    float x20;
-    float x24;
-    float x28;
-    float x2C;
-} ItZeldaDinFire_ItemVars;
-
 Fighter_GObj* itZeldaDinFire_GetOwner(Item_GObj* gobj)
 {
     /// @todo Use #itGetOwner if it can be made to inline here.
@@ -89,7 +74,7 @@ Item_GObj* it_802C3BAC(Item_GObj* gobj, Vec* vec, float facing_dir, float arg3)
     if (n != NULL) {
         Item* i = GET_ITEM(n);
         ItZeldaDinFire_ItemVars* attrs =
-            i->xC4_article_data->x4_specialAttributes;
+            &i->xC4_article_data->x4_specialAttributes->zelda_din_fire;
         Item_ClearCmdVars(i);
         it_80275158(n, attrs->x0);
         i->xDD4_itemVar.zeldadinfire.xDD8 = 0.0f;
@@ -136,7 +121,7 @@ void it_802C3D74(Item_GObj* gobj)
     ItZeldaDinFire_ItemVars* attrs;
     HSD_JObj* jobj = GET_JOBJ(gobj);
     double rot;
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->zelda_din_fire;
     Item_ClearFlagsAndEnterState(gobj, ip, 0);
     it_80275158(gobj, attrs->x0);
     ip->xDD4_itemVar.zeldadinfire.xDD8 = 0.0f;
@@ -165,7 +150,7 @@ static inline void itZeldadinfire_UnkMotion0_Anim_inline(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     ItZeldaDinFire_ItemVars* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->zelda_din_fire;
     HSD_JObj* jobj = GET_JOBJ(gobj);
     if (ip->xDD4_itemVar.zeldadinfire.xDF4) {
         efLib_DestroyAll(gobj);
@@ -182,7 +167,7 @@ bool itZeldadinfire_UnkMotion0_Anim(Item_GObj* gobj)
     Item* ip = GET_ITEM(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
     ItZeldaDinFire_ItemVars* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->zelda_din_fire;
     Vec v;
     if (ip->xDD4_itemVar.zeldadinfire.xDDC == 0) {
         ip->xDD4_itemVar.zeldadinfire.xDD8 += 1.0f;
@@ -210,7 +195,7 @@ bool itZeldadinfire_UnkMotion1_Anim(Item_GObj* gobj)
     Item* ip = GET_ITEM(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
     ItZeldaDinFire_ItemVars* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->zelda_din_fire;
     Vec v;
     v.x = v.y = v.z = ZD_FMA(ip->xDD4_itemVar.zeldadinfire.xDD8,
                              (attrs->xC - attrs->x8) / attrs->x4, attrs->x8);
@@ -236,7 +221,7 @@ void itZeldadinfire_UnkMotion0_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     ItZeldaDinFire_ItemVars* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->zelda_din_fire;
     int pad;
     float f1;
     float f2;
@@ -248,7 +233,7 @@ void itZeldadinfire_UnkMotion0_Phys(Item_GObj* gobj)
             float *f3, *f4;
             f3 = &f1;
             f4 = &f2;
-            ftLib_800865D8(ip->xDD4_itemVar.zeldadinfire.xDE0, f4, f3);
+            ftLib_GetLStick(ip->xDD4_itemVar.zeldadinfire.xDE0, f4, f3);
             if (ABS(f1) > attrs->x20) {
                 ip->xDD4_itemVar.zeldadinfire.xDE8 =
                     ZD_FMA(ip->facing_dir, attrs->x24 * f1,

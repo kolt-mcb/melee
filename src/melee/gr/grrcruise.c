@@ -459,16 +459,17 @@ void grRCruise_801FF7A4(Ground_GObj* gobj)
     Ground* gp = stage_gobj->user_data;
     HSD_JObj* jobj = stage_gobj->hsd_obj;
     UnkArchiveStruct* archive;
-    DynamicsDesc* data;
+    DynamicsTemplate* data;
     PAD_STACK(8);
 
     Ground_InitMapColl(jobj, gp->map_id);
     grAnime_801C8138(stage_gobj, gp->map_id, 0);
-    grAnime_801C752C(jobj, 1, 30628, HSD_AObjSetFlags, 3, 0x20000000);
-    archive = grDatFiles_801C6324();
-    if (archive != NULL && (data = HSD_ArchiveGetPublicAddress(
-                                archive->unk0, "dynamicsdata_shipflag"),
-                            data != NULL))
+    grAnime_801C752C(jobj, 1, 30628, HSD_AObjSetFlags, 3, AOBJ_LOOP);
+    archive = grDatFiles_GetArchive();
+    if (archive != NULL &&
+        (data = HSD_ArchiveGetPublicAs(DynamicsTemplate, archive->unk0,
+                                       "dynamicsdata_shipflag"),
+         data != NULL))
     {
 #if BUILD_TARGET_PC
         /* A public address is a pointer into the raw file image. Handed on
@@ -1122,19 +1123,19 @@ inline Ground* grRCruise_80200C04_inline(Ground_GObj* gobj)
 {
     return gobj->user_data;
 }
+struct grRCruise_EntryFlags {
+    u8 b0 : 1;
+    u8 b1 : 1;
+    u8 b2 : 1;
+    u8 b3 : 1;
+    u8 b4 : 1;
+    u8 b5 : 1;
+    u8 b6 : 1;
+    u8 b7 : 1;
+};
 
 void grRCruise_80200C04(Ground_GObj* gobj)
 {
-    struct grRCruise_EntryFlags {
-        u8 b0 : 1;
-        u8 b1 : 1;
-        u8 b2 : 1;
-        u8 b3 : 1;
-        u8 b4 : 1;
-        u8 b5 : 1;
-        u8 b6 : 1;
-        u8 b7 : 1;
-    };
     Ground* gp;
     s32 i;
 
@@ -1619,7 +1620,7 @@ void grRCruise_80201B60(HSD_JObj* jobj, bool arg1)
     }
 }
 
-void fn_80201BE0(HSD_GObj* gobj, s32 pass)
+void fn_80201BE0(HSD_GObj* gobj, intptr_t pass)
 {
     if (gm_GetDbPauseFlag(1) || gm_GetDbPauseFlag(2) || Camera_8003010C()) {
         return;
@@ -1627,7 +1628,7 @@ void fn_80201BE0(HSD_GObj* gobj, s32 pass)
     grDisplay_801C5DB0(gobj, pass);
 }
 
-DynamicsDesc* grRCruise_80201C50(enum_t arg)
+lbColl_80008D30_arg1* grRCruise_80201C50(enum_t arg)
 {
     return false;
 }

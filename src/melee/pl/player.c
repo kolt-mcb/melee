@@ -133,7 +133,8 @@ void Player_80031790(int slot)
             /// (transformed) checks to see if the player is in a transformed
             /// state, and calls the function only once depending on the state
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_800867E8(player->player_entity[player->transformed[i]]);
+                ftLib_DisableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -158,7 +159,8 @@ void Player_80031848(int slot)
             /// (transformed) checks to see if the player is in a transformed
             /// state, and calls the function only once depending on the state
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_8008688C(player->player_entity[player->transformed[i]]);
+                ftLib_EnableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -170,7 +172,8 @@ static void func_8008688C_wrapper(StaticPlayer* player)
         s32 i;
         for (i = 0; i < 2; i++) {
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_8008688C(player->player_entity[player->transformed[i]]);
+                ftLib_EnableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -267,8 +270,8 @@ void Player_80031AD0(int slot)
 
     first_struct.internal_id = internal_id;
     first_struct.slot = slot;
-    first_struct.b0 = false;
-    first_struct.has_transformation = false;
+    first_struct.x6.b0 = false;
+    first_struct.x6.has_transformation = false;
     first_struct.x5 = -1;
 
     player->player_entity[0] = Fighter_Create(&first_struct);
@@ -288,8 +291,8 @@ void Player_80031AD0(int slot)
 
         second_struct.internal_id = internal_id;
         second_struct.slot = slot;
-        second_struct.b0 = true;
-        second_struct.has_transformation = has_transformation;
+        second_struct.x6.b0 = true;
+        second_struct.x6.has_transformation = has_transformation;
         second_struct.x5 = -1;
 
         player->player_entity[1] = Fighter_Create(&second_struct);
@@ -368,7 +371,8 @@ void Player_80031EBC(int slot)
     for (i = 0; i < 2; i++) {
         StaticPlayer* player = &player_slots[slot];
         if ((player->player_entity[player->transformed[i]])) {
-            if (!ftLib_8008701C(player->player_entity[player->transformed[i]]))
+            if (!ftLib_IsSleeping(
+                    player->player_entity[player->transformed[i]]))
             {
                 ftCo_800D4F24(player->player_entity[player->transformed[i]],
                               1);
@@ -398,8 +402,6 @@ void Player_80031FB0(int slot, s32 entity_index)
     }
 }
 
-/// new match decomp.me/scratch/oHfiV  @todo
-//// old match decomp.me/scratch/8otnq
 void Player_80032070(int slot, bool bool_arg)
 {
     StaticPlayer* player;
@@ -416,7 +418,7 @@ void Player_80032070(int slot, bool bool_arg)
 
         if (player->flags.b2 &&
             !ftMapping_list[player->ckind].has_transformation &&
-            ftLib_8008701C(player->player_entity[player->transformed[1]]))
+            ftLib_IsSleeping(player->player_entity[player->transformed[1]]))
         {
             ftCo_800D4FF4(player->player_entity[player->transformed[1]]);
         }
@@ -425,7 +427,7 @@ void Player_80032070(int slot, bool bool_arg)
         return;
     }
 
-    if (ftLib_800873CC(player->player_entity[player->transformed[0]])) {
+    if (ftLib_IsRebirth(player->player_entity[player->transformed[0]])) {
         ftCo_800D4FF4(player->player_entity[player->transformed[1]]);
     }
 }
@@ -440,7 +442,7 @@ bool Player_8003219C(int slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    return ftLib_8008701C(player->player_entity[player->transformed[0]]);
+    return ftLib_IsSleeping(player->player_entity[player->transformed[0]]);
 }
 
 bool Player_8003221C(int slot)
@@ -456,7 +458,7 @@ bool Player_8003221C(int slot)
 #endif
         player = &player_slots[slot];
 
-        if (!ftLib_8008701C(player->player_entity[player->transformed[0]])) {
+        if (!ftLib_IsSleeping(player->player_entity[player->transformed[0]])) {
             return true;
         }
     }
@@ -575,8 +577,7 @@ s8 Player_800325C8(CharacterKind kind, bool b)
 }
 
 s8 Player_80032610(s32 slot, bool arg1)
-{ //// decomp.me/scratch/pHTx2
-
+{
     StaticPlayer* player;
     s32 error_value = -1;
 
@@ -735,8 +736,8 @@ void Player_80032A04(int slot, Vec3* arg_vec)
         player->player_poses.byIndex[player->transformed[i]] = *arg_vec;
 
         if (player->player_entity[player->transformed[i]]) {
-            ftLib_80086664(player->player_entity[player->transformed[i]],
-                           arg_vec);
+            ftLib_SetPos(player->player_entity[player->transformed[i]],
+                         arg_vec);
         }
     }
 }
@@ -954,9 +955,9 @@ void Player_SetCostumeId(int slot, int costume_id)
     player->costume_id = costume_id;
 }
 
-u8 Player_GetControllerIndex(int slot)
+u8 Player_GetSubColor(int slot)
 {
-    s8 controller_index;
+    s8 sub_color;
     StaticPlayer* player;
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
@@ -965,11 +966,11 @@ u8 Player_GetControllerIndex(int slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    controller_index = player->controller_index;
-    return controller_index;
+    sub_color = player->sub_color;
+    return sub_color;
 }
 
-void Player_SetControllerIndex(int slot, s8 controller_index)
+void Player_SetSubColor(int slot, s8 sub_color)
 {
     StaticPlayer* player;
     Player_CheckSlot(slot);
@@ -979,7 +980,7 @@ void Player_SetControllerIndex(int slot, s8 controller_index)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    player->controller_index = controller_index;
+    player->sub_color = sub_color;
 }
 
 int Player_GetTeam(int slot)
@@ -1010,9 +1011,9 @@ void Player_SetTeam(int slot, s8 team)
     player->team = team;
 }
 
-int Player_GetPlayerId(int slot)
+int Player_GetPadPort(int slot)
 {
-    u8 player_id;
+    u8 controller_index;
     StaticPlayer* player;
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
@@ -1021,11 +1022,11 @@ int Player_GetPlayerId(int slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    player_id = player->player_id;
-    return player_id;
+    controller_index = player->pad_port;
+    return controller_index;
 }
 
-void Player_SetPlayerId(int slot, int player_id)
+void Player_SetPadPort(int slot, int controller_index)
 {
     StaticPlayer* player;
     Player_CheckSlot(slot);
@@ -1035,7 +1036,7 @@ void Player_SetPlayerId(int slot, int player_id)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    player->player_id = player_id;
+    player->pad_port = controller_index;
 }
 
 #if BUILD_TARGET_PC
@@ -1523,8 +1524,8 @@ void Player_SetHUDDamage(s32 slot, s32 arg1)
         player = &player_slots[slot];
         player->staminas.byIndex[player->transformed[i]] = arg1;
         if (player->player_entity[player->transformed[i]]) {
-            ftLib_800870F0(player->player_entity[player->transformed[i]],
-                           arg1);
+            ftLib_SetPercent(player->player_entity[player->transformed[i]],
+                             arg1);
         }
     }
 }
@@ -1806,7 +1807,7 @@ s32 Player_GetRemainingHPByIndex(s32 slot, s32 index)
 }
 
 s32 Player_GetFalls(s32 slot)
-{ /// decomp.me/scratch/8ijor
+{
     StaticPlayer* player;
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
@@ -2434,9 +2435,9 @@ float Player_800360D8(s32 slot)
 #if BUILD_TARGET_PC
     /* A slot can hold no fighter: the results screen asks every slot for its
      * name-tag height, and a boss match leaves the slots past the fighters
-     * empty. ftLib_80086F80 reads the GObj's user data straight away, which
-     * on the host is at 0x48, and that is the address a Master Hand match
-     * faulted on the moment it ended. */
+     * empty. ftLib_GetNameTagHeight reads the GObj's user data straight away,
+     * which on the host is at 0x48, and that is the address a Master Hand
+     * match faulted on the moment it ended. */
     if (player->player_entity[player->transformed[0]] == NULL) {
         static int said;
         if (said < 4) {
@@ -2447,7 +2448,8 @@ float Player_800360D8(s32 slot)
         return 0.0f;
     }
 #endif
-    return ftLib_80086F80(player->player_entity[player->transformed[0]]);
+    return ftLib_GetNameTagHeight(
+        player->player_entity[player->transformed[0]]);
 }
 
 void Player_SetStructFunc(s32 slot, void* arg_func)
@@ -2558,7 +2560,7 @@ s32 Player_80036428(s32 slot)
     entity = player->player_entity[player->transformed[0]];
 
     if (entity) {
-        return ftLib_80087300(entity);
+        return ftLib_GetLastAttackerSlot(entity);
     }
     return 6;
 }
@@ -2691,7 +2693,8 @@ bool Player_800368F8(int slot)
     if ((unsigned) (slot) >= (unsigned) Gm_Player_NumMax) slot = 0;
 #endif
     player = &player_slots[slot];
-    return ftLib_80086BB4(player->player_entity[player->transformed[0]]);
+    return ftLib_IsCameraSubjectInBounds(
+        player->player_entity[player->transformed[0]]);
 }
 
 void Player_80036978(s32 slot, Vec3* pos)
@@ -2708,18 +2711,20 @@ void Player_80036978(s32 slot, Vec3* pos)
 #endif
     player = &player_slots[slot];
 
-    ftLib_80086B90(player->player_entity[player->transformed[0]], pos);
+    ftLib_GetCameraSubjectBonePos(
+        player->player_entity[player->transformed[0]], pos);
 }
 
 void Player_InitOrResetPlayer(s32 slot)
 {
+    int i;
     StaticPlayer* player;
     u8* transformed0;
     u8* transformed1;
     f32 zerofloat;
     f32 onefloat;
 
-    u8 _[56];
+    u8 _[48];
 
     Player_CheckSlot(slot);
 #if BUILD_TARGET_PC
@@ -2756,9 +2761,9 @@ void Player_InitOrResetPlayer(s32 slot)
     player->transformed[1] = 1;
 
     player->unk45 = 0;
-    player->controller_index = 0;
+    player->sub_color = 0;
     player->team = 0;
-    player->player_id = 0;
+    player->pad_port = 0;
     player->cpu_level = 0;
 
     player->cpu_type = 4;
@@ -2782,12 +2787,9 @@ void Player_InitOrResetPlayer(s32 slot)
     player->falls[player->transformed[0]] = 0;
     player->falls[player->transformed[1]] = 0;
 
-    player->kos_by_player[0] = 0;
-    player->kos_by_player[1] = 0;
-    player->kos_by_player[2] = 0;
-    player->kos_by_player[3] = 0;
-    player->kos_by_player[4] = 0;
-    player->kos_by_player[5] = 0;
+    for (i = 0; i < 6; i++) {
+        player->kos_by_player[i] = 0;
+    }
 
     player->match_frame_count = -1;
     player->self_destructs = 0;
@@ -2860,11 +2862,11 @@ void Player_80036DA4(void)
 
 void Player_80036DD8(void)
 {
-    void** sp8 = NULL;
+    struct plLoadCommonData* data;
 
 #if BUILD_TARGET_PC
-    /* PC port: the archive stays raw big-endian and unrelocated, so *sp8 is
-     * a 4-byte data-section offset, not a pointer. The block it names
+    /* PC port: the archive stays raw big-endian and unrelocated, so data->x0
+     * is a 4-byte data-section offset, not a pointer. The block it names
      * (pl_804D6470_t, 0x184 bytes) is all 4-byte scalars -- the bonus
      * thresholds and point values the results screen scores with -- so it
      * converts with a wholesale word swap. With a zero arena here every
@@ -2874,12 +2876,13 @@ void Player_80036DD8(void)
     {
         static u8 pc_plco_zero[0x1000];
         static u32 pc_plco_conv[0x184 / 4];
-        HSD_Archive* ar = (HSD_Archive*) (void*) lbArchive_LoadSymbols(
-            str_PdPmdat_start_of_data, (void**) &sp8, str_plLoadCommonData,
-            NULL);
+        HSD_Archive* ar;
+        data = NULL;
+        ar = (HSD_Archive*) (void*) lbArchive_LoadSymbols(
+            str_PdPmdat_start_of_data, &data, str_plLoadCommonData, NULL);
         pl_804D6470 = (void*) pc_plco_zero;
-        if (ar != NULL && sp8 != NULL && ar->data != NULL) {
-            const u8* p = (const u8*) sp8;
+        if (ar != NULL && data != NULL && ar->data != NULL) {
+            const u8* p = (const u8*) data;
             u32 off = ((u32) p[0] << 24) | ((u32) p[1] << 16) |
                       ((u32) p[2] << 8) | (u32) p[3];
             if (off + sizeof(pc_plco_conv) <= ar->header.data_size) {
@@ -2902,9 +2905,9 @@ void Player_80036DD8(void)
         }
     }
 #else
-    lbArchive_LoadSymbols(str_PdPmdat_start_of_data, (void**) &sp8,
-                          str_plLoadCommonData, NULL);
-    pl_804D6470 = *sp8;
+    lbArchive_LoadSymbols(str_PdPmdat_start_of_data, &data,
+                          str_plLoadCommonData, 0);
+    pl_804D6470 = data->x0;
 #endif
 }
 
@@ -2934,7 +2937,7 @@ HSD_JObj* Player_80036EA0(s32 slot)
     entity = player->player_entity[player->transformed[0]];
 
     if (entity) {
-        return ftLib_800865F0(entity);
+        return ftLib_GetHipJObj(entity);
     }
 
     return NULL;
@@ -2955,9 +2958,9 @@ void Player_80036F34(s32 slot, s32 arg1)
     player = &player_slots[slot];
     some_struct.internal_id = ftMapping_list[player->ckind].internal_id;
     some_struct.slot = slot;
-    some_struct.has_transformation = 0;
+    some_struct.xC.has_transformation = 0;
     some_struct.unk8 = arg1;
-    some_struct.b0 = 0;
+    some_struct.xC.b0 = 0;
 
     player->pkind = Gm_PKind_Demo;
     player->player_entity[0] = ftDemo_CreateFighter(&some_struct);
@@ -2966,7 +2969,7 @@ void Player_80036F34(s32 slot, s32 arg1)
     {
         some_struct.internal_id =
             ftMapping_list[player->ckind].extra_internal_id;
-        some_struct.has_transformation = 1;
+        some_struct.xC.has_transformation = 1;
         player->player_entity[1] = ftDemo_CreateFighter(&some_struct);
     }
 }
@@ -2986,9 +2989,9 @@ void Player_80037054(s32 slot, s32 arg1)
     player = &player_slots[slot];
     some_struct.internal_id = ftMapping_list[player->ckind].internal_id;
     some_struct.slot = slot;
-    some_struct.has_transformation = 0;
+    some_struct.xC.has_transformation = 0;
     some_struct.unk8 = arg1;
-    some_struct.b0 = 1;
+    some_struct.xC.b0 = 1;
 
     player->pkind = Gm_PKind_Demo;
     player->player_entity[0] = ftDemo_CreateFighter(&some_struct);
@@ -2997,7 +3000,7 @@ void Player_80037054(s32 slot, s32 arg1)
     {
         some_struct.internal_id =
             ftMapping_list[player->ckind].extra_internal_id;
-        some_struct.has_transformation = 1;
+        some_struct.xC.has_transformation = 1;
         player->player_entity[1] = ftDemo_CreateFighter(&some_struct);
     }
 }

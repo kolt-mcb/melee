@@ -71,7 +71,7 @@ struct grKongo_YakumonoParam {
      * fighter standing on it was at the wrong height on match frame 1. */
     u32 unk84;
 #else
-    void* unk84;
+    union ColorOverlay_x8_t* unk84 DAT_SCRIPT(colAnimCommandLength(_command));
 #endif
     f32 unk88;
     f32 unk8C;
@@ -97,8 +97,6 @@ _Static_assert(offsetof(struct grKongo_YakumonoParam, unkB8) == 0xB8,
 #endif
 
 extern const grKg_SplineChoiceList grKg_803B7FD4;
-
-static struct grKongo_YakumonoParam* yakumono_param;
 
 /* 1D5238 */ void grKongo_801D5238(bool);
 /* 1D523C */ void grKongo_801D523C(void);

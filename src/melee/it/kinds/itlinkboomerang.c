@@ -86,7 +86,7 @@ bool it_8029FDBC(Item_GObj* gobj)
     return (GET_ITEM(gobj)->msid != 0) ? false : true;
 }
 
-void it_8029FDDC(Item_GObj* gobj, int arg1)
+void it_8029FDDC(Item_GObj* gobj, intptr_t arg1)
 {
     s32 i;
     Item* ip;
@@ -171,7 +171,7 @@ HSD_GObj* it_802A013C(f32 facing_dir, Fighter_GObj* owner_gobj, Vec3* pos,
     if (gobj != NULL) {
         Item* ip = gobj->user_data;
         itLinkBoomerangAttributes* attrs =
-            ip->xC4_article_data->x4_specialAttributes;
+            &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
         int i;
         it_80275158(gobj, attrs->x0);
         ip->xDAC_itcmd_var0 = 0;
@@ -194,7 +194,8 @@ HSD_GObj* it_802A013C(f32 facing_dir, Fighter_GObj* owner_gobj, Vec3* pos,
         }
         for (i = 0; i < 2; i++) {
             ip->xDD4_itemVar.linkboomerang.xDDC[i] = 0;
-            attrs = ip->xC4_article_data->x4_specialAttributes;
+            attrs =
+                &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
             ip->xDD4_itemVar.linkboomerang.xF90[i] =
                 it_802A013C_LoadAnim(attrs, i);
         }
@@ -233,15 +234,17 @@ static void loop_lb_8000BA0C_gobj_1(Item_GObj* gobj, HSD_JObj* hobj)
     }
 }
 
+struct it_802A0534_stack {
+    u32 pad;
+    Quaternion quad;
+};
+
 void it_802A0534(Item_GObj* gobj, Vec3* arg1, f32 angle)
 {
-    struct {
-        u32 pad;
-        Quaternion quad;
-    } stack;
+    struct it_802A0534_stack stack;
     Item* ip = gobj->user_data;
     itLinkBoomerangAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     HSD_JObj* jobj_tmp = gobj->hsd_obj;
     HSD_JObj* jobj = jobj_tmp;
     HSD_JObj* child;
@@ -258,7 +261,8 @@ void it_802A0534(Item_GObj* gobj, Vec3* arg1, f32 angle)
     ip->xDD4_itemVar.linkboomerang.xF74 = angle;
     norm_xF74_from_angle(ip, angle);
     ip->xB8_itemLogicTable->thrown(gobj);
-    mtx = (ftLib_80086630(ip->xDD4_itemVar.linkboomerang.xF98, ip->xDC4))->mtx;
+    mtx = (ftLib_GetPartJObj(ip->xDD4_itemVar.linkboomerang.xF98, ip->xDC4))
+              ->mtx;
     HSD_MtxGetRotation(mtx, (Vec3*) &stack.quad); // kinda sus
     it_8027429C(gobj, arg1);
     it_8026B3A8(gobj);
@@ -343,7 +347,7 @@ static inline void it_802A0C34_sub_1(Item_GObj* gobj)
 {
     Item* ip = gobj->user_data;
     itLinkBoomerangAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     if (ip->xDB0_itcmd_var1 == 0) {
         ip->xDD4_itemVar.linkboomerang.xF70 =
             (ip->xDD4_itemVar.linkboomerang.xF70 - 1.0f);
@@ -388,7 +392,7 @@ bool it_802A0C34(Item_GObj* gobj)
     u8 _pad[8];
     Item* ip = GET_ITEM(gobj);
     itLinkBoomerangAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     Vec3 rot;
     PAD_STACK(12);
     if (ip->xDD4_itemVar.linkboomerang.xF8C <= 0.0f) {
@@ -431,7 +435,7 @@ void it_802A0E70(Item_GObj* gobj)
     HSD_JObjReqAnimAll(hobj, 0.0f);
     HSD_JObjAnimAll(hobj);
     HSD_JObjRemoveAnimAll(hobj);
-    ip->x524_cmd.u = NULL;
+    ip->x524_cmd.x8.u = NULL;
     Item_80268E5C(gobj, 0, ITEM_ANIM_UPDATE);
 }
 
@@ -473,7 +477,7 @@ void itLinkboomerang_UnkMotion1_Phys(Item_GObj* gobj)
     itLinkBoomerangAttributes* attrs;
 
     ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     if (ip->xDD4_itemVar.linkboomerang.xDE8 != 1) {
         var_f31 = attrs->xC;
         attrs->xC = attrs->xC;
@@ -509,7 +513,7 @@ void it_802A10E4(Item_GObj* gobj)
     }
     ip = gobj->user_data;
     child = HSD_JObjGetChild(hobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     HSD_JObjGetRotation(child, &quat);
     Item_80268E5C(gobj, 2, ITEM_ANIM_UPDATE);
     HSD_JObjSetRotationZ(hobj, ip->xDD4_itemVar.linkboomerang.xF78);
@@ -531,7 +535,7 @@ void itLinkboomerang_UnkMotion2_Phys(Item_GObj* gobj)
     itLinkBoomerangAttributes* attrs;
 
     ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     if (ip->xDD4_itemVar.linkboomerang.xDE8 != 1) {
         var_f31 = attrs->xC;
         attrs->xC = attrs->xC;
@@ -688,7 +692,7 @@ void it_802A1948(Item_GObj* gobj, s32 arg1)
     itLinkBoomerangAttributes* attrs;
 
     ip = GET_ITEM(gobj);
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     clamp_angle_pi(&ip->xDD4_itemVar.linkboomerang.xF74);
     if (arg1 != 0) {
         ip->xDD4_itemVar.linkboomerang.xF84 = MTXDegToRad(attrs->x24);
@@ -713,7 +717,7 @@ void it_802A19E0(Item_GObj* gobj)
     hobj = hobj_tmp;
     child = HSD_JObjGetChild(hobj_tmp);
     ip = gobj->user_data;
-    attrs = ip->xC4_article_data->x4_specialAttributes;
+    attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     HSD_JObjGetRotation(child, &quat);
     ip->xDD4_itemVar.linkboomerang.xF88 = -(2.0f * quat.z) / (f32) attrs->x8;
     ip->xDD4_itemVar.linkboomerang.xDE4 = attrs->x8;
@@ -751,7 +755,7 @@ static inline void itLinkboomerang_UnkMotion3_Phys_sub(Item_GObj* gobj,
 {
     Item* ip = GET_ITEM(gobj);
     itLinkBoomerangAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     if ((ip->msid == 3) && (angle < attrs->x2C)) {
         if (ip->xDD4_itemVar.linkboomerang.xF98) {
             if ((ftLk_SpecialS_Is2071b0_1to13(
@@ -786,7 +790,7 @@ void itLinkboomerang_UnkMotion3_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itLinkBoomerangAttributes* attrs =
-        ip->xC4_article_data->x4_specialAttributes;
+        &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
     f32 length;
 
     if (ip->xDD4_itemVar.linkboomerang.xDE8 != 1) {
@@ -809,7 +813,7 @@ bool it_802A1F08(Item_GObj* gobj)
     if ((ip->xDD4_itemVar.linkboomerang.xDE8 != 1) &&
         ((ip->msid == 1) || (ip->msid == 2)))
     {
-        attrs = ip->xC4_article_data->x4_specialAttributes;
+        attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
         clamp_angle_pi(&ip->xDD4_itemVar.linkboomerang.xF74);
         ip->xDD4_itemVar.linkboomerang.xF84 = MTXDegToRad(attrs->x24);
         ip->xDD4_itemVar.linkboomerang.xF80 = attrs->x28;
@@ -828,7 +832,7 @@ bool it_802A1FA8(Item_GObj* gobj)
     if ((ip->xDD4_itemVar.linkboomerang.xDE8 != 1) &&
         ((ip->msid == 1) || (ip->msid == 2)))
     {
-        attrs = ip->xC4_article_data->x4_specialAttributes;
+        attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
         clamp_angle_pi(&ip->xDD4_itemVar.linkboomerang.xF74);
         ip->xDD4_itemVar.linkboomerang.xF84 = MTXDegToRad(attrs->x24);
         ip->xDD4_itemVar.linkboomerang.xF80 = attrs->x28;
@@ -847,7 +851,7 @@ bool itLinkBoomerang_Logic18_Absorbed(Item_GObj* gobj)
     if ((ip->xDD4_itemVar.linkboomerang.xDE8 != 1) &&
         ((ip->msid == 1) || (ip->msid == 2)))
     {
-        attrs = ip->xC4_article_data->x4_specialAttributes;
+        attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
         clamp_angle_pi(&ip->xDD4_itemVar.linkboomerang.xF74);
         ip->xDD4_itemVar.linkboomerang.xF84 = MTXDegToRad(attrs->x24);
         ip->xDD4_itemVar.linkboomerang.xF80 = attrs->x28;
@@ -875,7 +879,7 @@ bool it_802A20E8(Item_GObj* gobj)
         }
         ip->xDD4_itemVar.linkboomerang.xDE8 = 1;
         ip->xD44_lifeTimer = ip->xD48_halfLifeTimer;
-        ftLib_800866DC(gobj2, &sp14);
+        ftLib_GetCameraBonePos(gobj2, &sp14);
         dy = it_802A20E8_inline(ip) - sp14.x;
         dx = ip->pos.y - sp14.y;
         ip->xDD4_itemVar.linkboomerang.xF74 = atan2f(dx, dy);
@@ -903,7 +907,7 @@ bool it_802A2288(Item_GObj* gobj)
 
     ip = GET_ITEM(gobj);
     if ((ip->xDD4_itemVar.linkboomerang.xDE8 != 1) && (ip->msid != 3)) {
-        attrs = ip->xC4_article_data->x4_specialAttributes;
+        attrs = &ip->xC4_article_data->x4_specialAttributes->link_boomerang;
         clamp_angle_pi(&ip->xDD4_itemVar.linkboomerang.xF74);
         ip->xDD4_itemVar.linkboomerang.xF84 = MTXDegToRad(attrs->x24);
         ip->xDD4_itemVar.linkboomerang.xF80 = attrs->x28;

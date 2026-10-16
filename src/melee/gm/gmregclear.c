@@ -41,41 +41,27 @@
 #include <sysdolphin/baselib/sislib.h>
 #include <sysdolphin/baselib/tobj.h>
 
-/* PC port: this and the old `fn_8017FA1C_arg` were two hand-laid views of the
- * *same* singleton (`lbl_80472D28`) -- one naming the fields the setup code
- * touches, the other the fields the per-frame code touches, each padding over
- * the other's with GCN-sized `char pad[]`. That works only while a pointer is
- * four bytes. Here every named pointer grows to eight while the pads stay
- * GCN-sized, so the two views drift by *different* amounts and stop agreeing
- * on where any field is: fn_80180630 wrote the clear-screen model through
- * `state->x4C` and fn_801803FC read a different address as `p->x4C`, so the
- * model desc came back zeroed. Its joint tree read as a single root, the
- * 10-joint lookup found nothing, and the 1-P stage-clear screen dereferenced
- * NULL -- Classic could not advance past round 1.
- *
- * Merging both field sets into one struct is what makes the two agree; the
- * sets do not conflict (each names only what the other padded over). Offsets
- * no longer match GCN, which is fine -- nothing indexes this by raw offset
- * and it is file-local, never memcpy'd or sized. */
+/// Shared state used by the scene setup and update paths.
 struct lbl_80472D28_t {
     /*   +0 */ HSD_GObj* x0;
     /*   +4 */ HSD_JObj* x4;
     /*   +8 */ HSD_JObj* x8;
     /*   +C */ HSD_JObj* xC;
-    /*  +10 */ HSD_JObj* x10;
-    /*  +14 */ HSD_JObj* x14;
-    /*  +18 */ HSD_JObj* x18;
-    /*  +1C */ HSD_JObj* x1C;
+    /* +10 */ HSD_JObj* x10;
+    /* +14 */ HSD_JObj* x14;
+    /* +18 */ HSD_JObj* x18;
+    /* +1C */ HSD_JObj* x1C;
     /* +20 */ HSD_JObj* x20;
     /* +24 */ HSD_JObj* x24;
-    /* +28 */ char pad_28[4];
+    /* +28 */ HSD_JObj* x28;
     /* +2C */ HSD_GObj* x2C;
     /* +30 */ HSD_ImageDesc x30;
     /* +48 */ HSD_Archive* x48;
     /* +4C */ DynamicModelDesc x4C;
-    /* +5C */ void* x5C;
-    /* +60 */ void* x60;
-    /* +64 */ char pad_64[8];
+    /* +5C */ LightList** x5C;
+    /* +60 */ HSD_CObjDesc* x60;
+    /* +64 */ void* x64;
+    /* +68 */ struct SceneFogDesc* x68;
     /* +6C */ HSD_Text* x6C;
     /* +70 */ HSD_Text* x70;
     /* +74 */ HSD_Text* x74;
@@ -218,9 +204,6 @@ typedef struct fn_8017F14C_arg {
     /* 0x98 */ s32 x98;
 } fn_8017F14C_arg;
 
-#ifdef MUST_MATCH
-#pragma dont_inline on
-#endif
 s32 fn_8017F14C(void* arg0)
 {
     fn_8017F14C_arg* p = arg0;
@@ -235,9 +218,6 @@ s32 fn_8017F14C(void* arg0)
     }
     return 0;
 }
-#ifdef MUST_MATCH
-#pragma dont_inline off
-#endif
 
 s32 fn_8017F1B8(void)
 {
@@ -365,8 +345,6 @@ s32 fn_8017F47C(HSD_Text** arg0, s32* cache, int arg1)
     PAD_STACK(0x18);
 }
 
-/* PC port: one view only -- see struct lbl_80472D28_t above. This used to
- * be a second, independently padded description of the same object. */
 typedef struct lbl_80472D28_t fn_8017FA1C_arg;
 
 static const Vec3 lbl_803B7C18 = { -41.0f, -0.25f, 0.0f };
@@ -660,14 +638,16 @@ void fn_8017FE54(HSD_GObj* gobj)
     }
 }
 
+union fn_8017FF1C_data {
+    struct lbl_80472D28_t* state;
+    fn_8017FA1C_arg* arg;
+};
+
 void fn_8017FF1C(HSD_GObj* gobj)
 {
     HSD_JObj* jobj;
     /// @todo Consolidate these split-derived views of the same state object.
-    union {
-        struct lbl_80472D28_t* state;
-        fn_8017FA1C_arg* arg;
-    } data;
+    union fn_8017FF1C_data data;
     s32 result;
     s32 i;
     u8 mask;
@@ -716,8 +696,8 @@ void fn_8017FF1C(HSD_GObj* gobj)
         }
 
         {
-            u64 buttons = gm_GetButtonsTriggered(Player_GetPlayerId(0));
-            u64 repeat = gm_801A36C0(Player_GetPlayerId(0));
+            u64 buttons = gm_GetButtonsTriggered(Player_GetPadPort(0));
+            u64 repeat = gm_801A36C0(Player_GetPadPort(0));
             if (((repeat | buttons) & (PAD_BUTTON_DOWN | PAD_STICK_DOWN)) |
                 ((repeat | buttons) & 0))
             {
@@ -735,8 +715,8 @@ void fn_8017FF1C(HSD_GObj* gobj)
                     }
                 }
             } else {
-                buttons = gm_GetButtonsTriggered(Player_GetPlayerId(0));
-                repeat = gm_801A36C0(Player_GetPlayerId(0));
+                buttons = gm_GetButtonsTriggered(Player_GetPadPort(0));
+                repeat = gm_801A36C0(Player_GetPadPort(0));
                 if (((repeat | buttons) & (PAD_BUTTON_UP | PAD_STICK_UP)) |
                     ((repeat | buttons) & 0))
                 {
@@ -770,7 +750,7 @@ void fn_8017FF1C(HSD_GObj* gobj)
 
     for (i = 0; i < 6; i++) {
         if (Player_GetPlayerSlotType(i) == Gm_PKind_Human &&
-            (HSD_PadMasterStatus[(u8) Player_GetPlayerId(i)].trigger &
+            (HSD_PadMasterStatus[(u8) Player_GetPadPort(i)].trigger &
              HSD_PAD_A))
         {
             data.state->xFC = data.state->x104;
@@ -782,7 +762,7 @@ void fn_8017FF1C(HSD_GObj* gobj)
     if (data.state->x110 > 0x3EU) {
         for (i = 0; i < 6; i++) {
             if (Player_GetPlayerSlotType(i) == Gm_PKind_Human &&
-                (HSD_PadMasterStatus[(u8) Player_GetPlayerId(i)].trigger &
+                (HSD_PadMasterStatus[(u8) Player_GetPadPort(i)].trigger &
                  0x1000))
             {
                 data.state->xFC = data.state->x104;
@@ -883,6 +863,13 @@ s32 fn_801803FC(void* arg0)
     PAD_STACK(4);
 }
 
+static inline void setScoreBonuses(struct lbl_80472D28_t* state,
+                                   MatchEnd* result)
+{
+    state->xD0 = fn_8017F09C();
+    state->xDC = fn_8017F14C(result);
+}
+
 static inline HSD_GObj* fn_80180630_CreateCameraGObj(void)
 {
     return GObj_Create(0xEU, 0xEU, 0U);
@@ -933,6 +920,11 @@ static inline u8 fn_80180630_GetX118(const struct lbl_80472D28_t* state)
     return state->x118;
 }
 
+union fn_80180630_data {
+    struct lbl_80472D28_t* state;
+    fn_8017FA1C_arg* model;
+};
+
 void fn_80180630(int arg0, int arg1, int arg2, bool arg3, MatchEnd* arg4)
 {
     s32 sp64;
@@ -945,10 +937,7 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3, MatchEnd* arg4)
     VsSceneController* temp;
     s32 total;
     s32 var_r4;
-    union {
-        struct lbl_80472D28_t* state;
-        fn_8017FA1C_arg* model;
-    } data;
+    union fn_80180630_data data;
     s32 special_score;
     s32 var_r3;
     struct lbl_80472D28_t* state;
@@ -1038,8 +1027,7 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3, MatchEnd* arg4)
     }
 
     if (state->x118 == 0) {
-        state->xD0 = fn_8017F09C();
-        state->xDC = fn_8017F14C(arg4);
+        setScoreBonuses(state, arg4);
     }
 
     if (state->x117 != 0) {
@@ -1062,7 +1050,7 @@ void fn_80180630(int arg0, int arg1, int arg2, bool arg3, MatchEnd* arg4)
 
     PAD_STACK(0x18);
     {
-        void* scene_data;
+        SceneDesc* scene_data;
 
         archive = lbArchive_80016DBC("GmRegClr", &scene_data,
                                      "ScGamRegClear_scene_data", NULL);

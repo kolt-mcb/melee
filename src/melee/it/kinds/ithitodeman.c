@@ -82,11 +82,12 @@ static inline float sqrtf(float x)
 void it_2725_Logic24_Spawned(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     PAD_STACK(16);
 
     ip->facing_dir = 0.0f;
-    ip->xDBC_itcmd_var4.flags.x0 = false;
+    ip->xDBC.xDBC_itcmd_var4.flags.x0 = false;
 
     it_80279CDC(gobj, attrs->x0);
     it_802D43EC(gobj);
@@ -122,12 +123,13 @@ void it_802D43B0(Item_GObj* gobj, Item_GObj* ref_gobj)
 void it_802D43EC(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     HSD_GObj* owner_gobj;
     f32 randf;
     f32 diff;
 
-    owner_gobj = ftLib_80086198(ip->owner);
+    owner_gobj = ftLib_FindLowestPercentOpponent(ip->owner);
     if (owner_gobj != NULL) {
         ip->xDD4_itemVar.hitodeman.x90 = owner_gobj;
     } else {
@@ -151,7 +153,8 @@ void it_802D43EC(Item_GObj* gobj)
 void it_802D4494(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     s32 randi;
     PAD_STACK(8);
     randi = HSD_Randi((s32) (attrs->x14 - attrs->x18));
@@ -161,7 +164,8 @@ void it_802D4494(Item_GObj* gobj)
 void it_802D4510(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     PAD_STACK(8);
     ip->xDD4_itemVar.hitodeman.x88 =
         attrs->x44 + HSD_Randi(attrs->x40 - attrs->x44);
@@ -189,7 +193,7 @@ bool it_802D4564(Item_GObj* gobj)
             HSD_JObj* jobj = gobj->hsd_obj;
             Vec3 target_pos;
             PAD_STACK(8);
-            ftLib_80086644(ip->xDD4_itemVar.hitodeman.x90, &target_pos);
+            ftLib_GetPos(ip->xDD4_itemVar.hitodeman.x90, &target_pos);
             if (target_pos.x < ip->pos.x) {
                 ip->facing_dir = -1.0f;
             } else {
@@ -217,14 +221,14 @@ void it_802D472C(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
     itHitodemanAttributes* attrs =
-        it_802D472C_inline(ip)->x4_specialAttributes;
+        &it_802D472C_inline(ip)->x4_specialAttributes->hitodeman;
     Vec3 target_pos;
     Vec3 dir;
     f32 speed;
     f32 dist;
 
     if (ip->xDD4_itemVar.hitodeman.x90 != NULL) {
-        ftLib_80086644(ip->xDD4_itemVar.hitodeman.x90, &target_pos);
+        ftLib_GetPos(ip->xDD4_itemVar.hitodeman.x90, &target_pos);
         target_pos.x += ip->xDD4_itemVar.hitodeman.x60;
         target_pos.y += ip->xDD4_itemVar.hitodeman.x64;
         target_pos.z = 0.0f;
@@ -310,13 +314,11 @@ bool itHitodeman_UnkMotion1_Anim(Item_GObj* gobj)
         }
 
         ip->xDD4_itemVar.hitodeman.x8C =
-            ((itHitodemanAttributes*)
-                 ip->xC4_article_data->x4_specialAttributes)
-                ->x3C;
+            (&ip->xC4_article_data->x4_specialAttributes->hitodeman)->x3C;
 
         if (ip->xDD4_itemVar.hitodeman.x90 != NULL) {
             itHitodemanAttributes* attrs =
-                ip->xC4_article_data->x4_specialAttributes;
+                &ip->xC4_article_data->x4_specialAttributes->hitodeman;
             ip->x40_vel.x = -ip->facing_dir * attrs->x48;
             it_802D4C74(gobj);
             ip->xDB0_itcmd_var1 = 1;
@@ -338,7 +340,8 @@ bool itHitodeman_UnkMotion1_Anim(Item_GObj* gobj)
 void itHitodeman_UnkMotion1_Phys(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     if (ip->xDB0_itcmd_var1 != 0) {
         ip->x40_vel.x = HM_FMA(ip->facing_dir, attrs->x4C, ip->x40_vel.x); /* fnmsubs of -facing */
     }
@@ -381,7 +384,8 @@ bool itHitodeman_UnkMotion2_Coll(Item_GObj* gobj)
 void it_802D4C74(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     SpawnItem spawn;
     Item_GObj* item_gobj;
 
@@ -397,7 +401,7 @@ void it_802D4C74(Item_GObj* gobj)
     spawn.kind = It_Kind_Hitodeman_Star;
     spawn.x0_parent_gobj = ip->owner;
     spawn.x4_parent_gobj2 = gobj;
-    spawn.x44_flag.b0 = false;
+    spawn.x44_flag.x0.b0 = false;
     spawn.x40 = 0;
     item_gobj = Item_80268B18(&spawn);
     if (item_gobj != NULL) {
@@ -415,7 +419,8 @@ void it_2725_Logic43_Spawned(Item_GObj* gobj)
 {
     HSD_JObj* jobj = gobj->hsd_obj;
     Item* ip = GET_ITEM(gobj);
-    itHitodemanAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itHitodemanAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->hitodeman;
     PAD_STACK(16);
 
     it_80275158(gobj, attrs->x0);

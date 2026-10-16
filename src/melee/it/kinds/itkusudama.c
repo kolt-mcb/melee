@@ -4,7 +4,6 @@
 
 #include <melee/it/forward.h>
 
-#include <math.h>
 #include <placeholder.h>
 
 #include "inlines.h"
@@ -76,7 +75,7 @@ HSD_GObj* it_802896CC(Vec3* arg0)
 void itKusudama_Logic4_Spawned(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    ip->xDCE_flag.b7 = 0;
+    ip->xDCE_flag.x0.b7 = 0;
     ip->xDAC_itcmd_var0 = 0;
     ip->xDB0_itcmd_var1 = 0;
     ip->xDB4_itcmd_var2 = 0;
@@ -147,7 +146,8 @@ void it_80289A00(Item_GObj* gobj)
     HSD_JObj* jobj = gobj->hsd_obj;
     Item* ip = GET_ITEM(gobj);
     f32 roty;
-    itKusudamaAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
 
     roty = HSD_JObjGetRotationY(jobj);
     if (ip->facing_dir == 1.0f) {
@@ -169,7 +169,8 @@ void it_80289A00(Item_GObj* gobj)
 void it_80289B50(Item_GObj* gobj, s32 arg1)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     if (it_8028A114(gobj, attr->x4, attr->x0, attr->x8, attr->xC)) {
         if (arg1 != 0) {
             Item_8026AE84(ip, 0x126, 0x7F, 0x40);
@@ -246,11 +247,11 @@ static void sdata2_order(void)
 }
 #endif
 
-/// @todo Only differs by register allocation.
 void it_80289BE8(Item_GObj* gobj, s32 arg1, s32 food_weight, s32 arg3)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     ItemKind spawned[15];
     Vec3 pos;
     Vec3 vel;
@@ -323,7 +324,7 @@ void it_80289BE8(Item_GObj* gobj, s32 arg1, s32 food_weight, s32 arg3)
             }
         }
     }
-    if (ftLib_80086960(ip->owner)) {
+    if (ftLib_IsFighter(ip->owner)) {
         ftLib_800874CC(ip->owner, spawned, i);
     }
 }
@@ -435,7 +436,8 @@ bool itKusudama_UnkMotion2_Coll(Item_GObj* gobj)
 void it_8028A544(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     PAD_STACK(8);
 
     ip->x40_vel.z = 0.0f;
@@ -461,7 +463,7 @@ static inline void itKusudama_UnkMotion3_inline(Item_GObj* gobj)
     ip->x40_vel.y = 0.0f;
     ip->x40_vel.x = 0.0f;
     ip->xDD4_itemVar.kusudama.x4 = 0x5A;
-    ip->xDD1_flag.b1 = 1;
+    ip->xDD1_flag.x0.b1 = 1;
     it_8026B3A8(gobj);
     rot_y = HSD_JObjGetRotationY(jobj);
     Item_80268E5C(gobj, 1, ITEM_ANIM_UPDATE);
@@ -528,7 +530,8 @@ void itKusudama_UnkMotion6_Phys(Item_GObj* gobj)
 static inline void itKusudama_UnkMotion5_Coll_inline(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     if (it_8028A114(gobj, attr->x4, attr->x0, attr->x8, attr->xC)) {
         Item_8026AE84(ip, 0x126, 0x7F, 0x40);
         it_8028A544(gobj);
@@ -573,7 +576,8 @@ static inline void itKusudama_UnkMotion6_Coll_inline(Item_GObj* gobj)
 bool itKusudama_UnkMotion6_Coll(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
 
     if (it_8026DA08(gobj)) {
         f32 vel_y = ip->x40_vel.y;
@@ -603,7 +607,7 @@ void it_8028AC74(Item_GObj* gobj)
     it_8027518C(gobj);
     ip->x40_vel.x = 0.0f;
     ip->x40_vel.y = 0.0f;
-    ip->xDCF_flag.b2 = true;
+    ip->xDCF_flag.x0.b2 = true;
     ip->xDD4_itemVar.kusudama.x0 = true;
     ip->xDD4_itemVar.kusudama.x4 = 0x28;
     it_80275444(gobj);
@@ -630,7 +634,7 @@ void it_8028AD44(Item_GObj* gobj)
     it_802756D0(gobj);
     ip->x40_vel.x = 0.0f;
     ip->x40_vel.y = 0.0f;
-    ip->xDCF_flag.b2 = true;
+    ip->xDCF_flag.x0.b2 = true;
     ip->xDD4_itemVar.kusudama.x0 = true;
     ip->xDD4_itemVar.kusudama.x4 = 0x55;
     it_8026B3A8(gobj);
@@ -647,7 +651,8 @@ static inline void itKusudama_UnkMotion8_Anim_inline(Item_GObj* gobj)
 bool itKusudama_UnkMotion8_Anim(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attrs = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attrs =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     if (ip->xDAC_itcmd_var0 != 0) {
         ip->xDAC_itcmd_var0 = 0;
         it_80289BE8(gobj, attrs->x4, attrs->x0, attrs->x8);
@@ -670,7 +675,8 @@ bool itKusudama_UnkMotion8_Coll(Item_GObj* gobj)
 static inline void itKusudama_Logic4_DmgDealt_inline(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     if (it_8028A114(gobj, attr->x4, attr->x0, attr->x8, attr->xC)) {
         it_8028A544(gobj);
     } else {
@@ -714,7 +720,8 @@ bool itKusudama_Logic4_Reflected(Item_GObj* gobj)
 bool itKusudama_Logic4_DmgReceived(Item_GObj* gobj)
 {
     Item* ip = GET_ITEM(gobj);
-    itKusudamaAttributes* attr = ip->xC4_article_data->x4_specialAttributes;
+    itKusudamaAttributes* attr =
+        &ip->xC4_article_data->x4_specialAttributes->kusudama;
     if (!ip->xDD4_itemVar.kusudama.x0) {
         if (ip->xC9C >= attr->x20) {
             itKusudama_Logic4_DmgDealt_inline(gobj);

@@ -55,16 +55,16 @@ void ftCo_Wait_Anim(HSD_GObj* gobj)
             fprintf(stderr,
                     "[FTWAIT] f%u gobj=%p b2=%d bits=%d%d%d%d%d%d%d%d "
                     "ledge=%d anim=%d\n",
-                    gm_GetFrameCount(), (void*) gobj, (int) fp->x2224_b2,
+                    gm_GetFrameCount(), (void*) gobj, (int) fp->stamina_dead,
                     (int) fp->x2224_b0, (int) fp->x2224_b1,
-                    (int) fp->x2224_b2, (int) fp->x2224_b3,
+                    (int) fp->stamina_dead, (int) fp->x2224_b3,
                     (int) fp->x2224_b4, (int) fp->x2224_b5,
                     (int) fp->x2224_b6, (int) fp->can_walljump,
                     (int) fp->x2064_ledgeCooldown, (int) fp->anim_id);
         }
     }
 #endif
-    if (fp->x2224_b2) {
+    if (fp->stamina_dead) {
         ftCo_DownSpot_Enter(gobj);
     } else {
         ftCo_8008A7A8(gobj, fp->ft_data->x24);

@@ -362,7 +362,7 @@ Vec3* lbVector_Lerp(Vec3* a, Vec3* b, Vec3* result, float f)
     return result;
 }
 
-Vec3* lbVector_8000DE38(Mtx m, Vec3* v, float c)
+Vec3* lbVector_8000DE38(const Vec3 points[3], Vec3* v, float c)
 {
     float var1;
     float var2;
@@ -373,20 +373,23 @@ Vec3* lbVector_8000DE38(Mtx m, Vec3* v, float c)
         c = 0.0f;
     }
 
-    /* 8000DE68-8000DE94 and the two copies after it: 4*m[0][3] plain, then
-     * fmsubs 2*m[0][0] - that, fmadds 2*m[1][2] onto it; fmadds -3*m[0][0] + 4*m[0][3], minus
-     * m[1][2] plain; c*(var1*c) + var2*c is one fmadds. */
-    var1 = LV_FMA(2.0f, m[1][2], LV_FMA(2.0f, m[0][0], -(4.0f * m[0][3])));
-    var2 = LV_FMA(-3.0f, m[0][0], 4.0f * m[0][3]) - m[1][2];
-    v->x = m[0][0] + LV_FMA(c, var1 * c, var2 * c);
+    /* 8000DE68-8000DE94 and the two copies after it: 4*p1 plain, then
+     * fmsubs 2*p0 - that, fmadds 2*p2 onto it; fmadds -3*p0 + 4*p1, minus
+     * p2 plain; c*(var1*c) + var2*c is one fmadds. */
+    var1 = LV_FMA(2.0f, points[2].x,
+                  LV_FMA(2.0f, points[0].x, -(4.0f * points[1].x)));
+    var2 = LV_FMA(-3.0f, points[0].x, 4.0f * points[1].x) - points[2].x;
+    v->x = points[0].x + LV_FMA(c, var1 * c, var2 * c);
 
-    var1 = LV_FMA(2.0f, m[1][3], LV_FMA(2.0f, m[0][1], -(4.0f * m[1][0])));
-    var2 = LV_FMA(-3.0f, m[0][1], 4.0f * m[1][0]) - m[1][3];
-    v->y = m[0][1] + LV_FMA(c, var1 * c, var2 * c);
+    var1 = LV_FMA(2.0f, points[2].y,
+                  LV_FMA(2.0f, points[0].y, -(4.0f * points[1].y)));
+    var2 = LV_FMA(-3.0f, points[0].y, 4.0f * points[1].y) - points[2].y;
+    v->y = points[0].y + LV_FMA(c, var1 * c, var2 * c);
 
-    var1 = LV_FMA(2.0f, m[2][0], LV_FMA(2.0f, m[0][2], -(4.0f * m[1][1])));
-    var2 = LV_FMA(-3.0f, m[0][2], 4.0f * m[1][1]) - m[2][0];
-    v->z = m[0][2] + LV_FMA(c, var1 * c, var2 * c);
+    var1 = LV_FMA(2.0f, points[2].z,
+                  LV_FMA(2.0f, points[0].z, -(4.0f * points[1].z)));
+    var2 = LV_FMA(-3.0f, points[0].z, 4.0f * points[1].z) - points[2].z;
+    v->z = points[0].z + LV_FMA(c, var1 * c, var2 * c);
 
     return v;
 }

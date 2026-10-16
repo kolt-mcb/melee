@@ -15,6 +15,7 @@
 #include "grmaterial.h"
 #include "ground.h"
 #include "inlines.h"
+#include "types.h"
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbheap.h>
@@ -53,7 +54,7 @@
                                           u32 type, void* param, int arg5);
 ///* 1C7B24 */ static void grAnime_801C7B24(HSD_GObj* gobj, int arg1, u32 arg2,
 ///                                          f32 arg8);
-/* 1C82E8 */ static void fn_801C82E8(int arg0, int* arg1);
+/* 1C82E8 */ static void fn_801C82E8(HSD_AObj* arg0, void* arg1);
 /* 4D6958 */ static float grAnime_804D6958;
 /* 4D695C */ static float grAnime_804D695C;
 
@@ -499,107 +500,62 @@ void fn_801C6F2C(HSD_AObj* aobj)
     HSD_AObjSetFlags(aobj, AOBJ_LOOP);
 }
 
-enum {
+enum ARG_TYPE {
     ARG_TYPE_DOBJ = 3,
     ARG_TYPE_MOBJ = 8,
     ARG_TYPE_POBJ = 9,
     ARG_TYPE_TOBJ = 11,
 };
-enum {
+enum CALL_ON {
     CALL_ON_DOBJ = 1 << (ARG_TYPE_DOBJ - 1),
     CALL_ON_MOBJ = 1 << (ARG_TYPE_MOBJ - 1),
     CALL_ON_POBJ = 1 << (ARG_TYPE_POBJ - 1),
     CALL_ON_TOBJ = 1 << (ARG_TYPE_TOBJ - 1),
 };
 
-typedef void (*Callback1)(HSD_AObj* aobj, HSD_TObj* obj, u32 flags,
-                          float param);
-typedef void (*Callback2)(HSD_AObj* aobj, int param);
-/* The two shapes every callee in this tree actually has. */
-typedef void (*AObjVoid)(HSD_AObj* aobj);
-typedef void (*AObjFloat)(HSD_AObj* aobj, f32 rate);
-typedef void (*Callback4)(HSD_AObj* aobj, HSD_TObj* obj, u32 flags, int param);
-typedef void (*Callback3)(HSD_AObj* aobj, HSD_TObj* obj, int param);
-
-/* The casts below are the reason the wasm build links with
- * -sEMULATE_FUNCTION_POINTER_CASTS. `type` selects a signature to call `func`
- * through, and the signature is routinely wider than the callee: type 1 casts
- * to Callback1 -- (HSD_AObj*, HSD_TObj*, u32, f32) -- and calls
- * HSD_AObjSetRate, which is (HSD_AObj*, f32).
- *
- * That is not a bug on the original hardware or on the desktop. PowerPC and
- * x86-64 both pass integers and floats in *separate* register files, so the
- * two unread integer arguments in the middle do not displace the float:
- * the callee reads r3/f1 (or rdi/xmm0) and gets exactly aobj and rate.
- *
- * wasm has one flat positional parameter list and type-checks every indirect
- * call against it, so the call traps rather than quietly working.
- *
- * Every (func, type) pair in the tree is a literal at a call site, so the
- * mapping is knowable exactly rather than by inference:
- *
- *   type 0   fn_801C6EE4, fn_801C6F2C        void (HSD_AObj*)
- *   type 1   HSD_AObjSetRate                 void (HSD_AObj*, f32)
- *   type 3   HSD_AObjSetFlags/ClearFlags     void (HSD_AObj*, u32)
- *
- * and nothing else reaches here -- the remaining cases are unexercised in
- * this codebase. Two of the three were wrong. Type 0 called through
- * `Event`, taking no arguments at all, while its callees read an HSD_AObj*:
- * that works only because r3 (rdi) still holds this function's own first
- * argument, untouched since entry. Type 1 called through a four-argument
- * Callback1 while HSD_AObjSetRate takes two, which survives for the
- * companion reason -- the float rides in f1/xmm0 and the two unread integer
- * arguments in between cannot displace it.
- *
- * Dispatching at each callee's real arity costs nothing on the register
- * targets and lets wasm drop -sEMULATE_FUNCTION_POINTER_CASTS, whose
- * trampolines route every indirect call in the module through JS -- which
- * ASYNCIFY then has to assume might sleep.
- *
- * The unexercised cases keep their original casts. If one ever fires, wasm
- * reports a signature mismatch naming it, which is a better outcome than a
- * silent dependence on argument registers. */
 void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
                       u32 type, void* param)
 {
-    (void) obj;
-    (void) flags;
+    grAnimeCallback callback;
+    callbackArg* arg = param;
+
+    callback.ptr = func;
     switch (type) {
-    case 0:
-        ((AObjVoid) func)(aobj);
+    case AOBJ_ARG_A:
+        callback.a(aobj);
         break;
-    case 1:
-        ((AObjFloat) func)(aobj, *(float*) param);
+    case AOBJ_ARG_AF:
+        callback.af(aobj, arg->f);
         break;
-    case 2:
-        ((Callback2) func)(aobj, *(int*) param);
+    case AOBJ_ARG_AV:
+        callback.av(aobj, arg->v);
         break;
-    case 3:
-        ((Callback2) func)(aobj, *(int*) param);
+    case AOBJ_ARG_AU:
+        callback.au(aobj, arg->d);
         break;
-    case 4:
-        ((AObjVoid) func)(aobj);
+    case AOBJ_ARG_AO:
+        callback.ao(aobj, obj);
         break;
-    case 8:
-        ((AObjVoid) func)(aobj);
+    case AOBJ_ARG_AOT:
+        callback.aot(aobj, obj, flags);
         break;
-    case 5:
-        ((AObjFloat) func)(aobj, *(float*) param);
+    case AOBJ_ARG_AOF:
+        callback.aof(aobj, obj, arg->f);
         break;
-    case 6:
-        ((Callback3) func)(aobj, obj, *(int*) param);
+    case AOBJ_ARG_AOV:
+        callback.aov(aobj, obj, arg->v);
         break;
-    case 7:
-        ((Callback3) func)(aobj, obj, *(int*) param);
+    case AOBJ_ARG_AOU:
+        callback.aou(aobj, obj, arg->d);
         break;
-    case 9:
-        ((AObjFloat) func)(aobj, *(float*) param);
+    case AOBJ_ARG_AOTF:
+        callback.aotf(aobj, obj, flags, arg->f);
         break;
-    case 10:
-        ((Callback4) func)(aobj, obj, flags, *(int*) param);
+    case AOBJ_ARG_AOTV:
+        callback.aotv(aobj, obj, flags, arg->v);
         break;
-    case 11:
-        ((Callback4) func)(aobj, obj, flags, *(int*) param);
+    case AOBJ_ARG_AOTU:
+        callback.aotu(aobj, obj, flags, arg->d);
         break;
     }
 }
@@ -971,7 +927,7 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     }
     archive = grDatFiles_801C6330(map_id);
     HSD_ASSERT(0x4DE, archive);
-    if ((arg3 & 1) && (ajp = archive->unk4->unk8[map_id].unk4, ajp != NULL) &&
+    if ((arg3 & 1) && (ajp = archive->unk4->unk8[map_id].anims, ajp != NULL) &&
         ((aj = ajp[arg4]) != NULL))
     {
         aj = &aj[arg2];
@@ -980,7 +936,8 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     } else {
         aj = NULL;
     }
-    if ((arg3 & 2) && (mjp = archive->unk4->unk8[map_id].unk8, mjp != NULL) &&
+    if ((arg3 & 2) &&
+        (mjp = archive->unk4->unk8[map_id].matanims, mjp != NULL) &&
         ((mj = mjp[arg4]) != NULL))
     {
         mj = &mj[arg2];
@@ -989,7 +946,8 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     } else {
         mj = NULL;
     }
-    if ((arg3 & 4) && (sjp = archive->unk4->unk8[map_id].unkC, sjp != NULL) &&
+    if ((arg3 & 4) &&
+        (sjp = archive->unk4->unk8[map_id].shapeanims, sjp != NULL) &&
         ((sj = sjp[arg4]) != NULL))
     {
         sj = &sj[arg2];
@@ -1008,7 +966,7 @@ void grAnime_801C7C1C(HSD_JObj* jobj, s32 map_id, s32 arg2, s32 arg3, s32 arg4,
     grAnime_801C752C(jobj, arg5, anim_flags, HSD_AObjSetRate, 1, farg1);
     archive = grDatFiles_801C6330(map_id);
     HSD_ASSERT(0x148, archive);
-    eflags = archive->unk4->unk8[map_id].x28;
+    eflags = archive->unk4->unk8[map_id].anim_loops;
     if (eflags != NULL) {
         flag = eflags[arg4];
     } else {
@@ -1074,7 +1032,7 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
     }
     archive = grDatFiles_801C6330(arg1);
     HSD_ASSERT(0x556, archive);
-    joint = archive->unk4->unk8[arg1].unk0;
+    joint = archive->unk4->unk8[arg1].joint;
     if (HSD_JObjGetChild(jobj) != NULL) {
         jobj = HSD_JObjGetChild(jobj);
     }
@@ -1083,9 +1041,9 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
     }
     grMaterial_801C8B68(jobj, 0);
     HSD_JObjRemoveAnimAll(jobj);
-    sap = archive->unk4->unk8[arg1].unkC;
-    ajp = archive->unk4->unk8[arg1].unk4;
-    mjp = archive->unk4->unk8[arg1].unk8;
+    sap = archive->unk4->unk8[arg1].shapeanims;
+    ajp = archive->unk4->unk8[arg1].anims;
+    mjp = archive->unk4->unk8[arg1].matanims;
     if (sap != NULL) {
         sa = sap[arg2];
     } else {
@@ -1197,7 +1155,7 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
     HSD_JObjReqAnimAll(jobj, 0.0f);
     archive = grDatFiles_801C6330(arg1);
     HSD_ASSERT(0x148, archive);
-    flags = (u8*) archive->unk4->unk8[arg1].x28;
+    flags = archive->unk4->unk8[arg1].anim_loops;
     if (flags != NULL) {
         flag = flags[arg2];
     } else {
@@ -1209,9 +1167,10 @@ void grAnime_801C8138(HSD_GObj* gobj, enum_t arg1, bool arg2)
     HSD_JObjAnimAll(jobj);
 }
 
-void fn_801C82E8(int arg0, int* arg1)
+void fn_801C82E8(HSD_AObj* arg0, void* arg1)
 {
-    *arg1 = arg0;
+    HSD_AObj* volatile* result = arg1;
+    *result = arg0;
     longjmp(grAnime_8049EE40, 1);
 }
 
@@ -1219,7 +1178,8 @@ HSD_AObj* grAnime_801C8318(HSD_GObj* gobj, int arg1, u32 arg2)
 {
     HSD_JObj* jobj;
     enum _HSD_TypeMask var_r30 = 0;
-    HSD_AObj* sp14 = NULL;
+    // Preserve the callback's result across longjmp.
+    HSD_AObj* volatile sp14 = NULL;
     jobj = Ground_801C3FA4(gobj, arg1);
     if (jobj == NULL) {
         return 0;
@@ -1301,7 +1261,7 @@ void grAnime_801C86D4(s32 arg0, HSD_GObj* arg1, s32 arg2)
         archive = grDatFiles_801C6330(arg0);
         HSD_ASSERT(1538, archive);
         {
-            HSD_Joint* root = archive->unk4->unk8[arg0].unk0;
+            HSD_Joint* root = archive->unk4->unk8[arg0].joint;
             sp = arg2;
             joint = grAnime_801C8578_noinline(root, &sp);
         }

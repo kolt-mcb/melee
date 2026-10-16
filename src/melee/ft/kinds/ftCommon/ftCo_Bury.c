@@ -72,26 +72,15 @@ void ftCo_800C0874(Fighter_GObj* gobj, UNK_T arg1, ftCommon_BuryType arg2)
     }
 }
 
-void ftCo_800C08A0(Fighter_GObj* gobj, Fighter_GObj* arg1, DynamicsDesc* arg2,
-                   ftCommon_BuryType arg3)
+void ftCo_800C08A0(Fighter_GObj* gobj, Fighter_GObj* arg1,
+                   lbColl_80008D30_arg1* arg2, ftCommon_BuryType arg3)
 {
     float f;
     FighterHurtCapsule* p_hurt;
     struct SmallerHitCapsule hit;
     int hurt_idx;
     Fighter* fp = GET_FIGHTER(gobj);
-    PAD_STACK(8);
-#if BUILD_TARGET_PC
-    /* arg2 is a stage hazard's flat block of attack words ({state, damage,
-     * angle, ...}, the lbColl_80008D30_arg1 view below). As a DynamicsDesc
-     * its count is the word at +4 on the console, the damage; here the
-     * leading pointer is eight bytes and count landed on the angle: a fall
-     * into Zebes's acid dealt 90% instead of 14%. */
-    f = ftColl_800765F0(fp, NULL,
-                        ((lbColl_80008D30_arg1*) arg2)->damage);
-#else
-    f = ftColl_800765F0(fp, NULL, arg2->count);
-#endif
+    f = ftColl_800765F0(fp, NULL, arg2->damage);
     hurt_idx = 0;
     switch (arg3) {
     case BuryType_Unk2:
@@ -107,10 +96,10 @@ void ftCo_800C08A0(Fighter_GObj* gobj, Fighter_GObj* arg1, DynamicsDesc* arg2,
     }
     if (ftColl_80076640(fp, &f) != 0) {
         ftColl_80076764(3, arg3, arg1, arg2, fp, &fp->hurt_capsules[hurt_idx]);
-        lbColl_80008D30((HitCapsule*) &hit, (lbColl_80008D30_arg1*) arg2);
+        lbColl_80008D30((HitCapsule*) &hit, arg2);
         ftColl_80078384(fp, &fp->hurt_capsules[hurt_idx], (HitCapsule*) &hit);
     }
-    pl_8003EC30(fp->player_id, fp->is_sub_fighter, arg3, f);
+    pl_8003EC30(fp->player_idx, fp->is_sub_fighter, arg3, f);
 }
 
 void ftCo_800C09B4(Fighter_GObj* gobj)
@@ -139,7 +128,7 @@ bool ftCo_800C0A28(Fighter_GObj* gobj, UNK_T arg1, ftCommon_BuryType arg2)
     switch (arg2) {
     case BuryType_Unk2: {
         if (fp->bury_timer_2 != 0 || fp->motion_id == ftCo_MS_BarrelWait ||
-            fp->x1A6A & 0x20 || fp->x2224_b2)
+            fp->x1A6A & 0x20 || fp->stamina_dead)
         {
             return false;
         }
@@ -188,7 +177,7 @@ void ftCo_800C0B20(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     int hurt_idx;
-    DynamicsDesc* unk_anim;
+    lbColl_80008D30_arg1* unk_anim;
     if (fp->bury_timer_1 == 0) {
         CollData* coll = &fp->coll_data;
         unk_anim = NULL;
@@ -208,28 +197,18 @@ void ftCo_800C0B20(Fighter_GObj* gobj)
             HitCapsule hit;
             float f;
             fp = GET_FIGHTER(gobj);
-#if BUILD_TARGET_PC
-            /* The stage's touch-line result is typed DynamicsDesc but is a
-             * hit descriptor (lbColl_80008D30_arg1, as the cast below says):
-             * `count` is its damage word at +4, which sits at +8 once data
-             * is an 8-byte pointer. Read the descriptor as itself. */
-            f = ftColl_800765F0(fp, NULL,
-                                ((lbColl_80008D30_arg1*) unk_anim)->damage);
-#else
-            f = ftColl_800765F0(fp, NULL, unk_anim->count);
-#endif
+            f = ftColl_800765F0(fp, NULL, unk_anim->damage);
             hurt_idx = 0;
             fp->bury_timer_1 = p_ftCommonData->bury_timer_unk1;
             if (ftColl_80076640(fp, &f)) {
                 ftColl_80076764(3, 1, 0, unk_anim, fp,
                                 &fp->hurt_capsules[hurt_idx]);
 
-                /// @todo Eliminate cast
-                lbColl_80008D30(&hit, (lbColl_80008D30_arg1*) unk_anim);
+                lbColl_80008D30(&hit, unk_anim);
 
                 ftColl_80078384(fp, &fp->hurt_capsules[hurt_idx], &hit);
             }
-            pl_8003EC30(fp->player_id, fp->is_sub_fighter, 1, f);
+            pl_8003EC30(fp->player_idx, fp->is_sub_fighter, 1, f);
         }
     }
 }
@@ -274,11 +253,11 @@ void ftCo_800C0D0C(Fighter_GObj* gobj)
         fp, 0,
         BU_FMA(fp->dmg.x1830_percent, p_ftCommonData->x60C,
                BU_FMA(p_ftCommonData->x5FC,
-                      p_ftCommonData->x600 - Player_GetHandicap(fp->player_id),
+                      p_ftCommonData->x600 - Player_GetHandicap(fp->player_idx),
                       p_ftCommonData->x5F8) +
                    (p_ftCommonData->x604 *
                     (p_ftCommonData->x608 -
-                     (Player_80033BB8(fp->player_id) + 1)))));
+                     (Player_80033BB8(fp->player_idx) + 1)))));
     ftCommon_8007E2F4(fp, 0x1FF);
     fp->x221D_b5 = true;
     fp->x2220_b3 = true;

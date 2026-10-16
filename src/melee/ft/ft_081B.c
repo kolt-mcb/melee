@@ -159,7 +159,7 @@ bool ft_80081DD4(Fighter_GObj* gobj)
     fp->coll_data.cur_pos = fp->cur_pos;
     if (fp->allow_sdi) {
         var_r28 = mpColl_800477E0(coll);
-    } else if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    } else if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         var_r28 = mpColl_800471F8(coll);
     } else {
         float tmp;
@@ -203,7 +203,7 @@ bool ft_80081F2C(Fighter_GObj* gobj)
     fp->coll_data.cur_pos = fp->cur_pos;
     if (fp->allow_sdi) {
         var_r28 = mpColl_80048274(coll);
-    } else if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    } else if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         var_r28 = mpColl_80048160(coll);
     } else {
         float tmp;
@@ -246,7 +246,7 @@ bool ft_80082084(Fighter_GObj* gobj)
     fp->coll_data.cur_pos = fp->cur_pos;
     if (fp->allow_sdi) {
         var_r28 = mpColl_80048388(coll);
-    } else if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    } else if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         var_r28 = mpColl_80048768(coll);
     } else {
         float tmp;
@@ -303,7 +303,7 @@ bool ft_CheckGroundAndLedge(Fighter_GObj* gobj, int dir)
 
     coll->last_pos = coll->cur_pos;
     coll->cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         var_r28 = mpColl_800471F8(coll);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -329,7 +329,7 @@ bool ft_8008239C(Fighter_GObj* gobj, int dir,
     coll->last_pos = coll->cur_pos;
     coll->cur_pos = fp->cur_pos;
     collbox = ft_80082838(&box, height_attributes, fp->facing_dir);
-    if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         var_r28 = mpColl_8004730C(coll, collbox);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -686,7 +686,7 @@ static inline bool ft_80083090_inline(Fighter_GObj* gobj,
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown || fp->stamina_dead) {
         temp = mpColl_80047AC8(coll, arg1, gobj);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -743,7 +743,7 @@ static inline bool ft_80083318_inline(Fighter_GObj* gobj,
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown || fp->stamina_dead) {
         temp = mpColl_80047BF4(coll, arg1, gobj);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -791,7 +791,7 @@ static inline bool ft_80083464_inline(Fighter_GObj* gobj,
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown || fp->stamina_dead) {
         temp = mpColl_80047D20(coll, arg1, gobj);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -850,7 +850,7 @@ static inline bool ft_8008370C_inline(Fighter_GObj* gobj)
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown || fp->stamina_dead) {
         temp = mpColl_800471F8(coll);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -921,7 +921,7 @@ static inline bool ft_80083910_inline(Fighter_GObj* gobj)
     coll = &fp->coll_data;
     fp->coll_data.last_pos = fp->coll_data.cur_pos;
     fp->coll_data.cur_pos = fp->cur_pos;
-    if (fp->x2064_ledgeCooldown != 0 || fp->x2224_b2) {
+    if (fp->x2064_ledgeCooldown != 0 || fp->stamina_dead) {
         temp = mpColl_80048654(coll);
     } else {
         mpCollSetFacingDir(coll, dir);
@@ -1023,12 +1023,14 @@ void ft_80083DCC(Fighter_GObj* gobj)
     ft_80081A00(gobj);
 }
 
+struct ft_80083E64_inline_sp {
+    u8 pad[8];
+    ftCollisionBox collbox;
+};
+
 static inline bool ft_80083E64_inline(Fighter_GObj* gobj, ftCollisionBox* ecb)
 {
-    struct {
-        u8 pad[8];
-        ftCollisionBox collbox;
-    } sp;
+    struct ft_80083E64_inline_sp sp;
     bool temp_r31;
     Fighter* fp = GET_FIGHTER(gobj);
     CollData* coll = &fp->coll_data;

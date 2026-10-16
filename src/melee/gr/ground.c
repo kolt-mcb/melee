@@ -13,6 +13,7 @@
 #include <Runtime/platform.h>
 
 #include <math.h>
+#include <stdbool.h>
 
 #include "grbattle.h"
 #include "grbigblue.h"
@@ -160,7 +161,7 @@ static inline u32 be32(u32 x)
 /* 1C0C2C */ static void Ground_801C0C2C(HSD_GObj*);
 /* 1C1CD0 */ static void Ground_801C1CD0(HSD_GObj*);
 /* 1C1D38 */ static void Ground_801C1D38(HSD_GObj*);
-/* 1C1E2C */ static void Ground_801C1E2C(HSD_GObj* gobj, int code);
+/* 1C1E2C */ static void Ground_801C1E2C(HSD_GObj* gobj, intptr_t code);
 /* 1C1E94 */ static void Ground_801C1E94(void);
 /* 1C20E0 */ static LightList** Ground_801C20E0(UnkArchiveStruct*,
                                                 LightList**);
@@ -191,7 +192,7 @@ static inline u32 be32(u32 x)
     0,
 };
 
-static StageData* stage_datas[] = {
+static StageData* stage_datas[111] = {
     &Ground_StageData,     &grTe_StageData,       &grCs_StageData,
     &grRc_StageData,       &grKg_StageData,       &grGd_StageData,
     &grGb_StageData,       &grSh_StageData,       &grZe_StageData,
@@ -764,7 +765,7 @@ void Ground_801C06B8(GrKind arg0)
 void Ground_801C0754(StageIdPair* pair)
 {
     StageData* stage;
-    s32 arg3;
+    bool arg3;
 #if BUILD_TARGET_PC
     if (getenv("MELEE_MODELOG") != NULL) {
         fprintf(stderr, "[DEMO] ground load: pair %p grkind %d stkind %d mode %d\n", (void*) pair,
@@ -829,8 +830,8 @@ void Ground_801C0754(StageIdPair* pair)
         }
     }
 #endif
-    arg3 = (pair->stkind == St_Kind_Heal) ? 0 : 1;
-    grDatFiles_801C6038(stage->data1, 0, arg3);
+    arg3 = (pair->stkind == St_Kind_Heal) ? false : true;
+    grDatFiles_801C6038(stage->data1, false, arg3);
     Ground_801C28CC(&stage_info.xA0, pair->stkind);
     stage_info.on_touch_line = stage->on_touch_line;
     stage_info.on_check_shadow_render = stage->on_check_shadow_render;
@@ -919,13 +920,13 @@ void Ground_801C0800(StageIdPair* pair)
          * spawn with no state descriptors and never create a hitbox. */
         if (stage_info.itemdata != NULL) {
             for (i = 0; stage_info.itemdata[i] != NULL; i++) {
-                it_8026B40C(stage_info.itemdata[i]->unk4,
-                            stage_info.itemdata[i]->unk0);
+                it_8026B40C(stage_info.itemdata[i]->article_data,
+                            stage_info.itemdata[i]->gr_itkind);
             }
         }
 
         if (stage_info.ald_yaku_all != NULL) {
-            for (i = 1; stage_info.ald_yaku_all[i] != NULL; i++) {
+            for (i = 1; stage_info.ald_yaku_all[i].script != NULL; i++) {
                 /* PC port: the ItCo tables are converted lazily, so reading
                  * the slot directly gives NULL until something spawns that
                  * kind -- and this runs at stage load, before anything has.
@@ -938,14 +939,16 @@ void Ground_801C0800(StageIdPair* pair)
                         ? PC_ONLY_ELSE(
                               pc_itconv_table_get(
                                   it_804D6D38,
-                                  It_PKind_Random - It_Kind_Kuriboh),
-                              it_804D6D38[It_PKind_Random - It_Kind_Kuriboh])
+                                  It_PKind_Random -
+                                      It_Kind_Section_Monster_Character_Misc_Start),
+                              it_804D6D38[It_PKind_Random -
+                                          It_Kind_Section_Monster_Character_Misc_Start])
                         : NULL;
                 if (a == NULL) {
                     continue;
                 }
                 a->xC_itemStates->x0_itemStateDesc[i].xC_script =
-                    stage_info.ald_yaku_all[i];
+                    stage_info.ald_yaku_all[i].script;
             }
         }
 #undef PC_ONLY_ELSE
@@ -1079,8 +1082,8 @@ void Ground_801C0C2C(HSD_GObj* arg0)
 
     if (stage_info.unk8C.b6 || stage_info.unk8C.b7) {
         HSD_GObj* gobj = Ground_GetP1Fighter();
-        if (gobj != NULL && !ftLib_8008701C(gobj)) {
-            ftLib_80086644(gobj, &sp50);
+        if (gobj != NULL && !ftLib_IsSleeping(gobj)) {
+            ftLib_GetPos(gobj, &sp50);
             if (stage_info.unk8C.b6) {
                 int i;
                 bool result = pass_x_bounds = pass_y_min =
@@ -1201,13 +1204,15 @@ void Ground_OnLoad(StageIdPair* pair)
     stage_datas[pair->grkind]->on_load();
 }
 
+struct Ground_801C0FB8_cur {
+    void* unk0;
+    s32 unk4;
+    void (*unk8)(s32);
+};
+
 void Ground_801C0FB8(StageIdPair* pair)
 {
-    struct {
-        void* unk0;
-        s32 unk4;
-        void (*unk8)(s32);
-    }* cur;
+    struct Ground_801C0FB8_cur* cur;
     void* next;
 #if BUILD_TARGET_PC
     {
@@ -1238,13 +1243,15 @@ void Ground_DemoInit(StageIdPair* pair, s32 arg1)
     stage_datas[pair->grkind]->on_demo_init(arg1);
 }
 
+struct Ground_801C10B8_temp_r3 {
+    void* unk0;
+    HSD_GObj* unk4;
+    HSD_GObjEvent unk8;
+};
+
 void Ground_801C10B8(HSD_GObj* arg0, HSD_GObjEvent arg1)
 {
-    struct {
-        void* unk0;
-        HSD_GObj* unk4;
-        HSD_GObjEvent unk8;
-    }* temp_r3;
+    struct Ground_801C10B8_temp_r3* temp_r3;
     /* sizeof, not the console's 0xC: two of the three fields are pointers. */
     temp_r3 = HSD_MemAlloc(sizeof(*temp_r3));
     if (temp_r3 != NULL) {
@@ -1314,11 +1321,11 @@ HSD_JObj* Ground_801C13D0(s32 arg0, s32 depth)
     if (archive != NULL && arg0 < archive->unk4->unkC) {
         HSD_Joint* joint;
         if (depth == 0) {
-            joint = archive->unk4->unk8[arg0].unk0;
+            joint = archive->unk4->unk8[arg0].joint;
         } else {
             s32 tmp_depth = depth;
             joint =
-                Ground_801C126C(archive->unk4->unk8[arg0].unk0, &tmp_depth);
+                Ground_801C126C(archive->unk4->unk8[arg0].joint, &tmp_depth);
         }
         result = HSD_JObjLoadJoint(joint);
     }
@@ -1436,7 +1443,7 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
             return NULL;
         }
 #endif
-        temp_r24 = archive->unk4->unk8[map_id].unk0;
+        temp_r24 = archive->unk4->unk8[map_id].joint;
         temp_r23 = HSD_JObjLoadJoint(temp_r24);
         Ground_801C34AC(map_id, temp_r23, temp_r24);
         if (stageinfo->param != NULL) {
@@ -1451,7 +1458,9 @@ Ground_GObj* Ground_GetStageGObj(int map_id)
             OSReport("%s:%d: couldn t get jobj\n", __FILE__, 0x55D);
             return NULL;
         }
-        if (stage_datas[stageinfo->grkind]->callbacks[map_id].flags_b2 == 1 &&
+        if (stage_datas[stageinfo->grkind]
+                    ->callbacks[map_id]
+                    .x10.x0.flags_b2 == 1 &&
             archive->unk4->unk8[map_id].x10 != NULL)
         {
             HSD_GObj* temp_r23_2 = GObj_Create(17, 19, 0);
@@ -1622,7 +1631,7 @@ s32 Ground_801C1E18(void)
     return stage_info.unk8C.b2;
 }
 
-void Ground_801C1E2C(HSD_GObj* gobj, int code)
+void Ground_801C1E2C(HSD_GObj* gobj, intptr_t code)
 {
     bool stage_is_something;
     HSD_JObj* jobj;
@@ -1646,7 +1655,7 @@ HSD_GObj* Ground_801C1E84(void)
 
 /// void Camera_SetBackgroundColor(u8, u8, u8);     /* extern */
 /// UnkStruct3* grDatFiles_801C6330(int); /* extern */
-/// void Ground_801C1E2C(HSD_GObj*, int); /* extern */
+/// void Ground_801C1E2C(HSD_GObj*, intptr_t); /* extern */
 /// extern s8 HSD_GObj_FogKind;
 /// extern float @330;
 
@@ -1667,7 +1676,7 @@ static inline HSD_FogDesc* foo(void)
     grDatFiles_GetArchive();
     for (i = 0; i < temp_r30; i++) {
         phi_r29 = &temp_r29[i];
-        if (phi_r29->flags_b1 == 1) {
+        if (phi_r29->x10.x0.flags_b1 == 1) {
             return grDatFiles_801C6330(i)->unk4->unk8[i].x1C;
         }
     }
@@ -1751,15 +1760,6 @@ f32 Ground_801C20D0(void)
 {
     return stage_info.cam_info.cam_vertical_tilt;
 }
-
-typedef struct LightOverrideEntry {
-    /* 0x0 */ HSD_LightDesc* desc;
-    /* 0x4 */ u8 a : 1;
-    /* 0x4 */ u8 b : 1;
-    /* 0x4 */ u8 c : 1;
-    /* 0x4 */ u8 _ : 5;
-    /* 0x5 */ u8 _pad[3];
-} LightOverrideEntry;
 
 static inline bool find_light_override(UnkArchiveStruct* archive,
                                        HSD_LightDesc* desc, bool* b6, bool* b7,
@@ -1881,7 +1881,7 @@ LightList** Ground_801C20E0(UnkArchiveStruct* archive, LightList** lightset)
 
     out = lightset;
     while (*out != NULL) {
-        HSD_LightDesc* desc = *(HSD_LightDesc**) *out;
+        HSD_LightDesc* desc = (*out)->desc;
         UnkStageDat* dat;
         u16* flags;
         if (*(flags = &desc->flags) & 3) {
@@ -1905,14 +1905,14 @@ LightList** Ground_801C20E0(UnkArchiveStruct* archive, LightList** lightset)
                     *flags &= ~4;
                 }
                 if (b7) {
-                    (*(HSD_LightDesc**) *out)->flags |= 8;
+                    (*out)->desc->flags |= 8;
                 } else {
-                    (*(HSD_LightDesc**) *out)->flags &= ~8;
+                    (*out)->desc->flags &= ~8;
                 }
                 if (b5) {
-                    (*(HSD_LightDesc**) *out)->flags |= 0x400;
+                    (*out)->desc->flags |= 0x400;
                 } else {
-                    (*(HSD_LightDesc**) *out)->flags &= ~0x400;
+                    (*out)->desc->flags &= ~0x400;
                 }
             }
         }
@@ -2843,18 +2843,14 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
     HSD_JObj* jobj;
     UnkStageDat* stage_dat;
     UnkArchiveStruct* archive;
-    int entry_count;
-    int i;
-    struct {
-        void* joint;
-        s16* pairs;
-        s32 pair_count;
-    }* entry;
-    int count;
-    s16* pair;
-    int prev_index;
+    ssize_t entry_count;
+    ssize_t i;
+    struct Ground_801C34AC_entry* entry;
+    ssize_t count;
+    struct GroundJointPair* pair;
+    ssize_t prev_index;
     int target;
-    int j;
+    ssize_t j;
 
     jobj = root;
     prev_index = -1;
@@ -2868,7 +2864,7 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
         return;
     }
     stage_dat = archive->unk4;
-    entry_count = stage_dat->unk4;
+    entry_count = stage_dat->count;
     if (entry_count == 0) {
         return;
     }
@@ -2952,7 +2948,7 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
     }
 #endif
     for (j = count; j > 0; j--) {
-        target = pair[0];
+        target = pair->joint_index;
         if (prev_index > target || prev_index == -1) {
             jobj = root;
             i = 0;
@@ -2988,7 +2984,8 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
 #if BUILD_TARGET_PC
         if (getenv("MELEE_STAGE_DIAG") != NULL) {
             fprintf(stderr, "[X280]   slot=%d <- jobj=%p (joint idx %d)\n",
-                    (int) pair[1], (void*) jobj, (int) pair[0]);
+                    (int) pair->stage_joint_index, (void*) jobj,
+                    (int) pair->joint_index);
         }
         /* A slot index this large is not a slot: the pairs are big-endian
          * s16 in the file, and an unswapped one reads as thousands. Skipping
@@ -2997,14 +2994,14 @@ void Ground_801C34AC(s32 map_id, HSD_JObj* root, struct HSD_Joint* joint)
          * fighter starts the match somewhere the console does not. Count it
          * so the character-by-stage sweep can say which stages are missing
          * one rather than leaving it to be inferred from a position. */
-        if ((unsigned) pair[1] >= 0x100u) {
+        if ((unsigned) pair->stage_joint_index >= 0x100u) {
             port_guard_warn("ground.c:x280-slot-out-of-range");
-            pair += 2;
+            pair++;
             continue;
         }
 #endif
-        stage_info.x280[pair[1]] = jobj;
-        pair += 2;
+        stage_info.x280[pair->stage_joint_index] = jobj;
+        pair++;
     }
 #if BUILD_TARGET_PC
     /* And what the four player spawns came out as. The table being filled is
@@ -3064,17 +3061,9 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
     HSD_JObj* jobj;
     UnkStageDat* stage_dat;
     UnkArchiveStruct* archive;
-    int entry_count;
-    /* The same 12-byte console entries Ground_801C34AC walks, spelled the
-     * same way. As {void*, u8[8]} they were 16 bytes on the host against the
-     * filler's 24, so past entry 0 the lookup read between entries and
-     * returned without clearing x280. */
-    struct {
-        void* joint;
-        s16* pairs;
-        s32 pair_count;
-    }* entry;
-    int i;
+    ssize_t entry_count;
+    struct Ground_801C34AC_entry* entry;
+    ssize_t i;
     u32 unused[4];
 
     archive = grDatFiles_801C6330(map_id);
@@ -3085,7 +3074,7 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
         return;
     }
     stage_dat = archive->unk4;
-    entry_count = stage_dat->unk4;
+    entry_count = stage_dat->count;
     if (entry_count == 0) {
         return;
     }
@@ -3678,7 +3667,7 @@ void Ground_801C42AC(void)
         if (jobj != NULL) {
             sp8.x14 = 0x14;
             sp8.x4 = jobj;
-            sp8.x1C.b0 = true;
+            sp8.x1C.x0.b0 = true;
             it_8026BE84(&sp8);
         }
     }
@@ -3787,7 +3776,7 @@ static void Ground_801C461C(HSD_GObj* gobj)
     Ground_801C445C(gobj->hsd_obj);
 }
 
-static void Ground_801C4640(HSD_GObj* gobj, int unused)
+static void Ground_801C4640(HSD_GObj* gobj, intptr_t unused)
 {
     HSD_LObj_803668EC(gobj->hsd_obj);
     HSD_LObjSetupInit(HSD_CObjGetCurrent());
@@ -3841,12 +3830,14 @@ static void Ground_801C4640(HSD_GObj* gobj, int unused)
     NULL,
 };
 
+union Ground_801C466C_r28_carrier {
+    LightList** lights;
+    void* callback;
+};
+
 void Ground_801C466C(void)
 {
-    union {
-        LightList** lights;
-        void* callback;
-    } r28_carrier;
+    union Ground_801C466C_r28_carrier r28_carrier;
     Vec3 sp10; /* compiler-managed */
     int i;
     int count;
@@ -3868,7 +3859,7 @@ void Ground_801C466C(void)
     count = archive->unk4->unkC;
     archive = grDatFiles_GetArchive();
     for (i = 0; i < count; i++) {
-        if (callbacks->flags_b0 == 1) {
+        if (callbacks->x10.x0.flags_b0 == 1) {
             archive = grDatFiles_801C6330(i);
             selected = Ground_801C20E0(archive, archive->unk4->unk8[i].x18);
             goto light_selected;
@@ -4148,7 +4139,7 @@ void Ground_801C4A08(HSD_GObj* gobj)
         archive = grDatFiles_801C6330(gp->map_id);
         if (archive != NULL) {
             Ground_801C36F4(gp->map_id, jobj,
-                            archive->unk4->unk8[map_id].unk0);
+                            archive->unk4->unk8[map_id].joint);
         }
     }
     HSD_GObjFree(gobj);
@@ -4517,7 +4508,7 @@ void Ground_801C5694(Ground* gp, s32 i, f32 val)
     }
 }
 
-DynamicsDesc* Ground_801C5700(int i)
+lbColl_80008D30_arg1* Ground_801C5700(int i)
 {
     if (stage_info.on_touch_line != NULL) {
         return stage_info.on_touch_line(i);
@@ -4627,28 +4618,23 @@ Item_GObj* Ground_801C58E0(s32 arg0, s32 arg1)
 
 int Ground_801C5940(void)
 {
-    struct {
-        u8 x0_pad[0x4];
-        struct {
-            s16 a, b;
-        }* unk4;
-        s32 unk8;
-    }* phi_r8;
-    int i, j, out_idx;
+    struct Ground_801C34AC_entry* phi_r8;
+    ssize_t i, j;
+    int out_idx;
     UnkArchiveStruct* archive;
     const size_t vals_count = 32;
     u8 _[4];
     int vals[vals_count];
     archive = grDatFiles_GetArchive();
     out_idx = 0;
-    if (archive->unk4->unk4 == 0) {
+    if (archive->unk4->count == 0) {
         return -1;
     }
     phi_r8 = archive->unk4->unk0;
-    for (i = 0; i < archive->unk4->unk4; i++, phi_r8++) {
-        int max = phi_r8->unk8;
+    for (i = 0; i < archive->unk4->count; i++, phi_r8++) {
+        ssize_t max = phi_r8->pair_count;
         for (j = 0; j < max; j++) {
-            int val = phi_r8->unk4[j].b;
+            int val = phi_r8->pairs[j].stage_joint_index;
             if (val >= 220 && val < 252 && (unsigned) out_idx < vals_count) {
                 vals[out_idx] = val;
                 out_idx++;

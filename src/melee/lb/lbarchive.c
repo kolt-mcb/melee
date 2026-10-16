@@ -21,10 +21,6 @@
 #include <sysdolphin/baselib/archive.h>
 #include <sysdolphin/baselib/debug.h>
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
 {
 #if BUILD_TARGET_PC
@@ -50,12 +46,11 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
         OSReport("HSD_ArchiveParse error!\n");
 #if BUILD_TARGET_PC
         /* PC port: don't crash on archive parse errors (byte-order issues) */
-        /* HSD_ASSERT(73, 0); */
+        memset(archive, 0, sizeof(HSD_Archive));
+        return;
 #else
         HSD_ASSERT(73, 0);
 #endif /* BUILD_TARGET_PC */
-        memset(archive, 0, sizeof(HSD_Archive));
-        return;
     }
 #if BUILD_TARGET_PC
     /* Item Articles are converted lazily from whichever archive holds
@@ -74,9 +69,6 @@ void lbArchive_InitializeDAT(HSD_Archive* archive, void* data, size_t length)
         }
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 #if BUILD_TARGET_PC
 /* lbBgFlashColAnimData is a table of {colour-anim script, priority, flag}
@@ -207,12 +199,11 @@ static void* pc_convert_section(HSD_Archive* archive, const char* name,
 }
 #endif
 
-void lbArchive_LoadSections(HSD_Archive* archive, void** symbol, ...)
+static inline void vLoadSections(HSD_Archive* archive, void** symbol,
+                                 va_list symbols)
 {
     const char* symbol_name;
-    va_list symbols;
 
-    va_start(symbols, symbol);
     for (; symbol != NULL; symbol = va_arg(symbols, void**)) {
         symbol_name = va_arg(symbols, const char*);
         *symbol = NULL;
@@ -220,33 +211,65 @@ void lbArchive_LoadSections(HSD_Archive* archive, void** symbol, ...)
         if (*symbol == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name);
         }
-#if BUILD_TARGET_PC
-        *symbol = pc_convert_section(archive, symbol_name, *symbol);
-#endif
     }
+}
+
+void(lbArchive_LoadSections)(HSD_Archive* archive, void* symbol, ...)
+{
+    va_list symbols;
+
+    va_start(symbols, symbol);
+#if BUILD_TARGET_PC
+    /* As vLoadSections, then each section is converted to its host layout
+     * (pc_convert_section). lbArchive_80016DBC and lbArchive_800171CC share
+     * vLoadSections and hand their callers raw archive data, as before. */
+    {
+        void** slot = symbol;
+        const char* symbol_name;
+
+        for (; slot != NULL; slot = va_arg(symbols, void**)) {
+            symbol_name = va_arg(symbols, const char*);
+            *slot = NULL;
+            *slot = HSD_ArchiveGetPublicAddress(archive, symbol_name);
+            if (*slot == NULL) {
+                OSReport("Cannot find symbol %s.\n", symbol_name);
+            }
+            *slot = pc_convert_section(archive, symbol_name, *slot);
+        }
+    }
+#else
+    vLoadSections(archive, symbol, symbols);
+#endif
     va_end(symbols);
 }
 
-static inline HSD_Archive* lbArchive_LoadArchive_inline(const char* filename)
+static inline void readArchive(const char* filename, void* data,
+                               HSD_Archive* archive)
+{
+    size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
+
+    lbFile_8001668C(filename, data, &length);
+    lbArchive_InitializeDAT(archive, data, length);
+}
+
+static inline HSD_Archive* loadArchive(const char* filename)
 {
     HSD_Archive* archive;
     void* data;
-    size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
 
     data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
     archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-    lbFile_8001668C(filename, data, &length);
-    lbArchive_InitializeDAT(archive, data, length);
+    readArchive(filename, data, archive);
     return archive;
 }
 
 HSD_Archive* lbArchive_LoadArchive(const char* filename)
 {
-    return lbArchive_LoadArchive_inline(filename);
+    return loadArchive(filename);
 }
 
-static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
-                                                void** symbol, va_list symbols)
+static inline void vLoadSectionsFatal(HSD_Archive* archive, void** symbol,
+                                      va_list symbols)
 {
     const char* symbol_name;
 
@@ -269,50 +292,30 @@ static inline void lbArchive_vLoadSectionsFatal(HSD_Archive* archive,
                           (const void*)symbol_name);
             return;
         }
-#endif
         *symbol = NULL;
         if (archive != NULL && symbol_name != NULL) {
             *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
         }
         if (*symbol == NULL) {
-            OSReport("Cannot find symbol %s.\n", symbol_name ? symbol_name : "(null)");
-#if BUILD_TARGET_PC
             /* PC port: don't crash on missing symbols */
-            /* HSD_ASSERT(112, 0); */
-#else
-            HSD_ASSERT(112, 0);
-#endif /* BUILD_TARGET_PC */
+            OSReport("Cannot find symbol %s.\n",
+                     symbol_name ? symbol_name : "(null)");
         }
-    }
-}
-
-static void lbArchive_vLoadSections(HSD_Archive* archive, void** symbol,
-                                           va_list symbols)
-{
-    const char* symbol_name;
-
-    for (; symbol != NULL; symbol = va_arg(symbols, void**)) {
-        symbol_name = va_arg(symbols, const char*);
+#else
         *symbol = NULL;
         *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
         if (*symbol == NULL) {
             OSReport("Cannot find symbol %s.\n", symbol_name);
+            HSD_ASSERT(112, 0);
         }
+#endif
     }
 }
 
-typedef struct {
-    void** ptr;
-    const char* name;
-} SymbolLookup;
-
-HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
+HSD_Archive*(lbArchive_LoadSymbols) (const char* filename, void* symbols, ...)
 {
-    HSD_Archive* archive;
-    void* data;
-    size_t length;
-    u8 _[8];
     va_list sections;
+    HSD_Archive* archive;
 
     va_start(sections, symbols);
 
@@ -339,10 +342,7 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
             return NULL;
         }
     }
-    data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-    archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-    lbFile_8001668C(filename, data, &length);
-    lbArchive_InitializeDAT(archive, data, length);
+    archive = loadArchive(filename);
     /* PC port: deliberately NOT resolving the (ptr, "name") pairs here.
      * Restoring plain GCN symbol resolution regressed the title screen:
      * several PC callers run their own GCN->x64 conversion keyed on these
@@ -387,52 +387,25 @@ HSD_Archive* lbArchive_LoadSymbols(const char* filename, void* symbols, ...)
     }
     return archive;
 #else
-    data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-    archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-    lbFile_8001668C(filename, data, &length);
-    lbArchive_InitializeDAT(archive, data, length);
-    lbArchive_vLoadSectionsFatal(archive, symbols, sections);
+    archive = loadArchive(filename);
+    vLoadSectionsFatal(archive, symbols, sections);
 
     va_end(sections);
     return archive;
 #endif /* BUILD_TARGET_PC */
 }
 
-HSD_Archive* lbArchive_80016DBC(const char* filename, void* symbols, ...)
+HSD_Archive*(lbArchive_80016DBC) (const char* filename, void* symbols, ...)
 {
-    HSD_Archive* archive;
-    void* data;
-    size_t length;
-    u8 _[8];
     va_list sections;
+    HSD_Archive* archive;
 
-    data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-    archive = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-    lbFile_8001668C(filename, data, &length);
-    lbArchive_InitializeDAT(archive, data, length);
+    va_start(sections, symbols);
 
-#if BUILD_TARGET_PC
-    /* The variadic (symbol, name) pairs were accepted and dropped -- va_start
-     * immediately followed by va_end -- so every caller's out-pointer kept
-     * whatever it already held. Resolve them the way lbArchive_LoadSections
-     * does. Callers must convert what they get back: it is raw archive data. */
-    {
-        void** symbol = (void**) symbols;
-        va_start(sections, symbols);
-        for (; symbol != NULL; symbol = va_arg(sections, void**)) {
-            const char* symbol_name = va_arg(sections, const char*);
-            *symbol = HSD_ArchiveGetPublicAddress(archive, symbol_name);
-            if (*symbol == NULL) {
-                OSReport("Cannot find symbol %s.\n", symbol_name);
-            }
-        }
-        va_end(sections);
-    }
-#else
-    (void)symbols;
-    va_start(sections, filename);
+    archive = loadArchive(filename);
+    vLoadSections(archive, symbols, sections);
+
     va_end(sections);
-#endif
     return archive;
 }
 
@@ -448,41 +421,34 @@ void lbArchive_80016EFC(HSD_Archive* archive)
     }
 #endif
     HSD_ASSERT(0xFD, archive->flags & HSD_ARCHIVE_DONT_FREE);
-    lbHeap_80015CA8(0, (u32*) (archive->data - 0x20));
-    lbHeap_80015CA8(0, (u32*) archive);
+#ifdef TARGET_PC
+    HSD_ArchiveReleaseNative(archive);
+#endif
+    lbHeap_80015CA8(0, archive->data - sizeof(archive->header));
+    lbHeap_80015CA8(0, archive);
 }
 
-bool lbArchive_80016F80(HSD_Archive** archive, const char* filename)
+bool lbArchive_80016F80(HSD_Archive** dst, const char* filename)
 {
-    void* data;
-    size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
-    HSD_Archive* var_r3;
-    bool result;
-    u8 _[8];
+    HSD_Archive* archive;
+    bool preloaded;
 
-    var_r3 = lbDvd_8001819C(filename);
-    if (var_r3 != NULL) {
-        result = true;
-    } else {
-        HSD_Archive* tmp;
-        data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-        tmp = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-        lbFile_8001668C(filename, data, &length);
-        lbArchive_InitializeDAT(tmp, data, length);
-        var_r3 = tmp;
-        result = false;
-    }
+    archive = lbDvd_8001819C(filename);
     if (archive != NULL) {
-        *archive = var_r3;
+        preloaded = true;
+    } else {
+        archive = loadArchive(filename);
+        preloaded = false;
     }
-    return result;
+    if (dst != NULL) {
+        *dst = archive;
+    }
+    return preloaded;
 }
 
-bool lbArchive_80017040(HSD_Archive** dst, const char* filename, void* symbols,
-                        ...)
+bool(lbArchive_80017040)(HSD_Archive** dst, const char* filename,
+                         void* symbols, ...)
 {
-    void* tmp;
-    HSD_Archive* archive2;
     HSD_Archive* archive;
     bool preloaded;
     va_list args;
@@ -493,23 +459,11 @@ bool lbArchive_80017040(HSD_Archive** dst, const char* filename, void* symbols,
     if (archive != NULL) {
         preloaded = true;
     } else {
-        // Inlined lbArchive_LoadArchive
-        {
-            void* data;
-            size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
-            u32 pad;
-            u32 pad2;
-            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-            tmp = data;
-            archive2 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-            lbFile_8001668C(filename, tmp, &length);
-            lbArchive_InitializeDAT(archive2, tmp, length);
-            archive = archive2;
-        }
+        archive = loadArchive(filename);
         preloaded = false;
     }
 
-    lbArchive_vLoadSectionsFatal(archive, symbols, args);
+    vLoadSectionsFatal(archive, symbols, args);
 
     va_end(args);
 
@@ -519,11 +473,9 @@ bool lbArchive_80017040(HSD_Archive** dst, const char* filename, void* symbols,
     return preloaded;
 }
 
-bool lbArchive_800171CC(HSD_Archive** dst, const char* filename, void* symbols,
-                        ...)
+bool(lbArchive_800171CC)(HSD_Archive** dst, const char* filename,
+                         void* symbols, ...)
 {
-    void* tmp;
-    HSD_Archive* archive2;
     HSD_Archive* archive;
     bool preloaded;
     va_list args;
@@ -534,23 +486,11 @@ bool lbArchive_800171CC(HSD_Archive** dst, const char* filename, void* symbols,
     if (archive != NULL) {
         preloaded = true;
     } else {
-        // Inlined lbArchive_LoadArchive
-        {
-            void* data;
-            size_t length = 0; /* PC: lbFile_8001668C writes only the low u32 */
-            u32 pad;
-            u32 pad2;
-            data = lbHeap_80015BD0(0, OSRoundUp32B(lbFileGetSize(filename)));
-            tmp = data;
-            archive2 = lbHeap_80015BD0(0, sizeof(HSD_Archive));
-            lbFile_8001668C(filename, tmp, &length);
-            lbArchive_InitializeDAT(archive2, tmp, length);
-            archive = archive2;
-        }
+        archive = loadArchive(filename);
         preloaded = false;
     }
 
-    lbArchive_vLoadSections(archive, symbols, args);
+    vLoadSections(archive, symbols, args);
 
     va_end(args);
 
@@ -566,8 +506,8 @@ static inline void Locate(HSD_Archive* archive, intptr_t base_addr)
     u32* ptr;
 
     for (i = 0; i < archive->header.nb_reloc; i++) {
-        ptr = (u32*) archive->reloc_info[i].offset;
-        *(intptr_t*) (archive->data + (u32) ptr) += base_addr;
+        ptr = (u32*) (archive->data + archive->reloc_info[i].offset);
+        *ptr += base_addr;
     }
 }
 

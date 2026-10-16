@@ -99,8 +99,8 @@ void ftKb_SpecialS_Enter(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     fp->cmd_vars[0] = 0;
-    Fighter_ChangeMotionState(gobj, ftKb_MS_SpecialS, 0, 0.0f, 1.0f, 0.0f,
-                              NULL);
+    Fighter_ChangeMotionState(gobj, ftKb_MS_SpecialS, Ft_MF_None, 0.0f, 1.0f,
+                              0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->accessory4_cb = &fn_800F53AC;
 }
@@ -115,8 +115,8 @@ void ftKb_SpecialAirS_Enter(Fighter_GObj* gobj)
         fp->self_vel.y = da->specials_aerial_vertical_momentum;
         fp->u.kb.x64 = true;
     }
-    Fighter_ChangeMotionState(gobj, ftKb_MS_SpecialAirS, 0, 0.0f, 1.0f, 0.0f,
-                              NULL);
+    Fighter_ChangeMotionState(gobj, ftKb_MS_SpecialAirS, Ft_MF_None, 0.0f,
+                              1.0f, 0.0f, NULL);
     ftAnim_8006EBA4(gobj);
     fp->accessory4_cb = &fn_800F53AC;
 }
@@ -233,6 +233,6 @@ HSD_Joint* ftKb_SpecialN_800F5898(Fighter_GObj* gobj)
         return items != NULL ? (HSD_Joint*) pc_ftconv_joint(items[4]) : NULL;
     }
 #else
-    return ca->x48_items[4];
+    return ca->x48_items[4].joint;
 #endif
 }

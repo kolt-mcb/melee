@@ -107,7 +107,7 @@ struct lb_Collider {
 };
 #endif
 
-const struct {
+const struct lb_803B7280_t {
     Vec3 v0;
     Vec3 v1;
     Vec3 v2;
@@ -417,10 +417,6 @@ float lb_800103B8(Vec3* a, Vec3* b)
     return lb_800101C8(a, b);
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool lb_800103D8(Vec3* vec, float x0, float x1, float x2, float x3,
                  float offset)
 {
@@ -429,20 +425,18 @@ bool lb_800103D8(Vec3* vec, float x0, float x1, float x2, float x3,
     if (dist0 == dist1) {
         if (dist0 > 1e-10f) {
             return true;
+        } else {
+            return false;
         }
-        return false;
-    }
-    if ((double) dist0 > 0.0 && (double) dist1 < 0.0) {
+    } else if ((double) dist0 > 0.0 && (double) dist1 < 0.0) {
         vec->x = DYN_FMA(-dist1 / (dist0 - dist1), x0 - x2, x2); /* 80010428 */
         vec->y = offset;
         vec->z = 0.0f;
         return true;
+    } else {
+        return false;
     }
-    return false;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 static inline bool approximatelyZeroVec3(Vec3 vec)
 {
@@ -1480,7 +1474,7 @@ void lb_800115F4(void)
     lb_804D63B4 = 0;
 }
 
-void lb_80011710(DynamicsDesc* arg0, DynamicsDesc* arg1)
+void lb_80011710(DynamicsTemplate* arg0, DynamicsDesc* arg1)
 {
     struct lb_00F9_UnkDesc1Inner* data0;
     struct DynamicsData* data1;
@@ -1505,7 +1499,7 @@ void lb_80011710(DynamicsDesc* arg0, DynamicsDesc* arg1)
     }
 #endif
     data1 = arg1->data;
-    data0 = &arg0->data->desc.lb_unk1.array[0];
+    data0 = arg0->params;
     for (data1 = arg1->data, i = 0; i < (int) arg0->count;
          data1 = data1->next, i++)
     {
