@@ -72,6 +72,12 @@ function serveDisc(req, res) {
 
 function handler(req, res) {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    // Container healthcheck: answers without touching the disc, so a missing or
+    // unreadable ISO still lets the page load and report its own error.
+    if (p === '/healthz') {
+        res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
+        return res.end('ok');
+    }
     if (p === '/disc.iso') return serveDisc(req, res);
     if (p === '/') p = '/melee.html';
     const file = path.join(WEB, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
