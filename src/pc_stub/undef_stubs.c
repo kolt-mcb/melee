@@ -5820,8 +5820,6 @@ __attribute__((weak)) void* tyDisplay_8031C5E4(int arg0)
  * table names the new ones, and the vi/ and ty/ scene sources are still
  * outside the PC build, so the stubs follow the rename. */
 __attribute__((weak)) void gm_Mode_ChallengerApproach_OnLoad(void) { PC_STUB_HIT("gm_Mode_ChallengerApproach_OnLoad");}
-__attribute__((weak)) void ifPrize_Scene_OnEnter(void) { PC_STUB_HIT("ifPrize_Scene_OnEnter");}
-__attribute__((weak)) void ifPrize_Scene_OnExit(void) { PC_STUB_HIT("ifPrize_Scene_OnExit");}
 __attribute__((weak)) void Toy_Mode_OnInit(void) { PC_STUB_HIT("Toy_Mode_OnInit");}
 __attribute__((weak)) void Toy_Scene_OnEnter(void) { PC_STUB_HIT("Toy_Scene_OnEnter");}
 __attribute__((weak)) void Toy_Scene_OnFrame(void) { PC_STUB_HIT("Toy_Scene_OnFrame");}
