@@ -1,9 +1,10 @@
 #ifndef MELEE_GR_INLINES_H
 #define MELEE_GR_INLINES_H
 
-#ifndef M_TAU
-#define M_TAU 6.283185307179586f
-#endif
+/* M_TAU comes from Runtime/platform.h (via gr/types.h below), as the double
+ * MSL defines. A float copy used to sit here behind #ifndef M_TAU; it could
+ * only take effect in a file that reached this header before platform.h, and
+ * there it would have become a redefinition. */
 
 #include <sysdolphin/baselib/forward.h>
 
