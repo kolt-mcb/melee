@@ -32,6 +32,22 @@ void pc_get_fb_size(float* w, float* h);
 #include <string.h>
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
+/* Resolve on the first animation frame at or after target_ms (performance
+ * clock, the one emscripten_get_now reads); see the pacer in render_present. */
+EM_ASYNC_JS(void, web_wait_frame, (double target_ms), {
+    await new Promise(function (resolve) {
+        function due() { return performance.now() >= target_ms - 2.0; }
+        if (document.hidden) {
+            setTimeout(resolve, Math.max(0, target_ms - performance.now()));
+            return;
+        }
+        function tick() {
+            if (due() || document.hidden) resolve();
+            else requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    });
+});
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -527,24 +543,33 @@ static void render_present_tail(int frame)
              * Unconditional on purpose: s_pace is false when a 60 Hz vsync
              * is trusted to pace, but there is no vsync to trust here. */
             {
+                /* Wait for the browser's frame clock, not a timer. A frame
+                 * resumed from requestAnimationFrame is simulated and drawn
+                 * in the promise's microtask, before that same frame's paint,
+                 * so it reaches the screen on the next vsync with nothing
+                 * between. setTimeout -- what emscripten_sleep is -- fires
+                 * at no particular point in the display's cycle and is
+                 * clamped and jittery besides, which is how a 9 ms frame on
+                 * a 16.7 ms budget still missed vsyncs (42 fps).
+                 *
+                 * The game is a fixed 60 Hz simulation, so on a faster
+                 * display callbacks are skipped until the next 60 Hz slot is
+                 * due (2 ms early counts: rAF timestamps land on the vsync,
+                 * not after it). A hidden tab gets no rAF at all; a timer
+                 * keeps it running there, because in netplay a stalled page
+                 * stalls every player. */
                 static double s_next_ms;
                 double now = emscripten_get_now();
-                double wait;
                 if (s_next_ms == 0.0) {
                     s_next_ms = now;
                 }
                 s_next_ms += 1000.0 / 60.0;
-                wait = s_next_ms - now;
                 /* More than a frame behind: resynchronise rather than run
                  * fast to catch up, as the native pacer does. */
-                if (wait < 0.0) {
+                if (s_next_ms < now - 1000.0 / 60.0) {
                     s_next_ms = now;
-                    wait = 0.0;
                 }
-                if (wait > 1000.0 / 60.0) {
-                    wait = 1000.0 / 60.0;
-                }
-                emscripten_sleep((unsigned int) (wait + 0.5));
+                web_wait_frame(s_next_ms);
             }
 #else
             if (s_pace) {
@@ -615,6 +640,19 @@ static void render_present_tail(int frame)
                 static struct timespec s_last;
                 struct timespec now;
                 long long dt;
+#if defined(__EMSCRIPTEN__)
+                /* The web compiles deferred variants in parallel: starting
+                 * one costs nothing, so every deferred variant is started at
+                 * once instead of waiting for a slow frame, and the finished
+                 * ones are picked up each frame (gx_gl_bridge.c). */
+                {
+                    extern void pc_web_prog_poll(void);
+                    int n = 24;
+                    pc_web_prog_poll();
+                    while (n-- > 0 && pc_shc_deferred() > 0 &&
+                           pc_shc_compile_one_deferred()) {}
+                }
+#endif
                 clock_gettime(CLOCK_MONOTONIC, &now);
                 dt = (long long) (now.tv_sec - s_last.tv_sec) * 1000000000LL + (now.tv_nsec - s_last.tv_nsec);
                 if (s_last.tv_sec != 0 && dt > 40000000LL && pc_shc_deferred() > 0) {

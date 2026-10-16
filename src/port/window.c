@@ -215,6 +215,14 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
     pc_default_hint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 #endif
 
+#ifdef __EMSCRIPTEN__
+    /* SDL's emscripten swap yields to the browser itself (emscripten_sleep(0)
+     * after every SDL_GL_SwapWindow) unless told not to. The pacer already
+     * yields once a frame, on the browser's own frame clock (render.c); the
+     * second yield was a setTimeout(0), clamped to ~4 ms, every frame -- a
+     * quarter of the frame budget spent asleep at the wrong moment. */
+    SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
+#endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0)
     {
         PORT_LOG_ERROR("SDL2 init failed: %s", SDL_GetError());
