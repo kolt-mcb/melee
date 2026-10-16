@@ -80,8 +80,15 @@ function handler(req, res) {
     }
     if (p === '/disc.iso') return serveDisc(req, res);
     if (p === '/') p = '/melee.html';
-    const file = path.join(WEB, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
+    let file = path.join(WEB, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(WEB + path.sep)) { res.writeHead(403); return res.end(); }
+    /* The lobby is a file, not inline script (the gateway's CSP blocks inline),
+     * and the build does not copy it next to melee.html. So a page served
+     * straight out of build/wasm would 404 on it: fall back to where it lives.
+     * A deploy copies it into the web root, so this is the dev path. */
+    if (path.basename(file) === 'lobby.js' && !fs.existsSync(file)) {
+        file = path.join(ROOT, 'tools', 'wasm', 'lobby.js');
+    }
     fs.stat(file, (err, st) => {
         if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
         res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
