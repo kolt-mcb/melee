@@ -86,6 +86,9 @@ function keyParams(code) {
             const text = (m.params.args || [])
                 .map(a => a.value !== undefined ? a.value : (a.description || '')).join(' ');
             log.push(`[${m.params.type}] ${text}`);
+        } else if (m.method === 'Log.entryAdded') {
+            /* The browser's own messages: WebGL errors arrive here. */
+            log.push(`[${m.params.entry.source}] ${m.params.entry.text}`);
         } else if (m.method === 'Runtime.exceptionThrown') {
             const d = m.params.exceptionDetails;
             log.push(`[exception] ${d.text} ${d.exception ? d.exception.description : ''}`);
@@ -93,6 +96,7 @@ function keyParams(code) {
     };
 
     await send('Runtime.enable');
+    await send('Log.enable');
     await send('Page.enable');
     await send('Page.navigate', { url });
 
