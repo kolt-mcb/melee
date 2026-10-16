@@ -2355,7 +2355,15 @@ void Camera_8002C5B4(Camera_x2D0* arg0)
     params = arg0;
 
     if (params->callback != NULL) {
+#if BUILD_TARGET_PC
+        /* Every callback installed here returns s32 (Camera_SetBounds,
+         * fn_8002F908, fn_8002FBA0), cast to this void-returning slot. wasm
+         * checks an indirect call's whole signature, result included, and
+         * trapped on pausing a match; call them as what they are. */
+        ((s32 (*)(Camera_x2D0*)) params->callback)(arg0);
+#else
         params->callback(arg0);
+#endif
     }
 
     limit = params->x_max;

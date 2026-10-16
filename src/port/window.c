@@ -446,9 +446,56 @@ Bool window_should_close(void)
     return !(flags & SDL_WINDOW_SHOWN);
 }
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+/* The canvas's size on screen in device pixels -- CSS size times the
+ * display's pixel ratio -- or 0 while it is hidden (the lobby). */
+EM_JS(int, web_canvas_device_px, (int* w, int* h), {
+    var c = Module.canvas;
+    if (!c) return 0;
+    var r = c.getBoundingClientRect();
+    if (!r.width || !r.height) return 0;
+    var d = window.devicePixelRatio || 1;
+    HEAP32[w >> 2] = Math.round(r.width * d);
+    HEAP32[h >> 2] = Math.round(r.height * d);
+    return 1;
+});
+/* Render at the size the canvas is shown at, not the config's 1280x720
+ * stretched over it: on a Retina display that was a quarter of the pixels,
+ * scaled up soft. Followed as the window is resized or goes fullscreen; the
+ * game letterboxes its 4:3 picture inside whatever shape it is given.
+ * Capped at 1440 lines (MELEE_IRES_MAX_LINES, 0 for none), as on Android:
+ * already 3x the GameCube's framebuffer, and a 5K display at native size is
+ * fill rate spent on nothing visible. */
+static void web_fit_canvas(void)
+{
+    static int s_tick, s_cap = -1;
+    int w = 0, h = 0, cw = 0, ch = 0;
+    if ((s_tick++ % 15) != 0 || g_sdl_window == NULL) return;
+    if (!web_canvas_device_px(&w, &h)) return;
+    if (s_cap < 0) {
+        const char* e = getenv("MELEE_IRES_MAX_LINES");
+        s_cap = e != NULL ? atoi(e) : 1440;
+        if (s_cap < 0) s_cap = 0;
+    }
+    if (s_cap > 0 && h > s_cap) {
+        w = (int) ((double) w * s_cap / h + 0.5);
+        h = s_cap;
+    }
+    SDL_GetWindowSize(g_sdl_window, &cw, &ch);
+    if (w != cw || h != ch) {
+        SDL_SetWindowSize(g_sdl_window, w, h);
+        fprintf(stderr, "[WEB] canvas %dx%d (was %dx%d)\n", w, h, cw, ch);
+    }
+}
+#endif
+
 void window_poll_events(void)
 {
     SDL_Event event;
+#ifdef __EMSCRIPTEN__
+    web_fit_canvas();
+#endif
     while (SDL_PollEvent(&event))
     {
         switch (event.type)
