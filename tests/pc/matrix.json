@@ -1,72 +1,171 @@
 {
 "0,10": {
 "frames": 240,
+"guards": [
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.0_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "0,12": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,13": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,14": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,15": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,16": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,19": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"0,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PIKACHU"
+},
 "0,20": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -76,12 +175,28 @@
 },
 "0,22": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,23": {
 "frames": 720,
+"guards": [
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -89,6 +204,13 @@
 },
 "0,24": {
 "frames": 720,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -96,162 +218,417 @@
 },
 "0,25": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,26": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,28": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"0,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PIKACHU"
+},
 "0,30": {
 "frames": 240,
+"guards": [
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,31": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"0,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PIKACHU"
+},
 "0,5": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,7": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "0,9": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.1_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "1,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"1,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "POPONANA"
+},
 "1,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -261,12 +638,30 @@
 },
 "1,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -274,6 +669,14 @@
 },
 "1,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -281,162 +684,434 @@
 },
 "1,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"1,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "POPONANA"
+},
 "1,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"1,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "POPONANA"
+},
 "1,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "1,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.10_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "10,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"10,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "EMBLEM"
+},
 "10,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -446,12 +1121,30 @@
 },
 "10,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -459,6 +1152,14 @@
 },
 "10,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -466,162 +1167,432 @@
 },
 "10,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"10,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "EMBLEM"
+},
 "10,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"10,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "EMBLEM"
+},
 "10,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "10,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.11_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "11,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"11,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PICHU"
+},
 "11,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -631,12 +1602,30 @@
 },
 "11,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -644,6 +1633,14 @@
 },
 "11,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -651,162 +1648,434 @@
 },
 "11,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"11,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PICHU"
+},
 "11,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"11,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PICHU"
+},
 "11,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "11,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.12_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "12,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"12,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "GANON"
+},
 "12,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -816,12 +2085,30 @@
 },
 "12,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -829,6 +2116,14 @@
 },
 "12,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -836,162 +2131,416 @@
 },
 "12,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"12,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "GANON"
+},
 "12,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "12,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.13_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "13,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"13,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "CAPTAIN"
+},
 "13,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1001,12 +2550,30 @@
 },
 "13,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1014,6 +2581,14 @@
 },
 "13,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1021,162 +2596,418 @@
 },
 "13,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"13,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "CAPTAIN"
+},
 "13,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "13,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.14_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "14,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"14,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "DONKEY"
+},
 "14,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1186,12 +3017,31 @@
 },
 "14,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"ftanim.c:80070A10-no-tree",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1199,168 +3049,432 @@
 },
 "14,24": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"14,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "DONKEY"
+},
 "14,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "14,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.15_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "15,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"15,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "FOX"
+},
 "15,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1370,12 +3484,30 @@
 },
 "15,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1383,6 +3515,14 @@
 },
 "15,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1390,162 +3530,404 @@
 },
 "15,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"15,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "FOX"
+},
 "15,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "15,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,10": {
 "frames": 240,
+"guards": [
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.16_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "16,12": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,13": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,14": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,15": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,16": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,19": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"16,2,r": {
+"frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "GAMEWATCH"
+},
 "16,20": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1555,12 +3937,28 @@
 },
 "16,22": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,23": {
 "frames": 720,
+"guards": [
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1568,6 +3966,13 @@
 },
 "16,24": {
 "frames": 720,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1575,162 +3980,401 @@
 },
 "16,25": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,26": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,28": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"16,3,r": {
+"frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "GAMEWATCH"
+},
 "16,30": {
 "frames": 240,
+"guards": [
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,31": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,5": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,7": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "16,9": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.17_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "17,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"17,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "KIRBY"
+},
 "17,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1740,12 +4384,30 @@
 },
 "17,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1753,6 +4415,14 @@
 },
 "17,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1760,162 +4430,416 @@
 },
 "17,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"17,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "KIRBY"
+},
 "17,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "17,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.18_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "18,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"18,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "KOOPA"
+},
 "18,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -1925,12 +4849,30 @@
 },
 "18,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1938,6 +4880,14 @@
 },
 "18,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -1945,162 +4895,416 @@
 },
 "18,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"18,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "KOOPA"
+},
 "18,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "18,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.19_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "19,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"19,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "LINK"
+},
 "19,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -2110,12 +5314,30 @@
 },
 "19,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2123,6 +5345,14 @@
 },
 "19,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2130,162 +5360,413 @@
 },
 "19,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"19,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "LINK"
+},
 "19,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "19,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,10": {
 "frames": 240,
+"guards": [
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.2_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "2,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"2,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PURIN"
+},
 "2,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -2295,12 +5776,30 @@
 },
 "2,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2308,6 +5807,14 @@
 },
 "2,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2315,162 +5822,417 @@
 },
 "2,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"2,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PURIN"
+},
 "2,30": {
 "frames": 240,
+"guards": [
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"2,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PURIN"
+},
 "2,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "2,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.20_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "20,12": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,13": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,14": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,15": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,16": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,19": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"20,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "LUIGI"
+},
 "20,20": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -2480,12 +6242,29 @@
 },
 "20,22": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2493,6 +6272,14 @@
 },
 "20,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2500,162 +6287,402 @@
 },
 "20,25": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,26": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,28": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"20,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "LUIGI"
+},
 "20,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,31": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,5": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,7": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "20,9": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.21_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "21,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"21,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MARIO"
+},
 "21,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -2665,12 +6692,30 @@
 },
 "21,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2678,6 +6723,14 @@
 },
 "21,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2685,162 +6738,418 @@
 },
 "21,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"21,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MARIO"
+},
 "21,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "21,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.22_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "22,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"22,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MARS"
+},
 "22,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -2850,12 +7159,30 @@
 },
 "22,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2863,6 +7190,14 @@
 },
 "22,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -2870,162 +7205,418 @@
 },
 "22,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"22,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MARS"
+},
 "22,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "22,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.23_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "23,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"23,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MEWTWO"
+},
 "23,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3035,12 +7626,30 @@
 },
 "23,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3048,6 +7657,14 @@
 },
 "23,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3055,162 +7672,416 @@
 },
 "23,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"23,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "MEWTWO"
+},
 "23,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "23,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.24_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "24,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"24,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "NESS"
+},
 "24,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3220,12 +8091,30 @@
 },
 "24,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3233,6 +8122,14 @@
 },
 "24,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3240,162 +8137,407 @@
 },
 "24,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"24,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "NESS"
+},
 "24,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "24,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,10": {
 "frames": 240,
+"guards": [
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.25_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "25,12": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,13": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,14": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,15": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,16": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,19": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"25,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PEACH"
+},
 "25,20": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3405,12 +8547,28 @@
 },
 "25,22": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,23": {
 "frames": 720,
+"guards": [
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3418,6 +8576,13 @@
 },
 "25,24": {
 "frames": 720,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3425,162 +8590,389 @@
 },
 "25,25": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,26": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,28": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"25,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "PEACH"
+},
 "25,30": {
 "frames": 240,
+"guards": [
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,31": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,5": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,7": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "25,9": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,10": {
 "frames": 240,
+"guards": [
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.3_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "3,12": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,13": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,14": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,15": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,16": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,17": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,18": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,19": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,2": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"3,2,r": {
+"frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SAMUS"
+},
 "3,20": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3590,12 +8982,28 @@
 },
 "3,22": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,23": {
 "frames": 720,
+"guards": [
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3603,6 +9011,13 @@
 },
 "3,24": {
 "frames": 720,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3610,162 +9025,417 @@
 },
 "3,25": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,26": {
 "frames": 240,
+"guards": [
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,27": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,28": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,29": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,3": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"3,3,r": {
+"frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SAMUS"
+},
 "3,30": {
 "frames": 240,
+"guards": [
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,31": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,32": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,4": {
 "frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"3,4,r": {
+"frames": 240,
+"guards": [
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SAMUS"
+},
 "3,5": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,6": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,7": {
 "frames": 240,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,8": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "3,9": {
 "frames": 240,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.4_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "4,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"4,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "YOSHI"
+},
 "4,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3775,12 +9445,30 @@
 },
 "4,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3788,6 +9476,14 @@
 },
 "4,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3795,162 +9491,432 @@
 },
 "4,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"4,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "YOSHI"
+},
 "4,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"4,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "YOSHI"
+},
 "4,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "4,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.5_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "5,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"5,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "ZELDA"
+},
 "5,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -3960,12 +9926,30 @@
 },
 "5,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -3973,168 +9957,446 @@
 },
 "5,24": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"5,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "ZELDA"
+},
 "5,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"5,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "ZELDA"
+},
 "5,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "5,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.6_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "6,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"6,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SEAK"
+},
 "6,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -4144,12 +10406,30 @@
 },
 "6,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4157,6 +10437,14 @@
 },
 "6,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4164,162 +10452,432 @@
 },
 "6,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"6,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SEAK"
+},
 "6,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"6,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "SEAK"
+},
 "6,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "6,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.7_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "7,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"7,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "FALCO"
+},
 "7,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -4329,12 +10887,30 @@
 },
 "7,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4342,6 +10918,14 @@
 },
 "7,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4349,162 +10933,434 @@
 },
 "7,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"7,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "FALCO"
+},
 "7,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"7,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "FALCO"
+},
 "7,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "7,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.8_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "8,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"8,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "CLINK"
+},
 "8,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -4514,12 +11370,30 @@
 },
 "8,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4527,6 +11401,14 @@
 },
 "8,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4534,162 +11416,434 @@
 },
 "8,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:801F96E0 no segment gobj (2)",
+"gricemt.c:no-segment-gobj",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"8,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "CLINK"
+},
 "8,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"8,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "CLINK"
+},
 "8,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "8,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,10": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grmutecity.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,11": {
-"frames": 240,
-"in_match": 107,
-"present": 107,
-"verdict": "ok"
+"guards": [
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"log": "/tmp/pc_matrix.out.9_11_None",
+"rc": 139,
+"verdict": "crash"
 },
 "9,12": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,13": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,14": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,15": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,16": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,17": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,18": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,19": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,2": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"9,2,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "DRMARIO"
+},
 "9,20": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
@@ -4699,12 +11853,30 @@
 },
 "9,22": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,23": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"grpura.c:model-desc-overlay",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601",
+"tobj.c:1194"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4712,6 +11884,14 @@
 },
 "9,24": {
 "frames": 720,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 587,
 "present": 587,
 "retried": true,
@@ -4719,90 +11899,250 @@
 },
 "9,25": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,26": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"gricemt.c:801F96E0 no segment gobj",
+"gricemt.c:no-segment-gp",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,27": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,28": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,29": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,3": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"9,3,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "DRMARIO"
+},
 "9,30": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"groldkongo.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,31": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,32": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,4": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
+"9,4,r": {
+"frames": 240,
+"guards": [
+"ftanim.c:1264",
+"grcastle.c:no-params",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_match": 107,
+"present": 107,
+"verdict": "ok",
+"vs": "DRMARIO"
+},
 "9,5": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,6": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,7": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,8": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"
 },
 "9,9": {
 "frames": 240,
+"guards": [
+"ftanim.c:1264",
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
 "in_match": 107,
 "present": 107,
 "verdict": "ok"

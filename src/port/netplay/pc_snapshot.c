@@ -341,11 +341,23 @@ typedef struct SnapRegion {
  * build/pc/melee-state.ld and the block that writes it in configure_pc.py. */
 #define SNAP_SPANS 8 /* must match SNAP_SPANS in configure_pc.py */
 
+#ifdef __EMSCRIPTEN__
+/* wasm-ld takes no linker script, so there are no markers: every span is
+ * empty and a snapshot holds no static storage. The web build plays in
+ * lockstep and never rolls back (MELEE_NET=web), so nothing reads one. */
+static unsigned char pc_snap_none[1];
+#define __melee_all_melee_data_start pc_snap_none
+#define __melee_all_melee_data_end pc_snap_none
+#define __melee_all_melee_bss_start pc_snap_none
+#define __melee_all_melee_bss_end pc_snap_none
+#define SNAP_SPAN_DECL(k)
+#else
 #define SNAP_SPAN_DECL(k)                                                      \
     extern unsigned char __melee_state_data_##k##_start[];                     \
     extern unsigned char __melee_state_data_##k##_end[];                       \
     extern unsigned char __melee_state_bss_##k##_start[];                      \
     extern unsigned char __melee_state_bss_##k##_end[];
+#endif
 SNAP_SPAN_DECL(0)
 SNAP_SPAN_DECL(1)
 SNAP_SPAN_DECL(2)
@@ -361,9 +373,14 @@ typedef struct SnapSpan {
     unsigned char* hi;
 } SnapSpan;
 
+#ifdef __EMSCRIPTEN__
+#define SNAP_SPAN_ROW(k)                                                       \
+    { { pc_snap_none, pc_snap_none }, { pc_snap_none, pc_snap_none } }
+#else
 #define SNAP_SPAN_ROW(k)                                                       \
     { { __melee_state_data_##k##_start, __melee_state_data_##k##_end },        \
       { __melee_state_bss_##k##_start, __melee_state_bss_##k##_end } }
+#endif
 /* [span][0] is .data, [span][1] is .bss. */
 static const SnapSpan snap_spans[SNAP_SPANS][2] = {
     SNAP_SPAN_ROW(0), SNAP_SPAN_ROW(1), SNAP_SPAN_ROW(2), SNAP_SPAN_ROW(3),
@@ -1343,10 +1360,12 @@ SNAP_NO_ASAN static int snapshot_restore(const Snapshot* s)
  * It is slow and it is meant to be: it copies hundreds of megabytes per rewind
  * and is not on unless asked for.
  */
+#ifndef __EMSCRIPTEN__
 extern unsigned char __melee_all_melee_data_start[];
 extern unsigned char __melee_all_melee_data_end[];
 extern unsigned char __melee_all_melee_bss_start[];
 extern unsigned char __melee_all_melee_bss_end[];
+#endif
 
 #define SNAP_DIFF_AREAS 4
 #define SNAP_DIFF_REPORT 200

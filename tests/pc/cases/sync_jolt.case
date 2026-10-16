@@ -1,0 +1,45 @@
+# Lockstep case for Pikachu's neutral-B: one thunder jolt, and what it does to
+# Peach. The recorded harness said the port's Peach took no damage where the
+# console's took 7%; running both games at once is how that gets pinned down.
+description: lockstep thunder jolt (Pikachu neutral-B vs Peach, Onett)
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
+ignore: mode, scene
+ignore: seed, p0.animf, p1.animf, p2.animf, p3.animf
+ref_shift: 3
+sync_input: 27: b
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A

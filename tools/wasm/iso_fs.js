@@ -99,6 +99,29 @@ Module.meleeIsoOpen = async function (file) {
     return Module.meleeIso;
 };
 
+/* The host's disc image over HTTP (tools/wasm/serve.js serves /disc.iso by
+ * byte range), presented as the File the reader above already speaks:
+ * size, name and slice(a, b).arrayBuffer(). */
+Module.meleeIsoOpenUrl = async function (url) {
+    const head = await fetch(url, { method: 'HEAD' });
+    const size = parseInt(head.headers.get('Content-Length') || '0', 10);
+    if (!head.ok || !size) throw new Error(`The server has no disc image at ${url}.`);
+    const remote = {
+        name: url, size,
+        slice(a, b) {
+            return {
+                async arrayBuffer() {
+                    if (b <= a) return new ArrayBuffer(0);
+                    const r = await fetch(url, { headers: { Range: `bytes=${a}-${b - 1}` } });
+                    if (r.status !== 206) throw new Error(`disc read ${a}-${b}: HTTP ${r.status}`);
+                    return r.arrayBuffer();
+                },
+            };
+        },
+    };
+    return Module.meleeIsoOpen(remote);
+};
+
 Module.preRun = Module.preRun || [];
 Module.preRun.push(function () {
     if (!Module.meleeIsoReady) return;

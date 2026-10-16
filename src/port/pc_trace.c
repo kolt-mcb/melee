@@ -54,6 +54,7 @@
 #include <melee/gm/gm_1A3F.h>
 #include <melee/it/types.h>
 #include <melee/lb/lb_00B0.h>
+#include <melee/mn/mnmain.h>
 #include <melee/pl/player.h>
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/psstructs.h>
@@ -991,6 +992,102 @@ static void pc_trace_animscript(void)
         fprintf(stderr, " %08x", w[k]);
     }
     fprintf(stderr, "\n");
+}
+
+/* MELEE_MENULOG=<path> records what the menu system is showing: one line
+ * every time the screen, the cursor or the game mode changes.
+ *
+ * The frame trace above cannot see any of this, and not by omission. Every
+ * menu in the game -- the main menu, the rules screens, trophies, records,
+ * name entry, the sound test -- is the *same* scene: GS_MENU, the only entry
+ * in GM_MENU's scene list (gm_803DD8B8_Scenes). So `mode` and `scene` read 1
+ * and 0 on all of them, and a walk of the menus judged by those two columns
+ * cannot tell the main menu from the sound test, or a menu that opened from
+ * one that did nothing.
+ *
+ * What does separate them is mn_804A04F0.cur_menu -- the menu system's own
+ * state, which every one of those screens writes (mnmain.c, mnmainrule.c,
+ * mnhyaku.c, mnname.c and the rest all share this one struct).
+ *
+ * The availability mask is the other half of the answer. How many options a
+ * screen has comes from the game's own table, mn_803EB6B0[].selection_count,
+ * and the cursor skips the ones mn_80229938 says are not offered: the two
+ * hidden entries, and the ones save data has not unlocked. Logging the mask
+ * lets tools/pc_menu.py tell "the game is not offering this option" from
+ * "this option is broken", which is the distinction that whole suite rests
+ * on -- without it every locked option reads as a failure.
+ *
+ * Written on change rather than per frame because that is what is being
+ * asked: a menu walk is a sequence of transitions, and one line per frame
+ * would be four hundred copies of the same screen per press. */
+/* Declared where it is used, as mnruleplus.c and mnmainrule.c do: the table
+ * is a definition in mnmain.c with no header of its own. */
+extern MenuKindData mn_803EB6B0[];
+
+static void pc_trace_menu(int frame)
+{
+    static FILE* out;
+    static int init;
+    static int last_mode = -2, last_scene = -2, last_menu = -2;
+    static int last_prev = -2, last_sel = -2;
+    int mode, scene, menu = -1, prev = -1, sel = -1, count = 0;
+    char avail[40];
+
+    if (!init) {
+        const char* path = getenv("MELEE_MENULOG");
+        init = 1;
+        if (path != NULL && *path != '\0') {
+            out = (strcmp(path, "1") == 0 || strcmp(path, "-") == 0)
+                      ? stderr
+                      : fopen(path, "w");
+            if (out != NULL) {
+                fprintf(out,
+                        "#menulog frame mode scene menu prev sel count avail\n");
+            }
+        }
+    }
+    if (out == NULL) {
+        return;
+    }
+
+    mode = (int) gm_GetCurrentGameMode();
+    scene = (int) gm_GetCurrentSceneIndex();
+    avail[0] = '\0';
+    /* Outside GM_MENU the menu struct holds whatever the last menu left in
+     * it. Reporting that as the current screen would have the log claim the
+     * main menu is up during a match, so the menu columns go to "-" and the
+     * line says only where the game is. */
+    if (mode == GM_MENU) {
+        int i;
+        menu = (int) mn_804A04F0.cur_menu;
+        prev = (int) mn_804A04F0.prev_menu;
+        sel = (int) mn_804A04F0.hovered_selection;
+        if (menu >= 0 && menu < 0x22) {
+            count = (int) mn_803EB6B0[menu].selection_count;
+            if (count > (int) sizeof(avail) - 1) {
+                count = (int) sizeof(avail) - 1;
+            }
+            for (i = 0; i < count; i++) {
+                avail[i] = mn_80229938((MenuKind) menu, i) ? '1' : '0';
+            }
+            avail[i] = '\0';
+        }
+    }
+
+    if (mode == last_mode && scene == last_scene && menu == last_menu &&
+        prev == last_prev && sel == last_sel)
+    {
+        return;
+    }
+    last_mode = mode;
+    last_scene = scene;
+    last_menu = menu;
+    last_prev = prev;
+    last_sel = sel;
+
+    fprintf(out, "%d %d %d %d %d %d %d %s\n", frame, mode, scene, menu, prev,
+            sel, count, avail[0] != '\0' ? avail : "-");
+    fflush(out);
 }
 
 /* MELEE_GRLINK=1 lists the stage GObjs once a frame: p-link 5 is where
@@ -2338,6 +2435,7 @@ void pc_trace_frame(int frame)
     pc_trace_camdump();
     pc_trace_animid();
     pc_trace_grlink();
+    pc_trace_menu(frame);
     pc_trace_ailog();
     pc_trace_animscript();
     pc_trace_bones();

@@ -3,238 +3,341 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Melee (web port)</title>
+<title>Melee (home netplay)</title>
 <style>
   :root {
-    --bg: #0b0d12; --panel: #151922; --line: #2a3140; --text: #e6e9ef;
-    --muted: #9aa3b2; --accent: #e8b931; --bad: #ff6b6b;
+    --bg: #0b0d12; --panel: #151922; --panel2: #1c2230; --line: #2a3140; --text: #e6e9ef;
+    --muted: #9aa3b2; --accent: #e8b931; --ok: #5fd38d; --bad: #ff6b6b;
+    --p1: #e5484d; --p2: #3e8ef7; --p3: #f5c518; --p4: #30a46c;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body.playing { overflow: hidden; }
   /* The game draws 4:3 inside a 16:9 surface; fit it whole, letterboxed. The
    * canvas must have no border or padding. */
   #canvas { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important;
-    object-fit: contain; background: #000; border: 0; outline: none; display: block; }
-  #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
-    background: radial-gradient(ellipse at top, #1b2130, var(--bg) 70%); z-index: 2; }
-  #overlay.hidden { display: none; }
-  .card { width: min(560px, 100%); background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 28px; box-shadow: 0 20px 60px #0008; }
-  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .2px; }
-  .sub { margin: 0 0 20px; color: var(--muted); }
-  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; text-align: center;
-    transition: border-color .15s, background .15s; }
-  .drop.over { border-color: var(--accent); background: #e8b93112; }
-  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
-    background: #222938; color: var(--text); padding: 10px 16px; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 600; }
-  button:disabled { opacity: .5; cursor: default; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
-  .note { color: var(--muted); font-size: 13px; margin-top: 14px; }
-  #status { min-height: 1.5em; margin-top: 14px; text-align: center; color: var(--muted); }
-  #status.bad { color: var(--bad); }
-  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
-  summary { cursor: pointer; color: var(--muted); }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    object-fit: contain; background: #000; border: 0; outline: none; display: none; }
+  body.playing #canvas { display: block; }
+  body.playing #lobby { display: none; }
+  #lobby { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .status { color: var(--muted); font-size: 14px; }
+  .status.bad { color: var(--bad); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .full { grid-column: 1 / -1; }
+  .players { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .players { grid-template-columns: repeat(2, 1fr); } }
+  .slot { border-radius: 10px; padding: 10px; background: var(--panel2); border-top: 4px solid var(--line); min-height: 86px; }
+  .slot.s0 { border-top-color: var(--p1); } .slot.s1 { border-top-color: var(--p2); }
+  .slot.s2 { border-top-color: var(--p3); } .slot.s3 { border-top-color: var(--p4); }
+  .slot .who { font-weight: 600; } .slot .what { color: var(--muted); font-size: 13px; }
+  .slot.me { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .slot.empty { opacity: .45; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: #ffffff14; color: var(--muted); margin-left: 4px; }
+  .fighters { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--text); padding: 8px 10px; }
+  button:hover { border-color: #3b4458; }
+  button.on { border-color: var(--accent); background: #e8b9311f; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 700; padding: 12px 22px; font-size: 16px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  label { color: var(--muted); font-size: 13px; }
+  input, select { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 9px; }
+  input[type=number] { width: 70px; }
+  .pad { font-size: 13px; }
+  .pad.ok { color: var(--ok); } .pad.no { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td { padding: 3px 4px; border-bottom: 1px solid #ffffff0d; }
   td:first-child { color: var(--muted); width: 45%; }
   kbd { font: 12px ui-monospace, monospace; background: #0b0d12; border: 1px solid var(--line);
     border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
-  #hud { position: fixed; top: 10px; right: 10px; z-index: 3; display: flex; gap: 6px; opacity: 0;
-    transition: opacity .3s; }
-  body:hover #hud { opacity: .85; }
+  #banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; display: none;
+    background: #000c; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; gap: 12px; align-items: center; }
+  #banner.show { display: flex; }
+  #hud { position: fixed; top: 10px; right: 10px; z-index: 3; display: none; gap: 6px; opacity: 0; transition: opacity .3s; }
+  body.playing #hud { display: flex; }
+  body.playing:hover #hud { opacity: .85; }
   #hud button { padding: 6px 10px; font-size: 13px; background: #000a; }
-  #help { position: fixed; inset: 0; display: none; place-items: center; z-index: 4; background: #0009; padding: 16px; }
-  #help.open { display: grid; }
 </style>
 </head>
 <body>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-quit">Leave match</button></div>
+<div id="banner"><span id="banner-text">Match over.</span><button class="primary" id="btn-lobby">Back to lobby</button></div>
 
-<div id="hud">
-  <button id="btn-help" title="Controls">Controls</button>
-  <button id="btn-full" title="Fullscreen">Fullscreen</button>
-</div>
+<div id="lobby">
+  <header>
+    <h1>Super Smash Bros. Melee <span class="tag">home netplay</span></h1>
+    <div class="status" id="status">Connecting…</div>
+  </header>
 
-<div id="overlay">
-  <div class="card">
-    <h1>Super Smash Bros. Melee</h1>
-    <p class="sub">An unofficial port of the decompilation, running in your browser.
-      It needs your own disc image: NTSC-U, revision 1.02 (GALE01).</p>
-    <div class="drop" id="drop">
-      <div>Drop your <b>.iso</b> here, or</div>
+  <div class="grid">
+    <section class="card full">
+      <h2>Players</h2>
+      <div class="players" id="players"></div>
       <div class="row">
-        <button class="primary" id="btn-pick">Choose disc image…</button>
-        <button id="btn-resume" hidden></button>
+        <label>Your name <input id="name" maxlength="16" autocomplete="off"></label>
+        <span class="pad no" id="pad">No gamepad yet: plug one in and press a button.</span>
       </div>
-      <input type="file" id="file" accept=".iso,.gcm" hidden>
-    </div>
-    <div id="status">Loading the engine…</div>
-    <p class="note">The file never leaves your computer: the game reads it in place,
-      piece by piece, as it needs it. Nothing is uploaded and no game data is hosted here.</p>
-    <details>
-      <summary>Controls</summary>
+    </section>
+
+    <section class="card full">
+      <h2>Your fighter</h2>
+      <div class="fighters" id="fighters"></div>
+      <div class="row"><label>Costume</label><span id="colors"></span></div>
+    </section>
+
+    <section class="card">
+      <h2>Match <span class="tag" id="host-note"></span></h2>
+      <div class="row"><label>Stage</label><select id="stage"></select></div>
+      <div class="row">
+        <label>Stocks <input type="number" id="stocks" min="1" max="99"></label>
+        <label>Minutes <input type="number" id="minutes" min="0" max="99" title="0: no time limit"></label>
+      </div>
+      <div class="row">
+        <label>CPUs <select id="cpus"></select></label>
+        <label>Level <select id="cpulevel"></select></label>
+      </div>
+      <div class="row"><button class="primary" id="btn-start" disabled>Start match</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Controls</h2>
       <table id="controls"></table>
-    </details>
+    </section>
   </div>
 </div>
 
-<div id="help"><div class="card"><h1>Controls</h1><table id="controls2"></table>
-  <div class="row"><button id="btn-help-close">Close</button></div></div></div>
-
 <script>
-  /* Keyboard map: src/pc_stub/undef_stubs.c, poll_keyboard_to_pad. */
+  'use strict';
+  const FIGHTERS = ['Captain Falcon', 'Donkey Kong', 'Fox', 'Mr. Game & Watch', 'Kirby', 'Bowser',
+    'Link', 'Luigi', 'Mario', 'Marth', 'Mewtwo', 'Ness', 'Peach', 'Pikachu', 'Ice Climbers',
+    'Jigglypuff', 'Samus', 'Yoshi', 'Zelda', 'Sheik', 'Falco', 'Young Link', 'Dr. Mario', 'Roy',
+    'Pichu', 'Ganondorf'];                                   // CharacterKind order
+  const STAGES = [[31, 'Battlefield'], [32, 'Final Destination'], [3, 'Pokémon Stadium'],
+    [16, "Yoshi's Island"], [8, "Yoshi's Story"], [2, 'Fountain of Dreams'], [28, 'Dream Land'],
+    [4, "Peach's Castle"], [5, 'Kongo Jungle'], [12, 'Jungle Japes'], [13, 'Great Bay'],
+    [14, 'Hyrule Temple'], [6, 'Brinstar'], [15, 'Brinstar Depths'], [17, 'Green Greens'],
+    [7, 'Corneria'], [22, 'Venom'], [9, 'Onett'], [18, 'Fourside'], [10, 'Mute City'],
+    [24, 'Big Blue'], [11, 'Rainbow Cruise'], [19, 'Mushroom Kingdom'], [20, 'Mushroom Kingdom II'],
+    [25, 'Icicle Mountain'], [23, 'Poké Floats'], [27, 'Flat Zone'], [29, "Yoshi's Island (N64)"],
+    [30, 'Kongo Jungle (N64)']];                            // StKind values
+  const COSTUMES = 4;            // every fighter has at least four
   const CONTROLS = [
-    ['Move (control stick)', '<kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>'],
+    ['Gamepad', 'Plays as you. Plug it in before the match and press a button.'],
+    ['Move', '<kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>'],
     ['C-stick', '<kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd>'],
-    ['A (attack, confirm)', '<kbd>Z</kbd>'],
-    ['B (special, back)', '<kbd>X</kbd>'],
-    ['X / Y (jump)', '<kbd>Space</kbd> / <kbd>V</kbd>'],
-    ['L / R (shield)', '<kbd>Shift</kbd> / <kbd>Alt</kbd>'],
-    ['Z (grab)', '<kbd>C</kbd> or <kbd>/</kbd>'],
-    ['Start', '<kbd>Enter</kbd>'],
-    ['Gamepad', 'Plug it in and press a button; it takes over player 1.'],
+    ['A / B', '<kbd>Z</kbd> / <kbd>X</kbd>'],
+    ['Jump', '<kbd>Space</kbd> or <kbd>V</kbd>'],
+    ['Shield', '<kbd>Shift</kbd> / <kbd>Alt</kbd>'],
+    ['Grab', '<kbd>C</kbd>'], ['Start (pause)', '<kbd>Enter</kbd>'],
   ];
-  for (const id of ['controls', 'controls2']) {
-    document.getElementById(id).innerHTML =
-      CONTROLS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
-  }
 
   const $ = (id) => document.getElementById(id);
-  const statusEl = $('status');
-  const setStatus = (text, bad) => { statusEl.textContent = text; statusEl.classList.toggle('bad', !!bad); };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('melee.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('melee.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+  };
+  const setStatus = (t, bad) => { $('status').textContent = t; $('status').classList.toggle('bad', !!bad); };
 
-  let resolveIso;
-  const isoReady = new Promise((r) => { resolveIso = r; });
-  let engineLoaded = false;
-
+  /* ---- the engine: loads now, runs main() only when a match starts ---- */
+  let resolveStart;
+  const startReady = new Promise((r) => { resolveStart = r; });
+  const inbox = [];
+  let ws = null;
   var Module = {
     canvas: $('canvas'),
-    meleeIsoReady: isoReady,
+    meleeIsoReady: startReady,
+    meleeNet: {
+      inbox,
+      send(bytes) { if (ws && ws.readyState === 1) ws.send(bytes); },
+      onMatchEnd(desynced) {
+        $('banner-text').textContent = desynced
+          ? 'Match over -- but the players fell out of step (desync).' : 'Match over.';
+        $('banner').classList.add('show');
+      },
+    },
     print: (t) => console.log(t),
     printErr: (t) => console.error(t),
-    setStatus: (t) => { if (t && !engineLoaded) setStatus(t); },
-    onRuntimeInitialized: () => {},
+    setStatus: () => {},
   };
-
-  /* Chromium can remember the file between visits; others ask each time. */
-  const canRemember = 'showOpenFilePicker' in window && 'indexedDB' in window;
-  function idb(mode, fn) {
-    return new Promise((res, rej) => {
-      const open = indexedDB.open('melee-web', 1);
-      open.onupgradeneeded = () => open.result.createObjectStore('kv');
-      open.onerror = () => rej(open.error);
-      open.onsuccess = () => {
-        const tx = open.result.transaction('kv', mode);
-        const req = fn(tx.objectStore('kv'));
-        tx.oncomplete = () => res(req && req.result);
-        tx.onerror = () => rej(tx.error);
-      };
-    });
-  }
-  const saveHandle = (h) => idb('readwrite', (s) => s.put(h, 'iso')).catch(() => {});
-  const loadHandle = () => idb('readonly', (s) => s.get('iso')).catch(() => null);
-
-  function whenEngine() {
-    return new Promise((res) => {
-      const t = () => (Module.meleeIsoOpen ? res() : setTimeout(t, 50));
-      t();
-    });
-  }
-
-  let busy = false;
-  async function useFile(file, handle) {
-    if (busy) return;
-    busy = true;
-    try {
-      setStatus(`Reading ${file.name}…`);
-      await whenEngine();
-      await Module.meleeIsoOpen(file);
-      if (handle) saveHandle(handle);
-      setStatus('Starting…');
-      $('overlay').classList.add('hidden');
-      engineLoaded = true;
-      $('canvas').focus();
-      resolveIso();
-    } catch (e) {
-      setStatus(e.message || String(e), true);
-      busy = false;
-    }
-  }
-
-  $('btn-pick').onclick = async () => {
-    if (canRemember) {
-      try {
-        const [h] = await showOpenFilePicker({
-          types: [{ description: 'GameCube disc image', accept: { 'application/octet-stream': ['.iso', '.gcm'] } }],
-        });
-        return useFile(await h.getFile(), h);
-      } catch (e) {
-        if (e.name === 'AbortError') return;
-      }
-    }
-    $('file').click();
-  };
-  $('file').onchange = (e) => e.target.files[0] && useFile(e.target.files[0]);
-
-  const drop = $('drop');
-  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => {
-    e.preventDefault(); drop.classList.add('over');
-  }));
-  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => {
-    e.preventDefault(); drop.classList.remove('over');
-  }));
-  drop.addEventListener('drop', async (e) => {
-    const item = e.dataTransfer.items && e.dataTransfer.items[0];
-    if (item && item.getAsFileSystemHandle) {
-      try {
-        const h = await item.getAsFileSystemHandle();
-        if (h && h.kind === 'file') return useFile(await h.getFile(), h);
-      } catch (err) { /* fall through to the plain File */ }
-    }
-    const f = e.dataTransfer.files[0];
-    if (f) useFile(f);
+  let discReady = null;
+  const whenEngine = () => new Promise((res) => {
+    const t = () => (Module.meleeIsoOpenUrl ? res() : setTimeout(t, 50)); t();
+  });
+  whenEngine().then(() => {
+    discReady = Module.meleeIsoOpenUrl('disc.iso').catch((e) => { setStatus(e.message, true); throw e; });
   });
 
-  if (canRemember) {
-    loadHandle().then((h) => {
-      if (!h) return;
-      const b = $('btn-resume');
-      b.textContent = `Continue with ${h.name}`;
-      b.hidden = false;
-      b.onclick = async () => {
-        try {
-          if ((await h.queryPermission({ mode: 'read' })) !== 'granted' &&
-              (await h.requestPermission({ mode: 'read' })) !== 'granted') return;
-          useFile(await h.getFile(), h);
-        } catch (e) {
-          setStatus('That file is no longer available; choose it again.', true);
-          b.hidden = true;
-        }
-      };
-    });
+  /* ---- lobby state ---- */
+  const me = { name: store.get('name', ''), ckind: store.get('ckind', 8), color: store.get('color', 0) };
+  let lobby = null;
+  let rules = { cpus: store.get('cpus', 0), cpulevel: store.get('cpulevel', 9) };
+
+  $('controls').innerHTML = CONTROLS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  $('fighters').innerHTML = FIGHTERS.map((f, i) => `<button data-ck="${i}">${f}</button>`).join('');
+  $('colors').innerHTML = Array.from({ length: COSTUMES }, (_, i) => `<button data-col="${i}">${i + 1}</button>`).join(' ');
+  $('stage').innerHTML = STAGES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
+  $('cpulevel').innerHTML = Array.from({ length: 9 }, (_, i) => `<option>${i + 1}</option>`).join('');
+  $('name').value = me.name;
+
+  function paintPicks() {
+    document.querySelectorAll('[data-ck]').forEach((b) => b.classList.toggle('on', +b.dataset.ck === me.ckind));
+    document.querySelectorAll('[data-col]').forEach((b) => b.classList.toggle('on', +b.dataset.col === me.color));
+  }
+  function sendPick() {
+    store.set('name', me.name); store.set('ckind', me.ckind); store.set('color', me.color);
+    send({ t: 'pick', name: me.name, ckind: me.ckind, color: me.color });
+    paintPicks();
+  }
+  $('fighters').onclick = (e) => { const b = e.target.closest('[data-ck]'); if (b) { me.ckind = +b.dataset.ck; sendPick(); } };
+  $('colors').onclick = (e) => { const b = e.target.closest('[data-col]'); if (b) { me.color = +b.dataset.col; sendPick(); } };
+  $('name').oninput = () => { me.name = $('name').value; sendPick(); };
+
+  const isHost = () => lobby && lobby.host === lobby.you;
+  function sendRules() {
+    send({ t: 'rules', stage: +$('stage').value, stocks: +$('stocks').value || 4,
+           minutes: Math.max(0, +$('minutes').value || 0), cpus: rules.cpus, cpulevel: rules.cpulevel });
+  }
+  ['stage', 'stocks', 'minutes'].forEach((id) => { $(id).onchange = sendRules; });
+  $('cpus').onchange = () => { rules.cpus = +$('cpus').value; store.set('cpus', rules.cpus); sendRules(); };
+  $('cpulevel').onchange = () => { rules.cpulevel = +$('cpulevel').value; store.set('cpulevel', rules.cpulevel); sendRules(); };
+  $('btn-start').onclick = () => send({ t: 'start' });
+
+  function paintLobby() {
+    if (!lobby) return;
+    const ps = lobby.players;
+    $('players').innerHTML = [0, 1, 2, 3].map((i) => {
+      const p = ps[i];
+      if (!p) return `<div class="slot s${i} empty"><div class="who">P${i + 1}</div><div class="what">open</div></div>`;
+      return `<div class="slot s${i}${p.id === lobby.you ? ' me' : ''}">
+        <div class="who">P${i + 1} · ${escapeHtml(p.name)}${p.id === lobby.host ? '<span class="tag">host</span>' : ''}</div>
+        <div class="what">${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.inMatch ? ' · <b>in a match</b>' : ''}</div></div>`;
+    }).join('');
+    const host = isHost();
+    $('host-note').textContent = host ? 'you are the host' : 'the host chooses';
+    ['stage', 'stocks', 'minutes', 'cpus', 'cpulevel'].forEach((id) => { $(id).disabled = !host; });
+    $('stage').value = lobby.rules.stage;
+    $('stocks').value = lobby.rules.stocks;
+    $('minutes').value = lobby.rules.minutes;
+    const free = Math.max(0, 4 - Math.min(4, ps.length));
+    $('cpus').innerHTML = Array.from({ length: free + 1 }, (_, i) => `<option>${i}</option>`).join('');
+    if (!host) { rules.cpus = lobby.rules.cpus | 0; rules.cpulevel = lobby.rules.cpulevel || 9; }
+    $('cpus').value = Math.min(rules.cpus, free);
+    $('cpulevel').value = rules.cpulevel;
+    $('btn-start').disabled = !host || lobby.inMatch;
+    $('btn-start').textContent = lobby.inMatch ? 'A match is running…' : host ? 'Start match' : 'Waiting for the host';
+    const n = Math.min(4, ps.length);
+    setStatus(`${n} player${n === 1 ? '' : 's'} here${lobby.waiting ? `, ${lobby.waiting} waiting for a free slot` : ''}`);
+  }
+  const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---- the relay ---- */
+  function send(obj) { if (ws && ws.readyState === 1) ws.send(new TextEncoder().encode(JSON.stringify(obj))); }
+  let started = false;
+  function connect() {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/net`);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => send({ t: 'hello', name: me.name, ckind: me.ckind, color: me.color });
+    ws.onmessage = (ev) => {
+      const bytes = new Uint8Array(ev.data);
+      if (bytes[0] !== 0x7B) { inbox.push(bytes); return; }     // a game packet
+      const msg = JSON.parse(new TextDecoder().decode(bytes));
+      if (msg.t === 'lobby') { lobby = msg; if (!started) paintLobby(); }
+      else if (msg.t === 'start') startMatch(msg);
+    };
+    ws.onclose = () => {
+      if (started) { Module.meleeNet.onMatchEnd(false); $('banner-text').textContent = 'Lost the connection to the host.'; }
+      else { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); }
+    };
   }
 
+  /* ---- a match ---- */
+  async function startMatch(msg) {
+    if (started) return;
+    started = true;
+    document.body.classList.add('playing');
+    setStatus('Starting…');
+    try { await discReady; } catch (e) { return; }
+    const humans = msg.players.length;
+    const cpuCount = isHostCpuCount(msg);
+    const lineup = msg.players.map((p) => `${p.ckind}:${p.color}`);
+    const levels = msg.players.map(() => 0);
+    for (let i = 0; i < cpuCount; i++) {
+      // CPU fighters come from the seed, so every page picks the same ones.
+      lineup.push(`${(msg.seed >>> (i * 5)) % 26}:${i % COSTUMES}`);
+      levels.push(msg.rules.cpulevel || 9);
+    }
+    const env = {
+      MELEE_BOOT_MODE: '14',
+      MELEE_BOOT_MATCH: `${msg.players[0].ckind},${(msg.players[1] || msg.players[0]).ckind},${msg.rules.stage}`,
+      MELEE_BOOT_PLAYERS: lineup.join(','),
+      MELEE_BOOT_STOCKS: String(msg.rules.stocks),
+      MELEE_BOOT_TIME: String(msg.rules.minutes * 60),
+      MELEE_SEED: msg.seed.toString(16),
+    };
+    if (cpuCount) env.MELEE_BOOT_CPU = levels.join(',');
+    if (humans > 1) {
+      Object.assign(env, {
+        MELEE_NET: 'web', MELEE_NET_SLOT: String(msg.slot), MELEE_NET_PLAYERS: String(humans),
+        MELEE_NET_SEED: msg.seed.toString(16), MELEE_NET_DELAY: String(msg.delay),
+        // The slowest page's load is the first wait; a player who leaves is
+        // announced by the relay, so a long timeout costs nothing.
+        MELEE_NET_TIMEOUT: '120000',
+      });
+    }
+    // Before main(): emscripten reads ENV on the first getenv, and the
+    // constructors that call it run only once the start dependency clears.
+    Object.assign(Module.ENV, env);
+    console.log('[lobby] start', JSON.stringify(env));
+    $('canvas').focus();
+    resolveStart();
+  }
+  // The host's CPU choice travels with the rules; it fills only free slots.
+  const isHostCpuCount = (msg) => Math.max(0, Math.min(4 - msg.players.length, msg.rules.cpus | 0));
+
+  function backToLobby() { send({ t: 'done' }); setTimeout(() => location.reload(), 100); }
+  $('btn-lobby').onclick = backToLobby;
+  $('btn-quit').onclick = () => { if (confirm('Leave the match? The others carry on without you.')) location.reload(); };
   $('btn-full').onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
     $('canvas').focus();
   };
-  $('btn-help').onclick = () => $('help').classList.add('open');
-  $('btn-help-close').onclick = () => { $('help').classList.remove('open'); $('canvas').focus(); };
 
-  window.addEventListener('error', (e) => setStatus(`Error: ${e.message}`, true));
-  /* Browsers keep audio suspended until a gesture; the click that chose the
-   * disc counts, but resume on any key too in case the context began later. */
-  const resumeAudio = () => {
-    const ctx = Module.SDL2 && Module.SDL2.audioContext;
-    if (ctx && ctx.state === 'suspended') ctx.resume();
-  };
-  window.addEventListener('keydown', resumeAudio);
-  window.addEventListener('pointerdown', resumeAudio);
+  /* ---- gamepad: show it is seen; Start on it returns to the lobby after a match ---- */
+  function padName() { const p = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(Boolean); return p && p.id; }
+  function padLoop() {
+    const n = padName();
+    $('pad').textContent = n ? `Gamepad ready: ${n.replace(/\s*\(.*\)$/, '')}` : 'No gamepad yet: plug one in and press a button.';
+    $('pad').className = 'pad ' + (n ? 'ok' : 'no');
+    if ($('banner').classList.contains('show')) {
+      const p = [...navigator.getGamepads()].find(Boolean);
+      if (p && p.buttons[9] && p.buttons[9].pressed) backToLobby();     // Start
+    }
+    requestAnimationFrame(padLoop);
+  }
+  if (!window.isSecureContext) {
+    $('pad').textContent = 'Gamepads need https: open this page through the https:// address.';
+  } else {
+    requestAnimationFrame(padLoop);
+  }
 
-  whenEngine().then(() => setStatus(''));
+  /* Audio starts only after a gesture; the click on Start is one, but resume
+   * on any input in case the context began later. */
+  const resumeAudio = () => { const c = Module.SDL2 && Module.SDL2.audioContext; if (c && c.state === 'suspended') c.resume(); };
+  ['keydown', 'pointerdown'].forEach((t) => window.addEventListener(t, resumeAudio));
+  window.addEventListener('gamepadconnected', resumeAudio);
+
+  paintPicks();
+  connect();
 </script>
 {{{ SCRIPT }}}
 </body>

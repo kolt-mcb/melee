@@ -137,10 +137,31 @@ typedef struct MnVibrationData {
 } MnVibrationData;
 
 // The asset blocks are also addressed as a contiguous array in Init.
+#if BUILD_TARGET_PC
+/* One array, not four globals. The four are consecutive on the console --
+ * 0x804A0868, +0x10, +0x20, +0x30 -- and this file indexes across them from
+ * the first (`assets = &mnVibration_804A0868; ... &assets[3].shapeanim`),
+ * which is only a valid address because the console's linker put them 0x10
+ * apart in that order.
+ *
+ * Here the struct is four pointers of eight bytes, so the stride is 0x20,
+ * and the host linker owes nothing about order or spacing. `assets[3]` then
+ * addressed memory belonging to something else entirely, and
+ * lbArchive_LoadSections wrote four archive symbols into it -- which is what
+ * killed the rumble screen before it drew a frame. Making them one array
+ * makes the indexing mean what it means on the console, whatever the stride
+ * turns out to be. */
+static MnVibrationJointAssets mnVibration_assets[4];
+#define mnVibration_804A0868 (mnVibration_assets[0])
+#define mnVibration_804A0878 (mnVibration_assets[1])
+#define mnVibration_804A0888 (mnVibration_assets[2])
+#define mnVibration_804A0898 (mnVibration_assets[3])
+#else
 static MnVibrationJointAssets mnVibration_804A0868;
 static MnVibrationJointAssets mnVibration_804A0878;
 static MnVibrationJointAssets mnVibration_804A0888;
 static MnVibrationJointAssets mnVibration_804A0898;
+#endif
 
 /// --- Function Implementation ---
 

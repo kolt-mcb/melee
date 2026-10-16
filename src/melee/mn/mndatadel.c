@@ -84,9 +84,42 @@ static u16 mnDataDel_803EF8C8[] = {
     0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC6,
 };
 static Vec3 lbl_803EF8D4 = { -5.5F, -2.8F, 23 };
+#if BUILD_TARGET_PC
+/* One array, not three globals. They are consecutive on the console --
+ * 0x804A0918, +0x10, +0x20 -- and this file indexes across them from the
+ * first, which is a valid address there only because the console's linker
+ * put them 0x10 apart in that order. A StaticModelDesc is four pointers, so
+ * the stride here is 0x20 and the order is the host linker's business;
+ * `assets[1]` and `assets[2]` addressed other objects entirely, and
+ * lbArchive_LoadSections wrote eight archive symbols into them. Same shape
+ * as mnVibration_804A0868 in mnvibration.c. */
+static StaticModelDesc mnDataDel_assets[3];
+#define mnDataDel_804A0918 (mnDataDel_assets[0])
+#define mnDataDel_804A0928 (mnDataDel_assets[1])
+#define mnDataDel_804A0938 (mnDataDel_assets[2])
+#else
 static StaticModelDesc mnDataDel_804A0918;
 static StaticModelDesc mnDataDel_804A0928;
 static StaticModelDesc mnDataDel_804A0938;
+#endif
+
+/* The screen's four think functions reach into their own user_data by
+ * console byte offsets -- the joint array at +0x10 with a stride of 4, the
+ * text pointer at +0xC -- rather than through struct MnDataDelGObjUserData,
+ * which is what those offsets describe. Both numbers are properties of a
+ * 32-bit pointer: here xC sits at +0x10 and the array's stride is 8, so
+ * every one of those reads returned half a pointer or the wrong slot, and
+ * the erase screen followed the result. The GameCube arm below is the
+ * original expression; only the offsets change. */
+#if BUILD_TARGET_PC
+#define MNDATADEL_JOBJ(ud, idx)                                               \
+    (((struct MnDataDelGObjUserData*) (ud))->x10[idx])
+#define MNDATADEL_TEXT(ud) (((struct MnDataDelGObjUserData*) (ud))->xC)
+#else
+#define MNDATADEL_JOBJ(ud, idx)                                               \
+    (*(HSD_JObj**) ((u8*) (ud) + (idx) * 4 + 0x10))
+#define MNDATADEL_TEXT(ud) (*(HSD_Text**) ((u8*) (ud) + 0xC))
+#endif
 
 HSD_Text* mnDataDel_804D6C6C;
 HSD_GObj* mnDataDel_804D6C68;
@@ -753,8 +786,8 @@ void fn_8024FBA4(HSD_GObj* gobj)
                         (enum _HSD_TypeMask) 0x480);
     for (i = 0; i < 6; i++) {
         mn_8022EE84(
-            *(HSD_JObj**) (user_data + mnDataDel_803EF8AC[i] * 4 + 0x10),
-            &data->xC, (enum _HSD_TypeMask) 0x480);
+            MNDATADEL_JOBJ(user_data, mnDataDel_803EF8AC[i]), &data->xC,
+            (enum _HSD_TypeMask) 0x480);
     }
     if (frame >= data->xC.end_frame) {
         HSD_GObjFree(gobj);
@@ -780,14 +813,13 @@ void fn_8024FC48(HSD_GObj* gobj)
         HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024FBA4, 0);
         proc->flags_3 = HSD_GObj_804D783C;
-        HSD_SisLib_803A5CC4(*(HSD_Text**) (user_data + 0xC));
+        HSD_SisLib_803A5CC4(MNDATADEL_TEXT(user_data));
     } else {
         for (i = 0; i < 6; i++) {
             lb_80011E24(
-                fn_8024FC48_inline(mn_80231634(
-                    *(struct mn_80231634_t**) ((u8*) gobj->user_data +
-                                               mnDataDel_803EF8AC[i] * 4 +
-                                               0x10))),
+                fn_8024FC48_inline(
+                    mn_80231634((struct mn_80231634_t*) MNDATADEL_JOBJ(
+                        gobj->user_data, mnDataDel_803EF8AC[i]))),
                 &jobj, 1, -1);
             if (user_data[0] == i) {
                 mn_8022EC18(jobj, &mnDataDel_803EF888, (HSD_TypeMask) 0x400);
@@ -821,14 +853,14 @@ void fn_8024FD40(HSD_GObj* gobj)
         HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
         proc = HSD_GObj_SetupProc(gobj, fn_8024FBA4, 0);
         proc->flags_3 = HSD_GObj_804D783C;
-        HSD_SisLib_803A5CC4(*(HSD_Text**) (user_data + 0xC));
+        HSD_SisLib_803A5CC4(MNDATADEL_TEXT(user_data));
         return;
     }
     frame =
         mn_8022EE84(jobj, &mnDataDel_803EF870.x0, (enum _HSD_TypeMask) 0x480);
     for (i = 0; i < 6; i++) {
         mn_8022EE84(
-            *(HSD_JObj**) (user_data + mnDataDel_803EF8AC[i] * 4 + 0x10),
+            MNDATADEL_JOBJ(user_data, mnDataDel_803EF8AC[i]),
             mnDataDel_GetAnimSettings(data), (enum _HSD_TypeMask) 0x480);
     }
     if (frame == data->x0.end_frame) {
@@ -877,6 +909,19 @@ void mnDataDel_8024FE4C(u8 arg0)
     }
     user_data->xC = NULL;
     GObj_InitUserData(gobj, 0U, HSD_Free, user_data);
+#if BUILD_TARGET_PC
+    /* The original fills user_data->x10[] by walking a byte cursor four
+     * bytes at a time from the start of the struct plus 0x10 -- the array's
+     * console offset and a console pointer's size. Here a pointer is eight
+     * bytes, so that walk wrote the first four joints into the low halves of
+     * the first two slots and left the rest of the array as it found it;
+     * HSD_JObjAddChild then took one of those and followed it. Same array,
+     * addressed as an array. */
+    enabled = 0;
+    for (i = 0; i < (int) ARRAY_SIZE(user_data->x10); i++) {
+        lb_80011E24(root, &user_data->x10[i], i, -1);
+    }
+#else
     i = (enabled = 0);
     cursor = (u8*) user_data + i * 4;
     do {
@@ -884,6 +929,7 @@ void mnDataDel_8024FE4C(u8 arg0)
         i++;
         cursor += 4;
     } while (i < (int) ARRAY_SIZE(user_data->x10));
+#endif
     proc = HSD_GObj_SetupProc(gobj, fn_8024FD40, 0U);
     proc->flags_3 = HSD_GObj_804D783C;
     assets = &mnDataDel_804A0928;

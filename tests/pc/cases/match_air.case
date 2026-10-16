@@ -1,0 +1,74 @@
+# The air is where the port has the least to fall back on: gravity, the
+# double-jump table, aerial drift and the landing-lag path all run every frame
+# with nothing holding the fighter in place, so an error accumulates instead of
+# being reset by the ground.
+description: P1 jumps, does a neutral air, double jumps and a forward air
+align: search
+window: 8
+ref_lead: -1515
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
+# Same menu route as match_move.case, and the same measured relations: Dolphin
+# input goes in at port frame + 1515 (dump frames), and the port's match runs
+# three frames ahead of the console's.
+ignore: mode, scene
+ref_shift: 3
+run_frames: 420
+ref_frames: 2400
+trace_frames: 1150
+ref_trace_frames: 3100
+checks: 250, 320
+input: 160: x
+input: 175: a
+input: 210: x
+input: 220: x
+input: 240: right*40
+input: 250: a
+input: 300: neutral
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A
+ref_input: 1675:+X
+ref_input: 1679:-X
+ref_input: 1690:+A
+ref_input: 1694:-A
+ref_input: 1725:+X
+ref_input: 1729:-X
+ref_input: 1735:+X
+ref_input: 1739:-X
+ref_input: 1755:MAIN:1.0:0.5
+ref_input: 1765:+A
+ref_input: 1769:-A
+ref_input: 1795:MAIN:0.5:0.5

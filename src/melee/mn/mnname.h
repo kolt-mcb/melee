@@ -13,7 +13,50 @@ typedef struct MnName_GObj {
     /* +38 */ void* x38;
     /* +3C */ HSD_Text* text;
     /* +40 */ HSD_Text* text2;
+#if BUILD_TARGET_PC
+    /* The name screen's user_data is not a GObj. It is a small header
+     * followed by thirteen joint pointers, which mnName_8023A59C fills with
+     * one four-byte step per joint from +0x8 -- straight across the fields
+     * this struct borrows the GObj's names for. Every reader then takes its
+     * joint back out by the name of whichever GObj field that console offset
+     * landed in: joint 8 is `hsd_obj`, joint 10 is `user_data_remove_func`,
+     * joint 12 is `x38`.
+     *
+     * That arithmetic only works while a pointer is four bytes. Here the
+     * writer's steps and the readers' field offsets disagree, so the screen
+     * read joints out of `render_cb` and the proc pointer and followed them.
+     * MNNAME_JOBJ below maps joint N to the field the console put it in, and
+     * these two are the joints whose console offsets land in the middle of
+     * the 64-bit gxlink_prios, which cannot hold a host pointer. */
+    HSD_JObj* slot6;
+    HSD_JObj* slot7;
+#endif
 } MnName_GObj;
+
+#if BUILD_TARGET_PC
+#define MNNAME_JOBJ(ud, n) (*mnName_JObjSlot((MnName_GObj*) (ud), n))
+
+static inline HSD_JObj** mnName_JObjSlot(MnName_GObj* d, int n)
+{
+    switch (n) {
+    case 0:  return (HSD_JObj**) &d->gobj.next;
+    case 1:  return (HSD_JObj**) &d->gobj.prev;
+    case 2:  return (HSD_JObj**) &d->gobj.next_gx;
+    case 3:  return (HSD_JObj**) &d->gobj.prev_gx;
+    case 4:  return (HSD_JObj**) &d->gobj.proc;
+    case 5:  return (HSD_JObj**) &d->gobj.render_cb;
+    case 6:  return &d->slot6;
+    case 7:  return &d->slot7;
+    case 8:  return (HSD_JObj**) &d->gobj.hsd_obj;
+    case 9:  return (HSD_JObj**) &d->gobj.user_data;
+    case 10: return (HSD_JObj**) &d->gobj.user_data_remove_func;
+    case 11: return (HSD_JObj**) &d->gobj.x34_unk;
+    default: return (HSD_JObj**) &d->x38;
+    }
+}
+#else
+#define MNNAME_JOBJ(ud, n) (*(HSD_JObj**) ((u8*) (ud) + 8 + (n) * 4))
+#endif
 
 /* 23749C */ char* mnName_8023749C(int slot);
 /* 23754C */ char* GetNameText(int slot);

@@ -245,3 +245,5 @@ tests/pc/lockstep_logs_slippi_noitems/
 tests/pc/lockstep_logs_random/
 tests/pc/cases/auto/rand_*
 tests/pc/routes/rand_*
+# A clone of decomp-permuter, not part of this tree.
+tools/decomp-permuter/

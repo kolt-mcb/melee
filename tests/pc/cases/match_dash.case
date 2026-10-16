@@ -1,0 +1,75 @@
+# Dashing is where ground physics, the turn-around window and the initial-dash
+# velocity table all meet, and a dash-dance repeats the transition four times in
+# a row -- so an off-by-one in the turn window shows up four times rather than
+# once, which makes it much easier to read.
+description: P1 dash-dances four times, then dash attacks
+align: search
+window: 8
+ref_lead: -1515
+env: MELEE_BOOT_MODE=14
+env: MELEE_BOOT_MATCH=13,12,9,0,0
+env: MELEE_BOOT_STOCKS=3
+# Same menu route as match_move.case, and the same measured relations: Dolphin
+# input goes in at port frame + 1515 (dump frames), and the port's match runs
+# three frames ahead of the console's.
+ignore: mode, scene
+ref_shift: 2
+run_frames: 420
+ref_frames: 2400
+trace_frames: 1150
+ref_trace_frames: 3100
+checks: 250, 320
+input: 160: right*12
+input: 180: left*12
+input: 200: right*12
+input: 220: left*12
+input: 240: right*30
+input: 275: a
+input: 300: neutral
+ref_input: 236:+START
+ref_input: 240:-START
+ref_input: 400:+START
+ref_input: 404:-START
+ref_input: 760:MAIN:0.5:0.0
+ref_input: 768:MAIN:0.5:0.5
+ref_input: 820:+A
+ref_input: 824:-A
+ref_input: 950:+A
+ref_input: 954:-A
+ref_input: 1000:P2:+A
+ref_input: 1004:P2:-A
+ref_input: 1060:MAIN:0.5:1.0
+ref_input: 1120:MAIN:0.5:0.5
+ref_input: 1130:MAIN:1.0:0.5
+ref_input: 1140:MAIN:0.5:0.5
+ref_input: 1150:MAIN:0.5:0.0
+ref_input: 1157:MAIN:0.5:0.5
+ref_input: 1170:+A
+ref_input: 1174:-A
+ref_input: 1180:P2:MAIN:0.5:1.0
+ref_input: 1240:P2:MAIN:0.5:0.5
+ref_input: 1250:P2:MAIN:1.0:0.5
+ref_input: 1260:P2:MAIN:0.5:0.5
+ref_input: 1270:P2:MAIN:0.5:0.0
+ref_input: 1277:P2:MAIN:0.5:0.5
+ref_input: 1290:P2:+A
+ref_input: 1294:P2:-A
+ref_input: 1340:+START
+ref_input: 1344:-START
+ref_input: 1420:MAIN:0.5:1.0
+ref_input: 1452:MAIN:0.5:0.5
+ref_input: 1480:+A
+ref_input: 1484:-A
+ref_input: 1675:MAIN:1.0:0.5
+ref_input: 1687:MAIN:0.5:0.5
+ref_input: 1695:MAIN:0.0:0.5
+ref_input: 1707:MAIN:0.5:0.5
+ref_input: 1715:MAIN:1.0:0.5
+ref_input: 1727:MAIN:0.5:0.5
+ref_input: 1735:MAIN:0.0:0.5
+ref_input: 1747:MAIN:0.5:0.5
+ref_input: 1755:MAIN:1.0:0.5
+ref_input: 1785:MAIN:0.5:0.5
+ref_input: 1790:+A
+ref_input: 1794:-A
+ref_input: 1815:MAIN:0.5:0.5

@@ -17,6 +17,10 @@
 #include <melee/lb/types.h>
 #include <melee/mn/types.h>
 
+#if BUILD_TARGET_PC
+#include <baselib/memory.h>
+#endif
+
 /* 1B24B4 */ static void gm_801B24B4(GameModeState*);
 /* 1B2510 */ static void gm_801B2510(GameModeState*);
 /* 1B254C */ static void gm_801B254C(GameModeState*);
@@ -87,6 +91,19 @@ void gm_801B23F0(void)
     lbDvd_80017740(0, 2008, 4, 4, lbSnap_8001E210(), 0, 1, 32, 0);
 }
 
+#if BUILD_TARGET_PC
+/* The port has no DVD preload pipeline. lbDvd_80017960 -- the only caller of
+ * gm_801B23F0, which registers camera mode's three scratch buffers -- is
+ * never reached here, so lbDvd_GetPreloadedArchive finds nothing registered
+ * and returns NULL, and lbSnap_8001E218 wrote its two card results straight
+ * through it. Allocate what the preload would have allocated. */
+static void* gm_PreloadedOrAlloc(int entry_num, u32 size)
+{
+    void* got = lbDvd_GetPreloadedArchive(entry_num);
+    return got != NULL ? got : HSD_MemAlloc(size);
+}
+#endif
+
 void gm_801B24B4(GameModeState* arg0)
 {
     Unk80433380_48* temp_r31_2;
@@ -97,8 +114,14 @@ void gm_801B24B4(GameModeState* arg0)
     temp_r31->mode_kind = GM_CAMERA_MODE;
     lbDvd_80018254();
     lbCardNew_AllocWorkArea();
+#if BUILD_TARGET_PC
+    temp_r31_2 = gm_PreloadedOrAlloc(0x7D8, lbSnap_8001E210());
+    lbSnap_8001E218(gm_PreloadedOrAlloc(0x7D7, lbSnap_8001E204()),
+                    temp_r31_2);
+#else
     temp_r31_2 = lbDvd_GetPreloadedArchive(0x7D8);
     lbSnap_8001E218(lbDvd_GetPreloadedArchive(0x7D7), temp_r31_2);
+#endif
 }
 
 void gm_801B2510(GameModeState* state)
@@ -228,8 +251,13 @@ void gm_PrepCameraModeVSScene(GameModeState* state)
     gm_LoadRumbleEnabled(start);
     gm_LoadAnnouncer();
     lbCardNew_AllocWorkArea();
+#if BUILD_TARGET_PC
+    lbSnap_8001E218(gm_PreloadedOrAlloc(2007, lbSnap_8001E204()),
+                    gm_PreloadedOrAlloc(2008, lbSnap_8001E210()));
+#else
     lbSnap_8001E218(lbDvd_GetPreloadedArchive(2007),
                     lbDvd_GetPreloadedArchive(2008));
+#endif
 }
 
 void gm_801B2AF8(GameModeState* arg0)

@@ -1,0 +1,222 @@
+{
+"100MAN_VS": {
+"chars": [
+"PIKACHU"
+],
+"players": 1,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"10MAN_VS": {
+"chars": [
+"PIKACHU",
+"27"
+],
+"players": 2,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"15MIN_VS": {
+"chars": [
+"PIKACHU",
+"28",
+"27"
+],
+"players": 3,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"3MIN_VS": {
+"chars": [
+"PIKACHU"
+],
+"players": 1,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"ADVENTURE": {
+"shape": "css1+start",
+"verdict": "crash"
+},
+"CAMERA_MODE": {
+"shape": "css1",
+"verdict": "front-end"
+},
+"CLASSIC": {
+"chars": [
+"PIKACHU",
+"DONKEY"
+],
+"players": 2,
+"shape": "css1+start",
+"stage": "Garden",
+"verdict": "match"
+},
+"CRUEL_VS": {
+"chars": [
+"PIKACHU",
+"27",
+"28",
+"27"
+],
+"players": 4,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"ENDLESS_VS": {
+"chars": [
+"PIKACHU",
+"28",
+"27",
+"28"
+],
+"players": 4,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"FIXED_CAMERA_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"GIANT_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"HOME_RUN_CONTEST": {
+"shape": "css1+start",
+"verdict": "crash"
+},
+"INVISIBLE_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"LIGHTNING_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SINGLE_BUTTON_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SLOMO_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"STAMINA_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SUPER_SUDDEN_DEATH_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"TARGET_TEST": {
+"chars": [
+"PIKACHU"
+],
+"players": 1,
+"shape": "css1+start",
+"stage": "TPikachu",
+"verdict": "match"
+},
+"TINY_VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"TOURNAMENT": {
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_COLLECTION": {
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_GALLERY": {
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_LOTTERY": {
+"shape": "none",
+"verdict": "ran"
+},
+"TRAINING": {
+"chars": [
+"PIKACHU",
+"PIKACHU"
+],
+"players": 2,
+"shape": "css1+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"VS": {
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+}
+}

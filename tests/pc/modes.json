@@ -1,0 +1,517 @@
+{
+"100MAN_VS": {
+"asserts": 14,
+"chars": [
+"PIKACHU"
+],
+"frames": 1775,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 1,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"10MAN_VS": {
+"asserts": 15,
+"chars": [
+"PIKACHU",
+"27"
+],
+"frames": 1761,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 2,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"15MIN_VS": {
+"asserts": 16,
+"chars": [
+"PIKACHU",
+"28",
+"27"
+],
+"frames": 1803,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 3,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"3MIN_VS": {
+"asserts": 14,
+"chars": [
+"PIKACHU"
+],
+"frames": 1789,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 1,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"ADVENTURE": {
+"asserts": 1,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"note": "crash",
+"rc": 139,
+"shape": "css1+start",
+"verdict": "crash"
+},
+"CAMERA_MODE": {
+"asserts": 1,
+"frames": 1597,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 0,
+"scenes": [
+[
+1,
+24,
+0
+],
+[
+10,
+1,
+0
+],
+[
+434,
+10,
+0
+],
+[
+639,
+10,
+1
+]
+],
+"shape": "css1",
+"verdict": "front-end"
+},
+"CLASSIC": {
+"asserts": 24,
+"chars": [
+"PIKACHU",
+"DONKEY"
+],
+"frames": 1595,
+"guards": [
+"ground.c:Ground_801C466C default light list",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 632,
+"players": 2,
+"shape": "css1+start",
+"stage": "Garden",
+"verdict": "match"
+},
+"CRUEL_VS": {
+"asserts": 17,
+"chars": [
+"PIKACHU",
+"27",
+"28",
+"27"
+],
+"frames": 1831,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 4,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"ENDLESS_VS": {
+"asserts": 17,
+"chars": [
+"PIKACHU",
+"28",
+"27",
+"28"
+],
+"frames": 1817,
+"guards": [
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 4,
+"shape": "css1+start",
+"stage": "Battle",
+"verdict": "match"
+},
+"FIXED_CAMERA_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2189,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"GIANT_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2147,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"HOME_RUN_CONTEST": {
+"asserts": 1,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"note": "crash",
+"rc": 139,
+"shape": "css1+start",
+"verdict": "crash"
+},
+"INVISIBLE_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2175,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"LIGHTNING_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2217,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SINGLE_BUTTON_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2203,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SLOMO_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2231,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"STAMINA_VS": {
+"asserts": 22,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2119,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"SUPER_SUDDEN_DEATH_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2133,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"TARGET_TEST": {
+"asserts": 1,
+"chars": [
+"PIKACHU"
+],
+"frames": 1623,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 774,
+"players": 1,
+"shape": "css1+start",
+"stage": "TPikachu",
+"verdict": "match"
+},
+"TINY_VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 2161,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"TOURNAMENT": {
+"asserts": 10,
+"end_mode": 27,
+"end_scene": 0,
+"frames": 1348,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_mode": 1039,
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_COLLECTION": {
+"asserts": 1,
+"end_mode": 13,
+"end_scene": 0,
+"frames": 1376,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_mode": 1039,
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_GALLERY": {
+"asserts": 1,
+"end_mode": 11,
+"end_scene": 0,
+"frames": 1348,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_mode": 1039,
+"shape": "none",
+"verdict": "ran"
+},
+"TOY_LOTTERY": {
+"asserts": 1,
+"end_mode": 12,
+"end_scene": 0,
+"frames": 1362,
+"guards": [
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"in_mode": 1039,
+"shape": "none",
+"verdict": "ran"
+},
+"TRAINING": {
+"asserts": 20,
+"chars": [
+"PIKACHU",
+"PIKACHU"
+],
+"flaky": "crash",
+"frames": 1871,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 799,
+"players": 2,
+"shape": "css1+start+sss",
+"stage": "Onett",
+"verdict": "match"
+},
+"VS": {
+"asserts": 23,
+"chars": [
+"PIKACHU",
+"PEACH"
+],
+"frames": 1967,
+"guards": [
+"jobj.c:JObjLoadJointSub",
+"jobj.h:bad-jobj",
+"texp.c:1244",
+"texp.c:376",
+"texp.c:393",
+"texp.c:601"
+],
+"play_frames": 715,
+"players": 2,
+"shape": "css2+start+sss",
+"stage": "Onett",
+"verdict": "match"
+}
+}
