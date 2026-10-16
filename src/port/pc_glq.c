@@ -238,9 +238,29 @@ static _Atomic int q_want_resume;
 static void* q_pending_heap;
 static size_t q_pending_bytes;
 
+/* Sleep and wake-up between the threads. A sleeper raises its flag, then
+ * looks for work once more before it waits; a waker publishes, then looks at
+ * the flag. Each side's store and load are separated by a full fence -- with
+ * release/acquire alone a store may pass a later load on ARM, both sides miss
+ * each other, and the sleeper only notices at its timeout (2-4 ms). The waker
+ * takes the flag down as it signals, so a burst of commits while the sleeper
+ * is still being scheduled back in costs one futex call, not one each: on the
+ * PowerVR tablet's in-order cores the producer was paying a mutex and a
+ * signal for most commands of a frame. */
+static int q_should_wake(_Atomic int* flag)
+{
+    atomic_thread_fence(memory_order_seq_cst);
+    return atomic_load_explicit(flag, memory_order_relaxed) &&
+           atomic_exchange_explicit(flag, 0, memory_order_acq_rel);
+}
+static void q_arm_sleep(_Atomic int* flag)
+{
+    atomic_store_explicit(flag, 1, memory_order_relaxed);
+    atomic_thread_fence(memory_order_seq_cst);
+}
 static void q_wake_render(void)
 {
-    if (atomic_load_explicit(&q_render_sleeping, memory_order_acquire)) {
+    if (q_should_wake(&q_render_sleeping)) {
         pthread_mutex_lock(&q_mx);
         pthread_cond_signal(&q_cv_work);
         pthread_mutex_unlock(&q_mx);
@@ -248,7 +268,7 @@ static void q_wake_render(void)
 }
 static void q_wake_game(void)
 {
-    if (atomic_load_explicit(&q_game_waiting, memory_order_acquire)) {
+    if (q_should_wake(&q_game_waiting)) {
         pthread_mutex_lock(&q_mx);
         pthread_cond_broadcast(&q_cv_prog);
         pthread_mutex_unlock(&q_mx);
@@ -303,9 +323,10 @@ static void q_game_wait_raw(int (*pred)(void*), void* arg)
         if (pred(arg)) return;
     }
     pthread_mutex_lock(&q_mx);
-    atomic_store_explicit(&q_game_waiting, 1, memory_order_release);
-    while (!pred(arg)) {
+    for (;;) {
         struct timespec ts;
+        q_arm_sleep(&q_game_waiting);
+        if (pred(arg)) break;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_nsec += 2000000;
         if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
@@ -830,7 +851,7 @@ static void* q_main(void* arg)
             continue;
         }
         pthread_mutex_lock(&q_mx);
-        atomic_store_explicit(&q_render_sleeping, 1, memory_order_release);
+        q_arm_sleep(&q_render_sleeping);
         if (atomic_load_explicit(&q_pub, memory_order_acquire) == tail && !atomic_load(&q_stop)) {
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);

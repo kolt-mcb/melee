@@ -67,9 +67,22 @@ static _Atomic int q_sleeping, q_waiting;
 static _Atomic unsigned q_tails_sent, q_tails_done;
 static pthread_t q_thread;
 
+/* The same hand-shake as pc_glq.c's: fence between each side's store and
+ * load, and the waker lowers the flag it answers. */
+static int q_should_wake(_Atomic int* flag)
+{
+    atomic_thread_fence(memory_order_seq_cst);
+    return atomic_load_explicit(flag, memory_order_relaxed) &&
+           atomic_exchange_explicit(flag, 0, memory_order_acq_rel);
+}
+static void q_arm_sleep(_Atomic int* flag)
+{
+    atomic_store_explicit(flag, 1, memory_order_relaxed);
+    atomic_thread_fence(memory_order_seq_cst);
+}
 static void q_wake_bridge(void)
 {
-    if (atomic_load_explicit(&q_sleeping, memory_order_acquire)) {
+    if (q_should_wake(&q_sleeping)) {
         pthread_mutex_lock(&q_mx);
         pthread_cond_signal(&q_cv_work);
         pthread_mutex_unlock(&q_mx);
@@ -77,7 +90,7 @@ static void q_wake_bridge(void)
 }
 static void q_wake_game(void)
 {
-    if (atomic_load_explicit(&q_waiting, memory_order_acquire)) {
+    if (q_should_wake(&q_waiting)) {
         pthread_mutex_lock(&q_mx);
         pthread_cond_broadcast(&q_cv_prog);
         pthread_mutex_unlock(&q_mx);
@@ -90,6 +103,9 @@ static struct { void (*fn)(void*); unsigned n; } q_sync_tab[32];
 /* Game-thread waits, by reason, for MELEE_GLTIME's report. */
 static unsigned long long q_wait_ns[4];
 static unsigned q_wait_n[4];
+/* The bridge thread's own time asleep (waiting for the game thread), so
+ * MELEE_GLTIME can say which of the three stages is the limit. */
+static _Atomic unsigned long long q_bridge_idle_ns;
 static void q_wait(int (*pred)(void*), void* arg, int reason)
 {
     struct timespec t0, t1;
@@ -99,9 +115,10 @@ static void q_wait(int (*pred)(void*), void* arg, int reason)
     for (spin = 0; spin < 200 && !pred(arg); spin++) {}
     if (!pred(arg)) {
         pthread_mutex_lock(&q_mx);
-        atomic_store_explicit(&q_waiting, 1, memory_order_release);
-        while (!pred(arg)) {
+        for (;;) {
             struct timespec ts;
+            q_arm_sleep(&q_waiting);
+            if (pred(arg)) break;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_nsec += 2000000;
             if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
@@ -124,6 +141,18 @@ void pc_gxq_wait_report(unsigned frames)
         fprintf(stderr, " %s %.2f (%.1f)", nm[i], q_wait_ns[i] / 1e6 / frames, (double) q_wait_n[i] / frames);
         q_wait_ns[i] = 0;
         q_wait_n[i] = 0;
+    }
+    {
+        static struct timespec s_last;
+        struct timespec now;
+        unsigned long long idle = atomic_exchange(&q_bridge_idle_ns, 0);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (s_last.tv_sec != 0) {
+            double wall = ((now.tv_sec - s_last.tv_sec) * 1e9 + (now.tv_nsec - s_last.tv_nsec)) / frames;
+            fprintf(stderr, "\n[GXQ] bridge thread per frame: busy %.2f ms, idle %.2f ms",
+                    (wall - (double) idle / frames) / 1e6, (double) idle / frames / 1e6);
+        }
+        s_last = now;
     }
     fprintf(stderr, "\n[GXQ] sync calls per frame:");
     for (i = 0; i < 32 && q_sync_tab[i].fn; i++) {
@@ -295,13 +324,21 @@ static void* q_main(void* arg)
         }
         q_wake_game();
         pthread_mutex_lock(&q_mx);
-        atomic_store_explicit(&q_sleeping, 1, memory_order_release);
+        q_arm_sleep(&q_sleeping);
         if (atomic_load_explicit(&q_pub, memory_order_acquire) == tail) {
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             ts.tv_nsec += 4000000;
             if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
-            pthread_cond_timedwait(&q_cv_work, &q_mx, &ts);
+            {
+                struct timespec i0, i1;
+                clock_gettime(CLOCK_MONOTONIC, &i0);
+                pthread_cond_timedwait(&q_cv_work, &q_mx, &ts);
+                clock_gettime(CLOCK_MONOTONIC, &i1);
+                atomic_fetch_add_explicit(&q_bridge_idle_ns,
+                    (unsigned long long) ((i1.tv_sec - i0.tv_sec) * 1000000000ll + (i1.tv_nsec - i0.tv_nsec)),
+                    memory_order_relaxed);
+            }
         }
         atomic_store_explicit(&q_sleeping, 0, memory_order_release);
         pthread_mutex_unlock(&q_mx);
