@@ -13,11 +13,21 @@
  * in the match. The relay reads only one thing from them: the newest frame
  * of each player's MSG_INPUT, so that when a player leaves it can tell the
  * rest exactly which frame that player's input stops after (MSG_BYE).
+ *
+ * The input delay comes from the players' measured round trips. The relay
+ * pings every page twice a second while it is in the lobby, and at Start
+ * picks the frames of delay that cover the slowest pair's path through it:
+ * a player's input reaches another in about half of each one's round trip,
+ * and the delay is what hides that. MELEE_NET_DELAY=<n> on the server fixes
+ * it instead (3 was the old constant).
  */
 
 const crypto = require('crypto');
 
 const MAX_PLAYERS = 4;
+const PING_MS = 500, PING_KEEP = 20;
+const FRAME_MS = 1000 / 60;
+const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
 const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8;
 
 const room = {
@@ -36,7 +46,7 @@ function lobbyState(forId) {
         you: forId,
         host: host ? host.id : null,
         players: room.members.slice(0, MAX_PLAYERS).map((m) => ({
-            id: m.id, name: m.name, ckind: m.ckind, color: m.color,
+            id: m.id, name: m.name, ckind: m.ckind, color: m.color, ping: pingOf(m),
             inMatch: !!(room.match && room.match.players.includes(m)),
         })),
         waiting: Math.max(0, room.members.length - MAX_PLAYERS),
@@ -49,6 +59,30 @@ function broadcastLobby() {
     for (const m of room.members) json(m.conn, lobbyState(m.id));
 }
 
+/* A player's round trip to the relay: the 90th percentile of the recent
+ * samples, so the delay covers the jitter and not just the average. */
+function pingOf(m) {
+    if (m.rtts.length < 3) return null;
+    const s = [...m.rtts].sort((a, b) => a - b);
+    return Math.round(s[Math.min(s.length - 1, Math.floor(s.length * 0.9))]);
+}
+
+/* One player's input reaches another through the relay in about half of each
+ * one's round trip; the slowest such pair sets the delay. Plus one frame,
+ * because the pages' frames are not in phase: an input can leave just after
+ * the peer's frame began. Two at least -- one already failed on a clean
+ * local link -- and at most 10. */
+function chooseDelay(players) {
+    if (FIXED_DELAY > 0) return { delay: FIXED_DELAY, why: 'fixed (MELEE_NET_DELAY)' };
+    if (players.length < 2) return { delay: 3, why: 'one player' };
+    const pings = players.map(pingOf);
+    if (pings.some((p) => p === null)) return { delay: 3, why: 'not enough ping samples' };
+    const [a, b] = [...pings].sort((x, y) => y - x);
+    const oneWay = (a + b) / 2;
+    const delay = Math.max(2, Math.min(10, Math.ceil(oneWay / FRAME_MS) + 1));
+    return { delay, why: `pings ${pings.join('/')} ms, slowest path ~${oneWay.toFixed(0)} ms` };
+}
+
 function startMatch() {
     const players = room.members.slice(0, MAX_PLAYERS);
     if (players.length < 1 || room.match) return;
@@ -56,12 +90,13 @@ function startMatch() {
     players.forEach((m, i) => { m.slot = i; m.lastFrame = -1; });
     room.match = { players };
     const lineup = players.map((m) => ({ slot: m.slot, name: m.name, ckind: m.ckind, color: m.color }));
+    const { delay, why } = chooseDelay(players);
     for (const m of players) {
         json(m.conn, { t: 'start', slot: m.slot, players: lineup, seed,
-                       rules: room.rules, delay: 3 });
+                       rules: room.rules, delay, why });
     }
     console.log(`[relay] match: ${lineup.map((p) => `${p.name}(${p.ckind})`).join(' vs ')}, ` +
-                `stage ${room.rules.stage}, seed ${seed.toString(16)}`);
+                `stage ${room.rules.stage}, seed ${seed.toString(16)}, delay ${delay} (${why})`);
     broadcastLobby();
 }
 
@@ -105,15 +140,32 @@ function leave(m) {
 
 exports.join = (conn) => {
     const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0,
-                slot: -1, lastFrame: -1, done: false };
+                slot: -1, lastFrame: -1, done: false, rtts: [], pingAt: 0, pingSeq: 0 };
     room.members.push(m);
-    conn.onclose = () => leave(m);
+    /* Lobby only: in a match the page's thread is busy and a reply would
+     * measure its frame time, not the network. */
+    const pinger = setInterval(() => {
+        if (room.match && room.match.players.includes(m)) return;
+        m.pingSeq++;
+        m.pingAt = performance.now();
+        json(m.conn, { t: 'ping', s: m.pingSeq });
+    }, PING_MS);
+    conn.onclose = () => { clearInterval(pinger); leave(m); };
     conn.onmessage = (buf) => {
         if (buf[0] !== 0x7B /* '{' */) return forward(m, buf);
         let msg;
         try { msg = JSON.parse(buf.toString('utf8')); } catch (e) { return; }
         const isHost = room.members[0] === m;
         switch (msg.t) {
+        case 'pong':
+            if (msg.s === m.pingSeq && m.pingAt) {
+                m.rtts.push(performance.now() - m.pingAt);
+                if (m.rtts.length > PING_KEEP) m.rtts.shift();
+                m.pingAt = 0;
+                // Refresh the lobby's ping readout every few samples.
+                if (m.pingSeq % 4 === 0) broadcastLobby();
+            }
+            break;
         case 'hello':
         case 'pick':
             if (typeof msg.name === 'string' && msg.name.trim())

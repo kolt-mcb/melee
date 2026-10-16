@@ -112,7 +112,7 @@
       if (!p) return `<div class="slot s${i} empty"><div class="who">P${i + 1}</div><div class="what">open</div></div>`;
       return `<div class="slot s${i}${p.id === lobby.you ? ' me' : ''}">
         <div class="who">P${i + 1} · ${escapeHtml(p.name)}${p.id === lobby.host ? '<span class="tag">host</span>' : ''}</div>
-        <div class="what">${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.inMatch ? ' · <b>in a match</b>' : ''}</div></div>`;
+        <div class="what">${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.ping != null ? ` · ${p.ping} ms` : ''}${p.inMatch ? ' · <b>in a match</b>' : ''}</div></div>`;
     }).join('');
     const host = isHost();
     $('host-note').textContent = host ? 'you are the host' : 'the host chooses';
@@ -132,20 +132,43 @@
   }
   const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  /* ---- a worse network, on purpose: ?netlag=MS&netjitter=MS&netloss=PCT ----
+   * Delays everything this page receives -- game packets, and the relay's
+   * pings too, so the delay it picks sees the same network -- to see what a
+   * match feels like over the internet before playing one there. In order, as the
+   * WebSocket's TCP delivers them: a "lost" packet is TCP's retransmit, held
+   * ~200 ms (its minimum timeout) plus the lag, and everything behind it
+   * waits too. Applied on both pages, the round trip is twice the lag. */
+  const impair = (() => {
+    const q = new URLSearchParams(location.search);
+    const n = (k) => Math.max(0, +q.get(k) || 0);
+    return { lag: n('netlag'), jitter: n('netjitter'), loss: n('netloss') };
+  })();
+  let impairDue = 0;
+  function deliver(bytes, handle) {
+    if (!impair.lag && !impair.jitter && !impair.loss) { handle(bytes); return; }
+    let due = performance.now() + impair.lag + Math.random() * impair.jitter;
+    if (Math.random() * 100 < impair.loss) due += 200 + impair.lag;
+    impairDue = Math.max(impairDue, due);
+    setTimeout(() => handle(bytes), impairDue - performance.now());
+  }
+  if (impair.lag || impair.jitter || impair.loss) console.log('[lobby] network impairment', JSON.stringify(impair));
+
   /* ---- the relay ---- */
+  function received(bytes) {
+    if (bytes[0] !== 0x7B) { inbox.push(bytes); return; }      // a game packet
+    const msg = JSON.parse(new TextDecoder().decode(bytes));
+    if (msg.t === 'ping') send({ t: 'pong', s: msg.s });        // the relay measuring the round trip
+    else if (msg.t === 'lobby') { lobby = msg; if (!started) paintLobby(); }
+    else if (msg.t === 'start') startMatch(msg);
+  }
   function send(obj) { if (ws && ws.readyState === 1) ws.send(new TextEncoder().encode(JSON.stringify(obj))); }
   let started = false;
   function connect() {
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/net`);
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => send({ t: 'hello', name: me.name, ckind: me.ckind, color: me.color });
-    ws.onmessage = (ev) => {
-      const bytes = new Uint8Array(ev.data);
-      if (bytes[0] !== 0x7B) { inbox.push(bytes); return; }     // a game packet
-      const msg = JSON.parse(new TextDecoder().decode(bytes));
-      if (msg.t === 'lobby') { lobby = msg; if (!started) paintLobby(); }
-      else if (msg.t === 'start') startMatch(msg);
-    };
+    ws.onmessage = (ev) => deliver(new Uint8Array(ev.data), received);
     ws.onclose = () => {
       if (started) { Module.meleeNet.onMatchEnd(false); $('banner-text').textContent = 'Lost the connection to the host.'; }
       else { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); }
@@ -189,7 +212,7 @@
     // Before main(): emscripten reads ENV on the first getenv, and the
     // constructors that call it run only once the start dependency clears.
     Object.assign(Module.ENV, env);
-    console.log('[lobby] start', JSON.stringify(env));
+    console.log('[lobby] start', JSON.stringify(env), `-- delay ${msg.delay}: ${msg.why || ''}`);
     $('canvas').focus();
     resolveStart();
     showLoading(humans > 1);
