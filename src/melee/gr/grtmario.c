@@ -128,9 +128,23 @@ void grTMario_8021FA00(Ground_GObj* gobj) {}
 
 void grTMario_8021FA04(Ground_GObj* gobj) {}
 
+#if BUILD_TARGET_PC
+/* The fighter-device pass calls this as ftDevice_Callback0, with a third
+ * argument this definition does not take. PowerPC and x86-64 ignore it;
+ * wasm traps on the first call. */
+static bool lbl_8021FB50_pc(Ground_GObj* gobj, Fighter_GObj* fobj, Vec3* unused)
+{
+    return lbl_8021FB50((uintptr_t) gobj, (void*) fobj);
+}
+#endif
+
 void lbl_8021FA08(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    ftCo_800C07F8(gobj, 6, lbl_8021FB50_pc);
+#else
     ftCo_800C07F8(gobj, 6, lbl_8021FB50);
+#endif
 }
 
 void grTMario_8021FA34(Ground_GObj* gobj)

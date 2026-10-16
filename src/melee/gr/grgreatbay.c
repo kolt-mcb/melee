@@ -339,9 +339,23 @@ void grGreatBay_801F451C(Ground_GObj* gobj)
     return;
 }
 
+#if BUILD_TARGET_PC
+/* The fighter-device pass calls this as ftDevice_Callback0, with a third
+ * argument this definition does not take. PowerPC and x86-64 ignore it;
+ * wasm traps on the first call. */
+static bool grGreatBay_801F6708_pc(Ground_GObj* gobj, Fighter_GObj* fobj, Vec3* unused)
+{
+    return grGreatBay_801F6708((uintptr_t) gobj, (void*) fobj);
+}
+#endif
+
 void fn_801F4520(HSD_GObj* gobj)
 {
+#if BUILD_TARGET_PC
+    ftCo_800C07F8(gobj, 6, grGreatBay_801F6708_pc);
+#else
     ftCo_800C07F8(gobj, 6, grGreatBay_801F6708);
+#endif
 }
 
 void grGreatBay_801F454C(Ground_GObj* gobj)
