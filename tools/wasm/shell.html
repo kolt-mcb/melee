@@ -84,6 +84,9 @@
   #loading .detail { font-size: 13px; color: #6b7384; min-height: 1.2em; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #loading .spin { animation-duration: 3s; } }
+  #loading .bar { width: min(320px, 70vw); height: 6px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
+  #loading .bar[hidden] { display: none; }
+  #loading-fill { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .25s linear; }
   #fps { position: fixed; top: 10px; left: 10px; z-index: 3; display: none; padding: 3px 8px;
     border-radius: 6px; background: #000a; font: 13px ui-monospace, monospace; color: var(--muted); }
   body.playing #fps.show { display: block; }
@@ -94,7 +97,9 @@
 <body>
 <canvas id="canvas" tabindex="-1"></canvas>
 <div id="loading" role="status" aria-live="polite"><div class="spin"></div>
-  <div id="loading-text">Loading the match…</div><div class="detail" id="loading-detail"></div></div>
+  <div id="loading-text">Loading the match…</div>
+  <div class="bar" id="loading-bar" hidden><div id="loading-fill"></div></div>
+  <div class="detail" id="loading-detail"></div></div>
 <div id="fps"></div>
 <div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-quit">Leave match</button></div>
 <div id="banner"><span id="banner-text">Match over.</span><button class="primary" id="btn-lobby">Back to lobby</button></div>

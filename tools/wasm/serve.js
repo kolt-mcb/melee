@@ -86,8 +86,8 @@ function handler(req, res) {
      * and the build does not copy it next to melee.html. So a page served
      * straight out of build/wasm would 404 on it: fall back to where it lives.
      * A deploy copies it into the web root, so this is the dev path. */
-    if (path.basename(file) === 'lobby.js' && !fs.existsSync(file)) {
-        file = path.join(ROOT, 'tools', 'wasm', 'lobby.js');
+    if (['lobby.js', 'load_manifest.json'].includes(path.basename(file)) && !fs.existsSync(file)) {
+        file = path.join(ROOT, 'tools', 'wasm', path.basename(file));
     }
     fs.stat(file, (err, st) => {
         if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }

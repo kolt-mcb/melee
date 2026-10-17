@@ -59,7 +59,16 @@
       },
     },
     print: (t) => console.log(t),
-    printErr: (t) => console.error(t),
+    printErr: (t) => {
+      console.error(t);
+      // The engine's own fatal error, on the loading screen that would
+      // otherwise spin forever.
+      if (/No usable GL context/.test(t)) {
+        $('loading-text').textContent = 'This browser could not start WebGL 2, so the game cannot draw.';
+        $('loading-detail').textContent = 'Turn on graphics acceleration (Chrome: Settings → System), relaunch, ' +
+          'and check that chrome://gpu lists WebGL2 as available.';
+      }
+    },
     setStatus: () => {},
   };
   let discReady = null;
@@ -216,23 +225,66 @@
     console.log('[lobby] start', JSON.stringify(env), `-- delay ${msg.delay}: ${msg.why || ''}`);
     $('canvas').focus();
     resolveStart();
-    showLoading(humans > 1);
+    showLoading(humans > 1, lineup.map((p) => +p.split(':')[0]), msg.rules.stage);
   }
 
-  /* The loading screen: the disc read so far, then -- in netplay -- the wait
-   * for the slowest page, until the match's first frame is drawn. */
-  function showLoading(netplay) {
+  /* Which disc files a match load reads (tools/wasm/gen_load_manifest.py):
+   * the ones every load reads, a stage's, and a fighter's -- costumes apart,
+   * one per player. Summed against the disc's own sizes it is the total the
+   * progress bar fills toward. */
+  const loadManifest = fetch('load_manifest.json')
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+  function loadBytes(m, fighters, stage) {
+    const iso = Module.meleeIso;
+    const size = (p) => { const e = iso && iso.lookup(p); return e ? e.size : 0; };
+    // An entry is a file read whole, or {path, bytes} for one read in part.
+    const sum = (list) => (list || []).reduce(
+      (a, p) => a + (typeof p === 'string' ? size(p) : p.bytes), 0);
+    let total = sum(m.common) + sum(m.stages[stage]);
+    for (const ck of new Set(fighters)) total += sum((m.fighters[ck] || {}).files);
+    // The trace loaded two costumes per fighter (two players); each player loads half.
+    for (const ck of fighters) total += sum((m.fighters[ck] || {}).costumes) / 2;
+    return total;
+  }
+
+  /* The loading screen: a bar of the disc read so far against what this
+   * match needs, then -- in netplay -- the wait for the slowest page, until
+   * the match's first frame is drawn. */
+  function showLoading(netplay, fighters, stage) {
     const t0 = performance.now();
+    const base = Module.meleeIsoBytes || 0;   // the disc's header and FST, read before Start
+    let total = 0;
+    loadManifest.then((m) => {
+      if (!m || !Module.meleeIso) return;
+      total = loadBytes(m, fighters, stage);
+      if (total > 0) $('loading-bar').hidden = false;
+    });
     const tick = setInterval(() => {
       if ((Module.meleeMatchFrame | 0) > 0) {
+        $('loading-fill').style.width = '100%';
         $('loading').classList.add('done');
+        console.log(`[lobby] match loaded: read ${(Module.meleeIsoBytes || 0) - base} bytes, estimated ${Math.round(total)}`);
         clearInterval(tick);
         return;
       }
-      const mb = (Module.meleeIsoBytes || 0) / 2 ** 20;
+      const read = (Module.meleeIsoBytes || 0) - base;
+      const mb = (n) => (n / 2 ** 20).toFixed(1);
       const secs = (performance.now() - t0) / 1000;
-      $('loading-detail').textContent = mb >= 0.1 ? `${mb.toFixed(1)} MB read from the disc` : '';
-      if (netplay && secs > 8) $('loading-text').textContent = 'Loading — and waiting for the other players…';
+      if (total > 0) {
+        // Never full until the match is: a load can read a little past the
+        // estimate, and the game still has work after the last byte.
+        const frac = Math.min(0.99, read / total);
+        $('loading-fill').style.width = `${(frac * 100).toFixed(1)}%`;
+        $('loading-detail').textContent = `${mb(Math.min(read, total))} of ${mb(total)} MB`;
+      } else {
+        $('loading-detail').textContent = read >= 0.1 * 2 ** 20 ? `${mb(read)} MB read from the disc` : '';
+      }
+      if (netplay && secs > 8 && total > 0 && read >= total * 0.99) {
+        $('loading-text').textContent = 'Waiting for the other players…';
+      } else if (netplay && secs > 8) {
+        $('loading-text').textContent = 'Loading — and waiting for the other players…';
+      }
     }, 250);
   }
   // The host's CPU choice travels with the rules; it fills only free slots.
@@ -292,10 +344,17 @@
       if (lose) lose.loseContext();      // a probe should not hold one of the page's contexts
       return { renderer };
     };
-    // No context at all is left to the game to report: it can be a GPU
-    // process still starting, and the game's own error is more specific.
+    // No context at all: say so before a match is started for nothing.
+    // Recent Chrome no longer falls back to SwiftShader for WebGL, so with
+    // acceleration off or the GPU blocklisted there is no WebGL at all.
     const any = probe({});
-    if (!any) return;
+    if (!any) {
+      $('gpu').innerHTML = '<b>Your browser could not start WebGL 2</b>, which the game needs to draw. ' +
+        'In Chrome: Settings → System → turn on <i>Use graphics acceleration when available</i>, ' +
+        'relaunch, then check that <code>chrome://gpu</code> lists WebGL2 as available.';
+      $('gpu').classList.add('show');
+      return;
+    }
     console.log('[GPU] WebGL renderer:', any.renderer || '(hidden)');
     const software = any.renderer
       ? /swiftshader|llvmpipe|softpipe|software|basic render driver/i.test(any.renderer)

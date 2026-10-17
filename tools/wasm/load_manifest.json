@@ -1,0 +1,489 @@
+{
+ "common": [
+  "EfCoData.dat",
+  "EfMnData.dat",
+  "GmPause.usd",
+  "GmTtAll.usd",
+  "IfAll.usd",
+  "IfCoGet.dat",
+  "ItCo.usd",
+  "LbBf.dat",
+  "LbRb.dat",
+  "LbRf.dat",
+  "PdPm.dat",
+  "PlCo.dat",
+  "SdIntro.dat",
+  "audio/opening.hps",
+  "audio/us/end.ssm",
+  "audio/us/main.ssm",
+  "audio/us/nr_name.ssm",
+  "audio/us/nr_title.ssm",
+  "audio/us/nr_vs.ssm",
+  "audio/us/pokemon.ssm",
+  "audio/us/smash2.sem",
+  "boot.dol",
+  "LbMcGame.dat",
+  {
+   "path": "MvOpen.mth",
+   "bytes": 148102
+  }
+ ],
+ "stages": {
+  "31": [
+   "GrNBa.dat",
+   "audio/sp_zako.hps"
+  ],
+  "32": [
+   "GrNLa.dat",
+   "audio/sp_end.hps",
+   "audio/us/last.ssm"
+  ],
+  "3": [
+   "GrPs.usd",
+   "audio/pstadium.hps",
+   "audio/us/pstadium.ssm"
+  ],
+  "16": [
+   "GrYt.dat",
+   "audio/yorster.hps"
+  ],
+  "8": [
+   "GrSt.dat",
+   "audio/ystory.hps"
+  ],
+  "2": [
+   "GrIz.dat",
+   "audio/izumi.hps"
+  ],
+  "28": [
+   "GrOp.dat",
+   "audio/old_kb.hps",
+   "audio/us/pupupu.ssm"
+  ],
+  "4": [
+   "GrCs.dat",
+   "audio/castle.hps",
+   "audio/us/castle.ssm"
+  ],
+  "5": [
+   "GrKg.dat",
+   "audio/garden.hps",
+   "audio/us/kongo.ssm"
+  ],
+  "12": [
+   "GrGd.dat",
+   "audio/kongo.hps",
+   "audio/us/garden.ssm"
+  ],
+  "13": [
+   "GrGb.dat",
+   "audio/greatbay.hps",
+   "audio/us/greatbay.ssm"
+  ],
+  "14": [
+   "GrSh.dat",
+   "audio/shrine.hps"
+  ],
+  "6": [
+   "GrZe.dat",
+   "audio/us/zebes.ssm",
+   "audio/zebes.hps"
+  ],
+  "15": [
+   "GrKr.dat",
+   "audio/kraid.hps",
+   "audio/us/klaid.ssm"
+  ],
+  "17": [
+   "GrGr.dat",
+   "audio/greens.hps",
+   "audio/us/greens.ssm"
+  ],
+  "7": [
+   "GrCn.usd",
+   "audio/corneria.hps",
+   "audio/us/corneria.ssm"
+  ],
+  "22": [
+   "GrVe.usd",
+   "audio/us/venom.ssm",
+   "audio/venom.hps"
+  ],
+  "9": [
+   "GrOt.usd",
+   "audio/onetto.hps",
+   "audio/us/onett.ssm"
+  ],
+  "18": [
+   "GrFs.dat",
+   "audio/fourside.hps",
+   "audio/us/fourside.ssm"
+  ],
+  "10": [
+   "GrMc.dat",
+   "audio/mutecity.hps",
+   "audio/us/mutecity.ssm"
+  ],
+  "24": [
+   "GrBb.dat",
+   "audio/bigblue.hps",
+   "audio/us/bigblue.ssm"
+  ],
+  "11": [
+   "GrRc.dat",
+   "audio/rcruise.hps"
+  ],
+  "19": [
+   "GrI1.dat",
+   "audio/inis1_01.hps"
+  ],
+  "20": [
+   "GrI2.dat",
+   "audio/inis2_01.hps"
+  ],
+  "25": [
+   "GrIm.dat",
+   "audio/icemt.hps"
+  ],
+  "23": [
+   "GrPu.dat",
+   "audio/pura.hps"
+  ],
+  "27": [
+   "GrFz.dat",
+   "audio/flatzone.hps"
+  ],
+  "29": [
+   "GrOy.dat",
+   "audio/old_ys.hps"
+  ],
+  "30": [
+   "GrOk.dat",
+   "audio/old_dk.hps"
+  ]
+ },
+ "fighters": {
+  "0": {
+   "files": [
+    "EfCaData.dat",
+    "PlCa.dat",
+    "PlCaAJ.dat",
+    "audio/us/captain.ssm"
+   ],
+   "costumes": [
+    "PlCaGy.dat",
+    "PlCaNr.dat"
+   ]
+  },
+  "1": {
+   "files": [
+    "EfDkData.dat",
+    "PlDk.dat",
+    "PlDkAJ.dat",
+    "audio/us/dk.ssm"
+   ],
+   "costumes": [
+    "PlDkBk.dat",
+    "PlDkNr.dat"
+   ]
+  },
+  "2": {
+   "files": [
+    "EfFxData.dat",
+    "PlFx.dat",
+    "PlFxAJ.dat",
+    "audio/us/fox.ssm"
+   ],
+   "costumes": [
+    "PlFxNr.dat",
+    "PlFxOr.dat"
+   ]
+  },
+  "3": {
+   "files": [
+    "PlGw.dat",
+    "PlGwAJ.dat",
+    "audio/us/gw.ssm"
+   ],
+   "costumes": [
+    "PlGwNr.dat"
+   ]
+  },
+  "4": {
+   "files": [
+    "EfKbData.dat",
+    "PlKb.dat",
+    "PlKbAJ.dat",
+    "audio/us/kirby.ssm"
+   ],
+   "costumes": [
+    "PlKbNr.dat",
+    "PlKbYe.dat"
+   ]
+  },
+  "5": {
+   "files": [
+    "EfKpData.dat",
+    "PlKp.dat",
+    "PlKpAJ.dat",
+    "audio/us/koopa.ssm"
+   ],
+   "costumes": [
+    "PlKpNr.dat",
+    "PlKpRe.dat"
+   ]
+  },
+  "6": {
+   "files": [
+    "EfLkData.dat",
+    "PlLk.dat",
+    "PlLkAJ.dat",
+    "audio/us/link.ssm"
+   ],
+   "costumes": [
+    "PlLkNr.dat",
+    "PlLkRe.dat"
+   ]
+  },
+  "7": {
+   "files": [
+    "EfLgData.dat",
+    "PlLg.dat",
+    "PlLgAJ.dat",
+    "audio/us/luigi.ssm"
+   ],
+   "costumes": [
+    "PlLgNr.dat",
+    "PlLgWh.dat"
+   ]
+  },
+  "8": {
+   "files": [
+    "EfMrData.dat",
+    "PlMr.dat",
+    "PlMrAJ.dat",
+    "audio/us/mario.ssm"
+   ],
+   "costumes": [
+    "PlMrNr.dat",
+    "PlMrYe.dat"
+   ]
+  },
+  "9": {
+   "files": [
+    "EfMsData.dat",
+    "PlMs.dat",
+    "PlMsAJ.dat",
+    "audio/us/mars.ssm"
+   ],
+   "costumes": [
+    "PlMsNr.dat",
+    "PlMsRe.dat"
+   ]
+  },
+  "10": {
+   "files": [
+    "EfMtData.dat",
+    "PlMt.dat",
+    "PlMtAJ.dat",
+    "audio/us/mewtwo.ssm"
+   ],
+   "costumes": [
+    "PlMtNr.dat",
+    "PlMtRe.dat"
+   ]
+  },
+  "11": {
+   "files": [
+    "EfNsData.dat",
+    "PlNs.dat",
+    "PlNsAJ.dat",
+    "audio/us/ness.ssm"
+   ],
+   "costumes": [
+    "PlNsNr.dat",
+    "PlNsYe.dat"
+   ]
+  },
+  "12": {
+   "files": [
+    "EfPeData.dat",
+    "PlPe.dat",
+    "PlPeAJ.dat",
+    "audio/us/peach.ssm"
+   ],
+   "costumes": [
+    "PlPeNr.dat",
+    "PlPeYe.dat"
+   ]
+  },
+  "13": {
+   "files": [
+    "EfPkData.dat",
+    "PlPk.dat",
+    "PlPkAJ.dat",
+    "audio/us/pikachu.ssm"
+   ],
+   "costumes": [
+    "PlPkNr.dat",
+    "PlPkRe.dat"
+   ]
+  },
+  "14": {
+   "files": [
+    "EfIcData.dat",
+    "PlNn.dat",
+    "PlNnAJ.dat",
+    "PlPp.dat",
+    "PlPpAJ.dat",
+    "audio/us/ice.ssm"
+   ],
+   "costumes": [
+    "PlNnNr.dat",
+    "PlNnYe.dat",
+    "PlPpGr.dat",
+    "PlPpNr.dat"
+   ]
+  },
+  "15": {
+   "files": [
+    "EfPrData.dat",
+    "PlPr.dat",
+    "PlPrAJ.dat",
+    "audio/us/purin.ssm"
+   ],
+   "costumes": [
+    "PlPrNr.dat",
+    "PlPrRe.dat"
+   ]
+  },
+  "16": {
+   "files": [
+    "EfSsData.dat",
+    "PlSs.dat",
+    "PlSsAJ.dat",
+    "audio/us/samus.ssm"
+   ],
+   "costumes": [
+    "PlSsNr.dat",
+    "PlSsPi.dat"
+   ]
+  },
+  "17": {
+   "files": [
+    "EfYsData.dat",
+    "PlYs.dat",
+    "PlYsAJ.dat",
+    "audio/us/yoshi.ssm"
+   ],
+   "costumes": [
+    "PlYsNr.dat",
+    "PlYsRe.dat"
+   ]
+  },
+  "18": {
+   "files": [
+    "EfZdData.dat",
+    "PlSk.dat",
+    "PlSkAJ.dat",
+    "PlZd.dat",
+    "PlZdAJ.dat",
+    "audio/us/zs.ssm"
+   ],
+   "costumes": [
+    "PlSkNr.dat",
+    "PlSkRe.dat",
+    "PlZdNr.dat",
+    "PlZdRe.dat"
+   ]
+  },
+  "19": {
+   "files": [
+    "EfZdData.dat",
+    "PlSk.dat",
+    "PlSkAJ.dat",
+    "PlZd.dat",
+    "PlZdAJ.dat",
+    "audio/us/zs.ssm"
+   ],
+   "costumes": [
+    "PlSkNr.dat",
+    "PlSkRe.dat",
+    "PlZdNr.dat",
+    "PlZdRe.dat"
+   ]
+  },
+  "20": {
+   "files": [
+    "EfFxData.dat",
+    "PlFc.dat",
+    "PlFcAJ.dat",
+    "audio/us/falco.ssm"
+   ],
+   "costumes": [
+    "PlFcNr.dat",
+    "PlFcRe.dat"
+   ]
+  },
+  "21": {
+   "files": [
+    "EfLkData.dat",
+    "PlCl.dat",
+    "PlClAJ.dat",
+    "audio/us/clink.ssm"
+   ],
+   "costumes": [
+    "PlClNr.dat",
+    "PlClRe.dat"
+   ]
+  },
+  "22": {
+   "files": [
+    "EfMrData.dat",
+    "PlDr.dat",
+    "PlDrAJ.dat",
+    "audio/us/drmario.ssm"
+   ],
+   "costumes": [
+    "PlDrNr.dat",
+    "PlDrRe.dat"
+   ]
+  },
+  "23": {
+   "files": [
+    "EfFeData.dat",
+    "PlFe.dat",
+    "PlFeAJ.dat",
+    "audio/us/emblem.ssm"
+   ],
+   "costumes": [
+    "PlFeNr.dat",
+    "PlFeRe.dat"
+   ]
+  },
+  "24": {
+   "files": [
+    "EfPkData.dat",
+    "PlPc.dat",
+    "PlPcAJ.dat",
+    "audio/us/pichu.ssm"
+   ],
+   "costumes": [
+    "PlPcNr.dat",
+    "PlPcRe.dat"
+   ]
+  },
+  "25": {
+   "files": [
+    "EfGnData.dat",
+    "PlGn.dat",
+    "PlGnAJ.dat",
+    "audio/us/ganon.ssm"
+   ],
+   "costumes": [
+    "PlGnNr.dat",
+    "PlGnRe.dat"
+   ]
+  }
+ }
+}
