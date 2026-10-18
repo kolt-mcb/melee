@@ -50,6 +50,7 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 700; padding: 12px 22px; font-size: 16px; }
   button:disabled { opacity: .45; cursor: default; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .row[hidden] { display: none; }
   label { color: var(--muted); font-size: 13px; }
   input, select { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
     border-radius: 8px; padding: 7px 9px; }
@@ -59,6 +60,8 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   td { padding: 3px 4px; border-bottom: 1px solid #ffffff0d; }
   td:first-child { color: var(--muted); width: 45%; }
+  button.key { padding: 2px 6px; min-width: 64px; text-align: left; background: transparent; border-color: transparent; }
+  button.key:hover, button.key.on { border-color: var(--line); }
   kbd { font: 12px ui-monospace, monospace; background: #0b0d12; border: 1px solid var(--line);
     border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
   #banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; display: none;
@@ -68,6 +71,7 @@
   body.playing #hud { display: flex; }
   body.playing:hover #hud { opacity: .85; }
   #hud button { padding: 6px 10px; font-size: 13px; background: #000a; }
+  button.report { padding: 4px 9px; font-size: 13px; color: var(--muted); }
   #gpu { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 10px;
     border: 1px solid var(--bad); background: #ff6b6b14; font-size: 14px; }
   #gpu.show { display: block; }
@@ -101,13 +105,16 @@
   <div class="bar" id="loading-bar" hidden><div id="loading-fill"></div></div>
   <div class="detail" id="loading-detail"></div></div>
 <div id="fps"></div>
-<div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-quit">Leave match</button></div>
-<div id="banner"><span id="banner-text">Match over.</span><button class="primary" id="btn-lobby">Back to lobby</button></div>
+<div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-report-hud" title="Send the host this page's log and frame timings">Send report</button><button id="btn-quit">Leave match</button></div>
+<div id="banner"><span id="banner-text">Match over.</span><button id="btn-report-banner">Send report</button><button class="primary" id="btn-lobby">Back to lobby</button></div>
 
 <div id="lobby">
   <header>
     <h1>Super Smash Bros. Melee <span class="tag">home netplay</span></h1>
-    <div class="status" id="status">Connecting…</div>
+    <div class="row" style="margin-top:0">
+      <div class="status" id="status">Connecting…</div>
+      <button id="btn-report" class="report" title="Send the host this page's log, browser and GPU details">Report a problem</button>
+    </div>
   </header>
   <div id="gpu"></div>
 
@@ -117,12 +124,19 @@
       <div class="players" id="players"></div>
       <div class="row">
         <label>Your name <input id="name" maxlength="16" autocomplete="off"></label>
+        <label title="Each extra player needs a gamepad of their own; player 1 also has the keyboard">Players on this computer <select id="locals"></select></label>
         <span class="pad no" id="pad">No gamepad yet: plug one in and press a button.</span>
       </div>
+      <div class="row"><label>Graphics <select id="gfx" title="Fewer lines run faster on weak graphics; the picture is stretched to fit">
+          <option value="auto">Auto</option><option value="high">High (up to 1440 lines)</option>
+          <option value="medium">Medium (720 lines)</option><option value="low">Low (480 lines, the GameCube's own)</option></select></label></div>
+      <div class="row"><span class="pad no" id="dl" role="status"></span>
+        <button id="btn-download" title="Every stage and fighter, about 200 MB, kept by this browser: later matches load without waiting on the host">Download the whole game</button></div>
     </section>
 
     <section class="card full">
-      <h2>Your fighter</h2>
+      <h2 id="fighter-title">Your fighter</h2>
+      <div class="row seat-tabs" id="seat-tabs" hidden></div>
       <div class="fighters" id="fighters"></div>
       <div class="row"><label>Costume</label><span id="colors"></span></div>
     </section>
@@ -131,8 +145,14 @@
       <h2>Match <span class="tag" id="host-note"></span></h2>
       <div class="row"><label>Stage</label><select id="stage"></select></div>
       <div class="row">
+        <label>Mode <select id="kind"><option value="stock">Stock</option><option value="time">Time</option></select></label>
+        <label>Items <select id="items"><option value="-1">Off</option><option value="0">Very low</option>
+          <option value="1">Low</option><option value="2">Medium</option><option value="3">High</option>
+          <option value="4">Very high</option></select></label>
+      </div>
+      <div class="row">
         <label>Stocks <input type="number" id="stocks" min="1" max="99"></label>
-        <label>Minutes <input type="number" id="minutes" min="0" max="99" title="0: no time limit"></label>
+        <label id="minutes-label">Minutes <input type="number" id="minutes" min="0" max="99" title="0: no time limit"></label>
       </div>
       <div class="row">
         <label>CPUs <select id="cpus"></select></label>
@@ -143,7 +163,17 @@
 
     <section class="card">
       <h2>Controls</h2>
-      <table id="controls"></table>
+      <p class="pad">A gamepad plays as you: plug it in before the match and press a button.
+        More than one person at this computer? Set <b>Players on this computer</b>: the first
+        gamepad (or the keyboard) is player 1, the second gamepad player 2, and so on.</p>
+      <div class="row"><label>Keyboard <select id="key-preset">
+        <option value="box">Box (recommended)</option><option value="classic">Classic</option>
+        <option value="custom" disabled>Custom</option></select></label></div>
+      <p class="pad">Keys go from centre to the rim at once, which the game reads as a smash or a dash.
+        Hold <b>Mod X</b> to walk and tilt, <b>Mod Y</b> to drift slowly; with a diagonal they pick the
+        wavedash angle. Click a key to change it.</p>
+      <p class="pad" id="key-note" role="status"></p>
+      <table id="keys"></table>
     </section>
   </div>
 </div>

@@ -39,7 +39,7 @@ const GL_FLAGS = process.env.DRIVE_GPU === '1'
        '--enable-gpu', '--disable-gpu-vsync', '--disable-frame-rate-limit']
     : ['--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'];
 const chrome = spawn(process.env.CHROME || 'chromium', [
-    '--headless=new', '--no-sandbox', ...GL_FLAGS,
+    '--headless=new', '--no-sandbox', '--mute-audio', ...GL_FLAGS,
     '--autoplay-policy=no-user-gesture-required',
     '--window-size=1280,800', '--hide-scrollbars',
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, 'about:blank',

@@ -4129,13 +4129,51 @@ static void pc_ubo_bind(void)
 }
 static GLintptr g_ubo_reserve(void)
 {
+#if defined(__EMSCRIPTEN__)
+    return 0; /* the block has its own buffer on the web (pc_ubo_commit) */
+#else
     return g_ubo_ok ? (GLintptr) g_ubo_align + (GLintptr) g_ubo_size : 0;
+#endif
 }
+#if defined(__EMSCRIPTEN__)
+/* The web's uniform block lives in a buffer of its own, used for nothing
+ * else, overwritten whole before each draw that changed it and bound once.
+ *
+ * It used to be streamed into the vertex ring and bound with
+ * glBindBufferRange into that draw's fresh vertex store (pc_web_vbo_commit).
+ * That suits ANGLE's Metal backend, but Chrome and Edge on Windows draw
+ * through ANGLE's Direct3D 11, where a constant buffer cannot be a vertex
+ * buffer: every such bind made ANGLE build a constant buffer for the range
+ * and copy into it on the GPU -- ~330 a frame. A GTX 1080 spent 91 ms of GPU
+ * time a frame on a match (9 fps), and every Windows player was slow
+ * whatever their GPU. A whole-buffer update of a uniform-only buffer is
+ * D3D11's ordinary constant-buffer path; on Metal it copies the block,
+ * 3.4 KB, not the 3.5 MB ring that was the trouble there. */
+static GLuint g_web_ubo;
+#endif
 static u32 g_ubo_lap = (u32) -1; /* the ring lap the bound range was streamed in */
 static void pc_ubo_commit(void)
 {
     GLintptr off;
     if (!g_ubo_ok) return;
+#if defined(__EMSCRIPTEN__)
+    if (g_web_ubo == 0) {
+        glGenBuffers(1, &g_web_ubo);
+        glBindBuffer(GL_UNIFORM_BUFFER, g_web_ubo);
+        glBufferData(GL_UNIFORM_BUFFER, (GLsizeiptr) g_ubo_size, g_ubo_img, GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, g_web_ubo);
+        g_ubo_pending = 0;
+        pc_diag_ubo_binds++;
+        return;
+    }
+    if (!g_ubo_pending) return;
+    glBindBuffer(GL_UNIFORM_BUFFER, g_web_ubo);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, (GLsizeiptr) g_ubo_size, g_ubo_img);
+    g_ubo_pending = 0;
+    pc_diag_ubo_binds++;
+    (void) off;
+    return;
+#endif
     /* An unchanged block still has to be streamed again once the ring
      * has been recycled under it: the bound range then names bytes in an
      * orphaned store (map/subdata modes) or bytes the write pointer is

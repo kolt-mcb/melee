@@ -4,6 +4,7 @@
 #include <dolphin/os.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #endif
 
 #include <melee/lb/forward.h>
@@ -399,6 +400,37 @@ void onEnterDebugVs(GameModeState* state)
             int stocks = st ? atoi(st) : 4;
             for (i = 0; i < Gm_Player_NumMax; i++) {
                 start->players[i].stocks = (s8) stocks;
+            }
+        }
+        /* MELEE_BOOT_KIND=time|stock|coin picks the match type, as the VS
+         * rules menu does (gm_80167BC8 sets match_kind; gmVsMelee_EnterVs
+         * adds is_stock, which is what takes a fighter out of the match on
+         * the last stock). The debug scene's own is a time match, and stays
+         * the default for the trace tools comparing against it. In a stock
+         * match MELEE_BOOT_TIME is the menu's stock time limit (0: none). */
+        {
+            const char* k = getenv("MELEE_BOOT_KIND");
+            if (k != NULL) {
+                if (strcmp(k, "stock") == 0) {
+                    start->rules.match_kind = MatchKind_Stock;
+                    start->rules.is_stock = true;
+                } else if (strcmp(k, "coin") == 0) {
+                    start->rules.match_kind = MatchKind_Coin;
+                } else {
+                    start->rules.match_kind = MatchKind_Time;
+                }
+            }
+        }
+        /* MELEE_BOOT_ITEMS=<n> is the item switch's frequency: -1 off (the
+         * debug scene's), 0 very low to 4 very high, the values the rules
+         * menu stores (if_2FFC.c: its index less one). Every item stays
+         * enabled in the mask (gm_SetupRulesDefaults sets rules.x20 to all
+         * ones). */
+        {
+            const char* it = getenv("MELEE_BOOT_ITEMS");
+            if (it != NULL) {
+                int f = atoi(it);
+                start->rules.item_freq = (s8) (f < -1 ? -1 : f > 4 ? 4 : f);
             }
         }
         /* rules.x6 is the 1P-mode flag (set only by gm_8016EBC0_OnEnter);

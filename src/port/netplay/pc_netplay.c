@@ -302,6 +302,14 @@ static int net_slot;         /* the slot in the match this machine plays */
  * guest's controller would be read from a port nothing is plugged into.
  * Only a scripted run driving a particular port needs to change it. */
 static int net_local_pad;
+/* The slots this machine plays, in the order of its local pads: the k-th
+ * feeds from pads[net_local_pad + k]. One, net_slot, unless the web lobby
+ * seated several players at this page (MELEE_NET_SLOTS=2,3): two pads on
+ * one computer are two players, each in a slot of its own, and every other
+ * page sees them as two remote slots like any other. */
+#define NET_LOCAL_MAX 4
+static int net_local_slot[NET_LOCAL_MAX];
+static int net_nlocal = 1;
 static int net_delay = 3;
 
 /* How far ahead of the oldest unresolved guess the simulation may run.
@@ -341,10 +349,21 @@ static unsigned net_cfg;     /* hash of the match configuration */
 static struct sockaddr_in net_peer[NET_SLOTS];
 static int net_have_peer[NET_SLOTS];
 
+static int net_is_local(int slot)
+{
+    int k;
+    for (k = 0; k < net_nlocal; k++) {
+        if (net_local_slot[k] == slot) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Is that slot someone else in this match? */
 static int net_is_remote(int slot)
 {
-    return slot >= 0 && slot < net_players && slot != net_slot;
+    return slot >= 0 && slot < net_players && !net_is_local(slot);
 }
 
 /* ---- the web build's transport (MELEE_NET=web) --------------------------
@@ -362,8 +381,10 @@ static int net_is_remote(int slot)
  * play that slot neutral from the same frame on and stay in step, instead
  * of each dropping to NET_SOLO on its own. */
 static int net_web;
-static s32 net_gone_after[NET_SLOTS] = { 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
-                                         0x7FFFFFFF };
+/* Set to "never" for every slot in net_config. A four-entry initialiser
+ * left slots 4-7 at 0, so a fifth player counted as gone from the first
+ * frame and was never waited for. */
+static s32 net_gone_after[NET_SLOTS];
 #ifdef __EMSCRIPTEN__
 EM_JS(void, web_net_send, (const void* buf, int len), {
     if (Module.meleeNet) Module.meleeNet.send(HEAPU8.slice(buf, buf + len));
@@ -385,11 +406,16 @@ static int web_net_recv(void* buf, int max) { (void) buf; (void) max; return 0; 
 /* Wait for the socket, or on the web, give the page its turn: the browser
  * delivers WebSocket messages only between turns of its event loop, and
  * ASYNCIFY returns to it across emscripten_sleep. */
+/* Time spent waiting here, for the web page's frame profile (render.c):
+ * the frames lost to other players rather than to this machine. */
+double pc_net_wait_ms;
 static void net_poll(struct pollfd* pfd, int ms)
 {
 #ifdef __EMSCRIPTEN__
+    double t0 = emscripten_get_now();
     (void) pfd;
     emscripten_sleep((unsigned) ms);
+    pc_net_wait_ms += emscripten_get_now() - t0;
 #else
     poll(pfd, 1, ms);
 #endif
@@ -459,7 +485,8 @@ static unsigned config_hash(void)
 {
     static const char* keys[] = { "MELEE_BOOT_MODE",  "MELEE_BOOT_MATCH",
                                   "MELEE_BOOT_CPU",   "MELEE_BOOT_STOCKS",
-                                  "MELEE_BOOT_TIME",  "MELEE_PADS",
+                                  "MELEE_BOOT_TIME",  "MELEE_BOOT_KIND",
+                                  "MELEE_BOOT_ITEMS", "MELEE_PADS",
                                   "MELEE_1P_CPU",     "MELEE_1P_DIFFICULTY" };
     unsigned h = 2166136261u;
     unsigned i;
@@ -540,6 +567,14 @@ static void net_config(void)
     }
     s = getenv("MELEE_NET_LOCAL_PAD");
     net_local_pad = (s != NULL) ? (atoi(s) & 3) : 0;
+    {
+        int k;
+        for (k = 0; k < NET_SLOTS; k++) {
+            net_gone_after[k] = 0x7FFFFFFF;
+        }
+    }
+    net_local_slot[0] = net_slot;
+    net_nlocal = 1;
     net_cfg = config_hash();
 
     s = getenv("MELEE_NET_SEED");
@@ -551,12 +586,39 @@ static void net_config(void)
     if (strcmp(role, "web") == 0) {
         int k;
         net_web = 1;
+        /* Several players at this page. Only the web lobby seats them: the
+         * UDP host hands out one slot per machine in MSG_SETUP, and Slippi
+         * has one player per connection. */
+        s = getenv("MELEE_NET_SLOTS");
+        if (s != NULL && *s) {
+            const char* q = s;
+            net_nlocal = 0;
+            while (net_nlocal < NET_LOCAL_MAX && net_local_pad + net_nlocal < 4) {
+                char* end;
+                long v = strtol(q, &end, 10);
+                if (end == q) {
+                    break;
+                }
+                if (v >= 0 && v < net_players && !net_is_local((int) v)) {
+                    net_local_slot[net_nlocal++] = (int) v;
+                }
+                q = (*end == ',') ? end + 1 : end;
+            }
+            if (net_nlocal == 0) {
+                net_local_slot[net_nlocal++] = net_slot;
+            }
+            net_slot = net_local_slot[0];
+        }
         for (k = 0; k < NET_SLOTS; k++) {
             ring_clear(&net_in[k]);
         }
         net_state = NET_RUN;
         fprintf(stderr, "[NET] web: slot %d of %d, delay %d frames, seed "
                         "%08X\n", net_slot, net_players, net_delay, net_seed);
+        for (k = 1; k < net_nlocal; k++) {
+            fprintf(stderr, "[NET] web: also slot %d, from local pad %d\n",
+                    net_local_slot[k], net_local_pad + k);
+        }
         return;
     }
 
@@ -1282,20 +1344,20 @@ static void send_ready(void)
  * just decided. Resending what the peer already has is the whole point: a
  * dropped datagram is covered by the next one, with no retransmit logic and
  * no ack. */
-static void send_inputs(s32 upto)
+static void send_slot_inputs_from(int slot, s32 base, s32 upto)
 {
     unsigned char buf[NET_HDR + 5 + NET_WINDOW * NET_PAD_BYTES];
     unsigned char* p = msg_start(buf, MSG_INPUT);
-    s32 base = upto - (NET_WINDOW - 1);
     int n = 0;
     int i;
 
+    put_u8(buf + 5, (unsigned) slot);
     if (base < 0) {
         base = 0;
     }
     for (i = 0; base + i <= upto && i < NET_WINDOW; i++) {
         NetPad pad;
-        if (!ring_get(&net_in[net_slot], base + i, &pad)) {
+        if (!ring_get(&net_in[slot], base + i, &pad)) {
             memset(&pad, 0, sizeof(pad));
         }
         pad_put(p + 5 + n * NET_PAD_BYTES, &pad);
@@ -1304,6 +1366,19 @@ static void send_inputs(s32 upto)
     put_u32(p + 0, (unsigned) base);
     put_u8(p + 4, (unsigned) n);
     net_send(buf, (size_t) (NET_HDR + 5 + n * NET_PAD_BYTES));
+}
+/* One packet per slot this machine plays, each named by its slot in the
+ * header, which is all a receiver keys the input ring on. */
+static void send_inputs_from(s32 base, s32 upto)
+{
+    int k;
+    for (k = 0; k < net_nlocal; k++) {
+        send_slot_inputs_from(net_local_slot[k], base, upto);
+    }
+}
+static void send_inputs(s32 upto)
+{
+    send_inputs_from(upto - (NET_WINDOW - 1), upto);
 }
 
 /* Slippi's eight bytes: the console's pad report, minus the four bytes it
@@ -1621,6 +1696,8 @@ static void pad_to_gc(GCPadStatus* g, const NetPad* n);
 static s32 rb_guessed = -1;
 static s32 rb_played = -1; /* the newest frame simulated, guessed or not */
 static unsigned rb_guesses, rb_corrected, rb_stalls;
+/* Rollback corrections so far, for the web page's frame profile (render.c). */
+unsigned pc_net_rewinds(void) { return rb_corrected; }
 /* The run of frames the correction now in progress is rebuilding. Only these
  * are final, and only these may be hashed from the replay path: the hook that
  * feeds a replayed frame its pads is also entered for frames outside the run,
@@ -1980,6 +2057,7 @@ static void net_handle(const unsigned char* cbuf, ssize_t n,
             if (net_slot < 0 || net_slot >= NET_SLOTS) {
                 net_slot = 1;
             }
+            net_local_slot[0] = net_slot;
             net_delay = (int) get_u8(p + 1);
             {
                 int np = (int) get_u16(p + 2);
@@ -2052,7 +2130,7 @@ static void net_handle(const unsigned char* cbuf, ssize_t n,
             if (net_web) {
                 int gone = (int) get_u8(buf + 5) & (NET_SLOTS - 1);
                 s32 last = n >= NET_HDR + 4 ? (s32) get_u32(buf + NET_HDR) : -1;
-                if (gone != net_slot && net_gone_after[gone] == 0x7FFFFFFF) {
+                if (!net_is_local(gone) && net_gone_after[gone] == 0x7FFFFFFF) {
                     net_gone_after[gone] = last;
                     fprintf(stderr, "[NET] slot %d left after frame %d; it "
                                     "stands still from here\n", gone, (int) last);
@@ -2783,6 +2861,18 @@ void pc_net_pads(GCPadStatus* pads)
                     (unsigned) pc_frame_number, (unsigned) hsd_804D78E2,
                     *HSD_RandSeedPtr);
         }
+        /* Neutral for every player through the load. The pads here are
+         * each machine's own, unexchanged, and the load reads them: a stick
+         * held on one page while the stage loaded put the sides apart by
+         * frame 1's hash. With a player per page it was that page's pad 1
+         * driving slot 0 everywhere; with two players at one page, its pad
+         * 2 drove slot 1 there and nowhere else. */
+        {
+            int k;
+            for (k = 0; k < net_players; k++) {
+                memset(&pads[k], 0, sizeof(pads[k]));
+            }
+        }
         net_quiet("still on the stage load (match frame 0)", frame);
         return;
     }
@@ -2843,22 +2933,29 @@ void pc_net_pads(GCPadStatus* pads)
     /* This frame's local input is announced as the input for a frame
      * net_delay in the future; the frames before that are neutral on both
      * sides, which is what the delay costs. */
-    pad_from_gc(&mine, &pads[net_local_pad]);
-    if (net_slippi_proto && frame + net_delay < SLP_START_SYNC_FRAME) {
-        /* Slippi clears every pad while the match is frozen
-         * (TriggerSendInput.asm, section 1), so only input-free frames sit
-         * before GO. A press here would reach the peer as one it has
-         * already thrown away. */
-        memset(&mine, 0, sizeof(mine));
-    }
     /* Only a frame not yet announced. After a rewind the counter is back on
      * a frame whose input already went out; writing the live pad over it
      * changed this side's past input to something the peer never saw, and
      * the re-simulation then played that -- the emulator dashed on frame 169,
      * this side 49 frames later. Lockstep never comes back to a frame, so
-     * there this changes nothing. */
+     * there this changes nothing.
+     *
+     * Every local pad is read here, before anything below writes the
+     * frame's pads into the array by slot: local pad 1 is pads[1], which
+     * slot 1's input overwrites. */
     if (frame + net_delay > net_last_sent) {
-        ring_put(&net_in[net_slot], frame + net_delay, &mine);
+        int k;
+        for (k = 0; k < net_nlocal; k++) {
+            pad_from_gc(&mine, &pads[net_local_pad + k]);
+            if (net_slippi_proto && frame + net_delay < SLP_START_SYNC_FRAME) {
+                /* Slippi clears every pad while the match is frozen
+                 * (TriggerSendInput.asm, section 1), so only input-free
+                 * frames sit before GO. A press here would reach the peer as
+                 * one it has already thrown away. */
+                memset(&mine, 0, sizeof(mine));
+            }
+            ring_put(&net_in[net_local_slot[k]], frame + net_delay, &mine);
+        }
     }
     if (frame + net_delay > net_last_sent) {
         net_last_sent = frame + net_delay;
@@ -3108,6 +3205,32 @@ void pc_net_pads(GCPadStatus* pads)
                      * this to know how far back its window must reach. */
                     slp_send_ack(net_done);
                 } else {
+                    /* From the frame the slowest peer is stuck on, not just
+                     * our newest twelve. A peer announces its input net_delay
+                     * frames ahead, so its newest input says which frame it
+                     * is on, and that frame's input from us is what it waits
+                     * for. The window used to end at our newest frame only:
+                     * once the frame a peer needed had slid out of it, every
+                     * resend missed it, and two pages stood a frame apart
+                     * waiting on each other for good (the web, 2026-10-17:
+                     * one at 93 waiting for 93, the other at 86 waiting for
+                     * 86, after the packets carrying 86 never arrived). */
+                    s32 need = net_last_sent - (NET_WINDOW - 1);
+                    int k;
+                    for (k = 0; k < net_players; k++) {
+                        s32 nk, at;
+                        if (!net_is_remote(k) || net_gone_after[k] != 0x7FFFFFFF) {
+                            continue;
+                        }
+                        nk = ring_newest(&net_in[k]);
+                        at = nk >= 0 ? nk - net_delay : 0;
+                        if (at < 0) at = 0;
+                        if (at < need) need = at;
+                    }
+                    if (need < net_last_sent - (NET_WINDOW - 1)) {
+                        s32 upto = need + (NET_WINDOW - 1);
+                        send_inputs_from(need, upto < net_last_sent ? upto : net_last_sent);
+                    }
                     send_inputs(net_last_sent);
                 }
             }
@@ -3182,13 +3305,18 @@ void pc_net_pads(GCPadStatus* pads)
      * feels the delay: if the local side acted on its input immediately and
      * the peer acted on it three frames later, the two would be simulating
      * different matches by frame two. */
-    if (!ring_get(&net_in[net_slot], frame, &mine)) {
-        /* The first net_delay frames of a match: nobody announced an input
-         * for them, so both sides play them neutral. */
-        memset(&mine, 0, sizeof(mine));
-    }
     net_done = frame;
-    pad_to_gc(&pads[net_slot], &mine);
+    {
+        int k;
+        for (k = 0; k < net_nlocal; k++) {
+            if (!ring_get(&net_in[net_local_slot[k]], frame, &mine)) {
+                /* The first net_delay frames of a match: nobody announced an
+                 * input for them, so both sides play them neutral. */
+                memset(&mine, 0, sizeof(mine));
+            }
+            pad_to_gc(&pads[net_local_slot[k]], &mine);
+        }
+    }
     {
         int slot;
         for (slot = 0; slot < net_players; slot++) {

@@ -101,28 +101,141 @@ Module.meleeIsoOpen = async function (file) {
 
 /* The host's disc image over HTTP (tools/wasm/serve.js serves /disc.iso by
  * byte range), presented as the File the reader above already speaks:
- * size, name and slice(a, b).arrayBuffer(). */
+ * size, name and slice(a, b).arrayBuffer().
+ *
+ * Every byte comes up the host's upload, which on a home connection is the
+ * slow end -- a friend's first match took five minutes. So once the FST is
+ * parsed, a read inside a file of up to WHOLE_MAX bytes (every .dat, sound
+ * bank and music track; not the movies) fetches that whole file from
+ * disc.z, gzipped by the server, and keeps it in the browser's Cache Storage
+ * under the disc's version: a file crosses the network once per browser, not
+ * once per match. Module.meleeIsoPrefetch(paths) fills that cache ahead of
+ * need -- the lobby asks for a match's files while players are still
+ * picking. Without Cache Storage (plain http off localhost) the HTTP cache
+ * keeps them instead: disc.z answers are immutable. */
 Module.meleeIsoOpenUrl = async function (url) {
-    const head = await fetch(url, { method: 'HEAD' });
+    const WHOLE_MAX = 32 * 1024 * 1024; /* src/port/pc_web_iso.c WEB_ISO_WHOLE */
+    const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
     const size = parseInt(head.headers.get('Content-Length') || '0', 10);
     if (!head.ok || !size) throw new Error(`The server has no disc image at ${url}.`);
+    const version = (head.headers.get('ETag') || String(size)).replace(/[^A-Za-z0-9-]/g, '');
+    const zurl = url.replace(/[^/]*$/, '') + 'disc.z';
+    let store = null;
+    try {
+        if (self.caches) {
+            store = await caches.open('melee-disc-' + version);
+            // Another disc image's files are no use: drop them.
+            for (const k of await caches.keys()) {
+                if (k.startsWith('melee-disc-') && k !== 'melee-disc-' + version) caches.delete(k);
+            }
+        }
+    } catch (e) { store = null; }
+
+    const net = Module.meleeIsoNet = { files: 0, wire: 0, raw: 0, cached: 0, ranges: 0 };
+    const pending = new Map(); // entry offset -> Promise<ArrayBuffer>
+    let index = null;          // the FST's entries by offset, once parsed
+    const entryFor = (a, b) => {
+        if (!index) return null;
+        let lo = 0, hi = index.length - 1, e = null;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (index[mid].offset <= a) { e = index[mid]; lo = mid + 1; } else hi = mid - 1;
+        }
+        return e && b <= e.offset + e.size ? e : null;
+    };
+    const keyOf = (e) => `${zurl}?o=${e.offset}&n=${e.size}&v=${version}`;
+    async function fetchWhole(e) {
+        const key = keyOf(e);
+        if (store) {
+            try {
+                const hit = await store.match(key);
+                if (hit) {
+                    const buf = await hit.arrayBuffer();
+                    if (buf.byteLength === e.size) { net.cached += buf.byteLength; return buf; }
+                }
+            } catch (err) { /* read it again */ }
+        }
+        const r = await fetch(key, { cache: store ? 'no-store' : 'default' });
+        if (!r.ok) throw new Error(`disc read ${e.path}: HTTP ${r.status}`);
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength !== e.size) throw new Error(`disc read ${e.path}: ${buf.byteLength} of ${e.size} bytes`);
+        net.files++; net.raw += buf.byteLength;
+        net.wire += parseInt(r.headers.get('Content-Length') || String(buf.byteLength), 10);
+        if (store) store.put(key, new Response(buf.slice(0))).catch(() => {});
+        return buf;
+    }
+    /* One fetch per file however many readers want it; with Cache Storage the
+     * bytes live there once fetched, so they are not held here too. */
+    function whole(e) {
+        let p = pending.get(e.offset);
+        if (!p) {
+            p = fetchWhole(e);
+            pending.set(e.offset, p);
+            p.then(() => { if (store) pending.delete(e.offset); },
+                   () => pending.delete(e.offset));
+        }
+        return p;
+    }
+    async function rangeRead(a, b) {
+        const r = await fetch(url, { headers: { Range: `bytes=${a}-${b - 1}` } });
+        if (r.status !== 206) throw new Error(`disc read ${a}-${b}: HTTP ${r.status}`);
+        net.ranges++;
+        return r.arrayBuffer();
+    }
     const remote = {
         name: url, size,
         slice(a, b) {
             return {
                 async arrayBuffer() {
                     if (b <= a) return new ArrayBuffer(0);
-                    const r = await fetch(url, { headers: { Range: `bytes=${a}-${b - 1}` } });
-                    if (r.status !== 206) throw new Error(`disc read ${a}-${b}: HTTP ${r.status}`);
-                    const buf = await r.arrayBuffer();
-                    // Bytes fetched so far, for the page's loading screen.
+                    const e = entryFor(a, b);
+                    let buf;
+                    if (e) {
+                        const w = await whole(e);
+                        buf = a === e.offset && b === e.offset + e.size ? w : w.slice(a - e.offset, b - e.offset);
+                    } else {
+                        buf = await rangeRead(a, b);
+                    }
+                    // Bytes the game has read so far, for the page's loading screen.
                     Module.meleeIsoBytes = (Module.meleeIsoBytes || 0) + buf.byteLength;
                     return buf;
                 },
             };
         },
     };
-    return Module.meleeIsoOpen(remote);
+    const iso = await Module.meleeIsoOpen(remote);
+    index = iso.entries.filter((e) => e.size > 0 && e.size <= WHOLE_MAX)
+        .sort((x, y) => x.offset - y.offset);
+
+    /* Fetch these files into the cache, a few at a time, oldest request first.
+     * Call it again with more as they become known; repeats cost nothing.
+     * Module.meleeIsoPrefetchState says how far it has got, in bytes. */
+    const state = Module.meleeIsoPrefetchState = { want: 0, have: 0, failed: 0 };
+    const queued = new Set(), queue = [];
+    let running = 0, paused = false;
+    const pump = () => {
+        while (!paused && running < 3 && queue.length) {
+            const e = queue.shift();
+            running++;
+            whole(e).then(() => { state.have += e.size; },
+                          (err) => { state.failed++; queued.delete(e.offset); state.want -= e.size;
+                                     console.warn('[ISO] prefetch', e.path, err.message); })
+                .finally(() => { running--; pump(); });
+        }
+    };
+    Module.meleeIsoPrefetchPause = (on) => { paused = !!on; pump(); };
+    Module.meleeIsoPrefetch = (paths) => {
+        for (const p of paths) {
+            const e = iso.lookup(p);
+            if (!e || e.size <= 0 || e.size > WHOLE_MAX || queued.has(e.offset)) continue;
+            queued.add(e.offset);
+            state.want += e.size;
+            queue.push(e);
+        }
+        pump();
+        return state;
+    };
+    return iso;
 };
 
 Module.preRun = Module.preRun || [];

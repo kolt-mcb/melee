@@ -18,7 +18,7 @@ const waitS = parseInt(process.argv[3] || '120', 10);
 const PORT = 9224;
 
 const chrome = spawn('chromium', [
-    '--headless=new', '--no-sandbox', '--disable-gpu',
+    '--headless=new', '--no-sandbox', '--mute-audio', '--disable-gpu',
     '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader',
     '--window-size=1280,720', `--remote-debugging-port=${PORT}`, 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'ignore'] });

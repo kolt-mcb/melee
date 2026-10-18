@@ -8,8 +8,16 @@
  * - /disc.iso: the host's own disc image, by byte range. The page reads the
  *   game from it as it needs it (tools/wasm/iso_fs.js); nothing is copied.
  *   Serve it only on your own network: it is your copy of the game.
+ * - /disc.z?o=&n=: one file of it, whole and gzipped, cacheable for ever --
+ *   what the page reads a file through once it knows the disc's layout, so
+ *   that each file crosses the host's upload once per browser.
+ * - The page's own files compressed (brotli, else gzip), with ETags, so a
+ *   reload revalidates the 17 MB engine instead of downloading it again.
  * - /net: a WebSocket relay that carries netplay between the players' pages
  *   (src/port/pc_web_net.c).
+ * - /report: where a page sends its log, crash and frame profile
+ *   (tools/wasm/lobby.js, "reports"). Each one is a JSON file in --reports
+ *   (default ./reports); `node tools/wasm/report.js <file>` reads one.
  *
  * HTTPS by default, with a self-signed certificate made on first run in
  * build/wasm/cert: browsers expose gamepads only to secure contexts, and a
@@ -23,6 +31,7 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const os = require('os');
+const zlib = require('zlib');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -35,13 +44,18 @@ const PLAIN = args.includes('--http');
 const PORT = parseInt(opt('--port', PLAIN ? '8000' : '8443'), 10);
 const WEB = path.resolve(opt('--dir', path.join(ROOT, 'build', 'wasm')));
 const ISO = opt('--iso', process.env.MELEE_ISO || '');
+const REPORTS = path.resolve(opt('--reports', process.env.MELEE_REPORTS || path.join(ROOT, 'reports')));
+const REPORT_MAX_BYTES = 32 << 20, REPORT_MAX_FILES = 2000;
 const relay = require('./relay.js');
 
 if (!ISO || !fs.existsSync(ISO)) {
     console.error('usage: node tools/wasm/serve.js --iso /path/to/Melee.iso [--port N] [--http]');
     process.exit(2);
 }
-const isoSize = fs.statSync(ISO).size;
+const isoStat = fs.statSync(ISO);
+const isoSize = isoStat.size;
+// Names this disc image to the page's cache (iso_fs.js): new image, new files.
+const ISO_TAG = `"${isoSize.toString(36)}-${Math.floor(isoStat.mtimeMs).toString(36)}"`;
 
 const TYPES = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript',
@@ -51,7 +65,7 @@ const TYPES = {
 
 function serveDisc(req, res) {
     const base = { 'Accept-Ranges': 'bytes', 'Content-Type': 'application/octet-stream',
-                   'Cache-Control': 'no-store' };
+                   'Cache-Control': 'no-store', ETag: ISO_TAG };
     const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
     if (!m) {
         res.writeHead(req.method === 'HEAD' ? 200 : 416,
@@ -70,6 +84,150 @@ function serveDisc(req, res) {
     fs.createReadStream(ISO, { start, end }).pipe(res);
 }
 
+/* A page's report: gzip or plain JSON, kept as a file named for when, which
+ * match, who and why. Anyone who can open the page can send one, so it is
+ * bounded: 32 MB a report, 2000 reports in the directory. */
+function receiveReport(req, res) {
+    const done = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain' }); res.end(text); };
+    if (req.method !== 'POST') return done(405, 'POST a report');
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+        size += c.length;
+        if (size > REPORT_MAX_BYTES) { done(413, 'too large'); req.destroy(); return; }
+        chunks.push(c);
+    });
+    req.on('end', () => {
+        if (size > REPORT_MAX_BYTES) return;
+        let report;
+        try {
+            let body = Buffer.concat(chunks);
+            if ((req.headers['content-encoding'] || '') === 'gzip') {
+                body = zlib.gunzipSync(body, { maxOutputLength: 8 * REPORT_MAX_BYTES });
+            }
+            report = JSON.parse(body.toString('utf8'));
+            if (!report || typeof report !== 'object') throw new Error('not an object');
+        } catch (e) {
+            return done(400, `bad report: ${e.message}`);
+        }
+        try {
+            fs.mkdirSync(REPORTS, { recursive: true });
+            if (fs.readdirSync(REPORTS).length >= REPORT_MAX_FILES) return done(507, 'the reports directory is full');
+            const clean = (v, n) => String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, n) || 'x';
+            const when = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const seed = report.match && report.match.seed != null ? (report.match.seed >>> 0).toString(16) : 'lobby';
+            const file = path.join(REPORTS, `${when}_${seed}_${clean(report.name || req.socket.remoteAddress, 24)}_` +
+                                            `${clean(report.kind, 12)}_${crypto.randomBytes(2).toString('hex')}.json`);
+            report.received = { at: new Date().toISOString(), from: req.socket.remoteAddress };
+            fs.writeFileSync(file, JSON.stringify(report));
+            const sum = report.prof && report.prof.summary;
+            console.log(`[report] ${report.name || '?'} (${report.kind || '?'})` +
+                        (sum ? `: ${sum.fps} fps over ${sum.seconds} s, ${sum.over20ms} frames over 20 ms` : '') +
+                        (report.crash ? `: CRASH ${String(report.crash.message).slice(0, 120)}` : '') +
+                        ` -> ${path.relative(process.cwd(), file)}`);
+            done(200, 'ok');
+        } catch (e) {
+            console.error(`[report] could not save one: ${e.message}`);
+            done(500, 'could not save');
+        }
+    });
+}
+
+/* One file of the disc, gzipped: [o, o+n) as the page's FST says. Answers
+ * are immutable (the page puts the disc's tag in the URL), so they are kept
+ * compressed here too, up to 256 MB, and three friends loading the same
+ * stage gzip it once. */
+const Z_MAX = 32 << 20, Z_KEEP = 256 << 20;
+const zCache = new Map();
+let zKept = 0;
+function discFile(o, n) {
+    const key = `${o}:${n}`;
+    let p = zCache.get(key);
+    if (p) { zCache.delete(key); zCache.set(key, p); return p; }
+    p = new Promise((resolve, reject) => {
+        const buf = Buffer.alloc(n);
+        fs.open(ISO, 'r', (err, fd) => {
+            if (err) return reject(err);
+            fs.read(fd, buf, 0, n, o, (err2) => {
+                fs.close(fd, () => {});
+                if (err2) return reject(err2);
+                zlib.gzip(buf, { level: 6 }, (err3, z) => (err3 ? reject(err3) : resolve({ raw: buf, z })));
+            });
+        });
+    });
+    zCache.set(key, p);
+    p.then((v) => {
+        zKept += v.z.length;
+        for (const [k, q] of zCache) {
+            if (zKept <= Z_KEEP || k === key) break;
+            zCache.delete(k);
+            q.then((w) => { zKept -= w.z.length; }, () => {});
+        }
+    }, () => zCache.delete(key));
+    return p;
+}
+function serveDiscFile(req, res, url) {
+    const o = Number(url.searchParams.get('o')), n = Number(url.searchParams.get('n'));
+    if (!Number.isInteger(o) || !Number.isInteger(n) || o < 0 || n <= 0 || n > Z_MAX || o + n > isoSize) {
+        res.writeHead(400); return res.end('bad range');
+    }
+    discFile(o, n).then(({ raw, z }) => {
+        const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+        const body = gz ? z : raw;
+        const h = { 'Content-Type': 'application/octet-stream', 'Content-Length': body.length,
+                    'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' };
+        if (gz) h['Content-Encoding'] = 'gzip';
+        res.writeHead(200, h);
+        res.end(req.method === 'HEAD' ? undefined : body);
+    }, (err) => { res.writeHead(500); res.end(err.message); });
+}
+
+/* The page's files, compressed once per version and kept: brotli for the
+ * engine (17 MB -> 5 MB), which is most of a first visit. */
+const COMPRESS = new Set(['.wasm', '.js', '.html', '.json', '.css']);
+const packed = new Map(); // file -> { mtime, br: Promise<Buffer>, gz: Promise<Buffer> }
+function packedOf(file, st, enc) {
+    let e = packed.get(file);
+    if (!e || e.mtime !== st.mtimeMs) {
+        const raw = fs.promises.readFile(file);
+        e = {
+            mtime: st.mtimeMs,
+            br: raw.then((b) => new Promise((ok, no) => zlib.brotliCompress(b, {
+                params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 9,
+                          [zlib.constants.BROTLI_PARAM_SIZE_HINT]: b.length } },
+                (err, z) => (err ? no(err) : ok(z))))),
+            gz: raw.then((b) => new Promise((ok, no) => zlib.gzip(b, { level: 9 }, (err, z) => (err ? no(err) : ok(z))))),
+        };
+        e.br.catch(() => {}); e.gz.catch(() => {});
+        packed.set(file, e);
+    }
+    return e[enc];
+}
+
+/* The page, stamped with its files' versions. A browser can rebuild a tab
+ * from its cache without asking (Chrome restoring a tab it put to sleep), and
+ * one player's ran last night's engine after a deploy for exactly that
+ * reason. So the page is never cached, and it names lobby.js, melee.js and
+ * (through lobby.js, Module.locateFile) melee.wasm with ?v=<their ETag>: a
+ * new build is a new URL, which no cache can answer with an old one. */
+const tagOf = (st) => `${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}`;
+function servePage(req, res, file) {
+    let html;
+    try { html = fs.readFileSync(file, 'utf8'); } catch (e) { res.writeHead(404); return res.end('not found'); }
+    const v = (name) => {
+        let f = path.join(WEB, name);
+        if (!fs.existsSync(f)) f = path.join(ROOT, 'tools', 'wasm', name);   // the dev fallback below
+        try { return tagOf(fs.statSync(f)); } catch (e) { return '0'; }
+    };
+    html = html.replace('<script src="lobby.js"></script>',
+                        `<script src="lobby.js?v=${v('lobby.js')}" data-wasm-v="${v('melee.wasm')}"></script>`)
+               .replace('src="melee.js"', `src="melee.js?v=${v('melee.js')}"`);
+    const body = Buffer.from(html);
+    res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Content-Length': body.length,
+                         'Cache-Control': 'no-store' });
+    res.end(req.method === 'HEAD' ? undefined : body);
+}
+
 function handler(req, res) {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     // Container healthcheck: answers without touching the disc, so a missing or
@@ -79,7 +237,9 @@ function handler(req, res) {
         return res.end('ok');
     }
     if (p === '/disc.iso') return serveDisc(req, res);
-    if (p === '/') p = '/melee.html';
+    if (p === '/disc.z') return serveDiscFile(req, res, new URL(req.url, 'http://x'));
+    if (p === '/report' || p.endsWith('/report')) return receiveReport(req, res);
+    if (p === '/' || p === '/melee.html') return servePage(req, res, path.join(WEB, 'melee.html'));
     let file = path.join(WEB, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(WEB + path.sep)) { res.writeHead(403); return res.end(); }
     /* The lobby is a file, not inline script (the gateway's CSP blocks inline),
@@ -91,10 +251,29 @@ function handler(req, res) {
     }
     fs.stat(file, (err, st) => {
         if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
-        res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
-                             'Content-Length': st.size, 'Cache-Control': 'no-cache' });
-        if (req.method === 'HEAD') return res.end();
-        fs.createReadStream(file).pipe(res);
+        const tag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+        const h = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+                    'Cache-Control': 'no-cache', ETag: tag, Vary: 'Accept-Encoding',
+                    // Names the build in players' reports (lobby.js).
+                    'Last-Modified': st.mtime.toUTCString() };
+        // no-cache means "ask first": a reload is a 304, not the engine again.
+        if ((req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(tag)) {
+            res.writeHead(304, h);
+            return res.end();
+        }
+        const accept = req.headers['accept-encoding'] || '';
+        const enc = !COMPRESS.has(path.extname(file)) ? null
+            : /\bbr\b/.test(accept) ? 'br' : /\bgzip\b/.test(accept) ? 'gz' : null;
+        if (!enc) {
+            res.writeHead(200, { ...h, 'Content-Length': st.size });
+            if (req.method === 'HEAD') return res.end();
+            return fs.createReadStream(file).pipe(res);
+        }
+        packedOf(file, st, enc).then((z) => {
+            res.writeHead(200, { ...h, 'Content-Length': z.length,
+                                 'Content-Encoding': enc === 'br' ? 'br' : 'gzip' });
+            res.end(req.method === 'HEAD' ? undefined : z);
+        }, (e) => { res.writeHead(500); res.end(e.message); });
     });
 }
 
@@ -192,9 +371,15 @@ server.on('upgrade', (req, socket) => {
     const conn = wsAccept(req, socket);
     if (conn) relay.join(conn, req);
 });
+// Compress the engine now, so the first player does not wait on it.
+for (const f of ['melee.wasm', 'melee.js', 'melee.html']) {
+    const file = path.join(WEB, f);
+    fs.stat(file, (err, st) => { if (!err) packedOf(file, st, 'br'); });
+}
 server.listen(PORT, '0.0.0.0', () => {
     const scheme = PLAIN ? 'http' : 'https';
     console.log(`Melee web: serving ${path.basename(ISO)} (${(isoSize / 2 ** 20).toFixed(0)} MB)`);
     for (const a of ['localhost', ...lanAddresses()]) console.log(`  ${scheme}://${a}:${PORT}/`);
     if (!PLAIN) console.log('  (self-signed certificate: accept the browser warning once per device)');
+    console.log(`  reports from the players' pages go to ${REPORTS}`);
 });

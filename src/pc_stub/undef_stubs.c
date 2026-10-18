@@ -1824,61 +1824,202 @@ static void pc_pad_run_script(GCPadStatus* pad, int which)
 }
 
 /* Keyboard-to-GC-pad mapping for Player 1.
- * When no gamepad is connected, keyboard provides input. */
+ * When no gamepad is connected, keyboard provides input.
+ *
+ * The layout follows the box controllers (B0XX, Frame1): movement under the
+ * left hand, buttons under the right, and two modifier keys that shorten the
+ * stick. A key is digital -- it goes from centre to the rim in one frame --
+ * and Melee reads exactly that as a smash: a dash instead of a walk, a smash
+ * attack instead of a tilt. Mod X and Mod Y are the only way a keyboard can
+ * walk, tilt, drift slowly or pick a wavedash angle. The coordinates are the
+ * B0XX's (in the game's +/-80 units; 0.0125 a step):
+ *
+ *                    alone (x / y)    diagonal (x, y)
+ *     no modifier    80 / 80          56, 56
+ *     Mod X          53 / 43          59, 25     walk, tilts, shallow angle
+ *     Mod Y          27 / 59          25, 59     slow drift, steep angle
+ *
+ * Opposite directions held together resolve "second input priority, no
+ * reactivation" -- the key pressed last wins, and letting go of it gives
+ * neutral, not the key still held -- the rule the competitive controller
+ * ruleset asks of box controllers; a dash-dance is just alternating keys.
+ * Pressing both modifiers cancels them (both shortening at once has no
+ * meaning).
+ *
+ * The D-pad has keys of its own: up is the taunt, so it must not ride on a
+ * movement key. Light shield sets the analog trigger alone, just over the
+ * game's 0.3 shield threshold (49 of 140), as the B0XX's light-shield button.
+ *
+ * MELEE_KEYS rebinds: "action=key[+key...],..." with SDL scancode numbers or
+ * names ("left=A+Left,shield=Left Shift"). Named actions replace their
+ * defaults; the rest keep them. "action=" with nothing unbinds. The web
+ * lobby's controls editor writes this. */
+enum {
+    KB_UP, KB_DOWN, KB_LEFT, KB_RIGHT, KB_MODX, KB_MODY,
+    KB_A, KB_B, KB_JUMP, KB_JUMP2, KB_SHIELD, KB_SHIELD2, KB_LIGHTSHIELD,
+    KB_GRAB, KB_START,
+    KB_CUP, KB_CDOWN, KB_CLEFT, KB_CRIGHT,
+    KB_DUP, KB_DDOWN, KB_DLEFT, KB_DRIGHT,
+    KB_N_ACTIONS
+};
+#define KB_MAX_KEYS 4
+static const char* const kb_action_names[KB_N_ACTIONS] = {
+    "up", "down", "left", "right", "modx", "mody",
+    "a", "b", "jump", "jump2", "shield", "shield2", "lightshield",
+    "grab", "start",
+    "cup", "cdown", "cleft", "cright",
+    "dup", "ddown", "dleft", "dright",
+};
+static SDL_Scancode kb_keys[KB_N_ACTIONS][KB_MAX_KEYS];
+
+static void kb_bind(int action, SDL_Scancode a, SDL_Scancode b)
+{
+    memset(kb_keys[action], 0, sizeof(kb_keys[action]));
+    kb_keys[action][0] = a;
+    kb_keys[action][1] = b;
+}
+
+static void kb_load_keymap(void)
+{
+    const char* env;
+    char buf[1024];
+    char* save = NULL;
+    char* tok;
+
+    kb_bind(KB_UP, SDL_SCANCODE_W, 0);
+    kb_bind(KB_DOWN, SDL_SCANCODE_S, 0);
+    kb_bind(KB_LEFT, SDL_SCANCODE_A, 0);
+    kb_bind(KB_RIGHT, SDL_SCANCODE_D, 0);
+    kb_bind(KB_MODX, SDL_SCANCODE_LSHIFT, 0);
+    kb_bind(KB_MODY, SDL_SCANCODE_TAB, 0);
+    kb_bind(KB_A, SDL_SCANCODE_J, 0);
+    kb_bind(KB_B, SDL_SCANCODE_K, 0);
+    kb_bind(KB_JUMP, SDL_SCANCODE_SPACE, 0);
+    kb_bind(KB_JUMP2, SDL_SCANCODE_H, 0);
+    kb_bind(KB_SHIELD, SDL_SCANCODE_L, 0);
+    kb_bind(KB_SHIELD2, 0, 0);
+    kb_bind(KB_LIGHTSHIELD, SDL_SCANCODE_APOSTROPHE, 0);
+    kb_bind(KB_GRAB, SDL_SCANCODE_SEMICOLON, 0);
+    kb_bind(KB_START, SDL_SCANCODE_RETURN, 0);
+    /* The C-stick as a row, in Vim's order: left, down, up, right. */
+    kb_bind(KB_CLEFT, SDL_SCANCODE_U, 0);
+    kb_bind(KB_CDOWN, SDL_SCANCODE_I, 0);
+    kb_bind(KB_CUP, SDL_SCANCODE_O, 0);
+    kb_bind(KB_CRIGHT, SDL_SCANCODE_P, 0);
+    kb_bind(KB_DUP, SDL_SCANCODE_1, 0);
+    kb_bind(KB_DDOWN, SDL_SCANCODE_2, 0);
+    kb_bind(KB_DLEFT, SDL_SCANCODE_3, 0);
+    kb_bind(KB_DRIGHT, SDL_SCANCODE_4, 0);
+
+    env = getenv("MELEE_KEYS");
+    if (env == NULL || env[0] == '\0') {
+        return;
+    }
+    snprintf(buf, sizeof(buf), "%s", env);
+    for (tok = strtok_r(buf, ",", &save); tok != NULL; tok = strtok_r(NULL, ",", &save)) {
+        char* eq = strchr(tok, '=');
+        char* ksave = NULL;
+        char* key;
+        int action, n = 0;
+        if (eq == NULL) {
+            continue;
+        }
+        *eq = '\0';
+        for (action = 0; action < KB_N_ACTIONS; action++) {
+            if (strcmp(tok, kb_action_names[action]) == 0) {
+                break;
+            }
+        }
+        if (action == KB_N_ACTIONS) {
+            PORT_LOG_WARN("MELEE_KEYS: no action named \"%s\"", tok);
+            continue;
+        }
+        memset(kb_keys[action], 0, sizeof(kb_keys[action]));
+        for (key = strtok_r(eq + 1, "+", &ksave); key != NULL && n < KB_MAX_KEYS;
+             key = strtok_r(NULL, "+", &ksave))
+        {
+            char* end;
+            long v = strtol(key, &end, 10);
+            SDL_Scancode sc = (*end == '\0' && end != key && v > 0 && v < SDL_NUM_SCANCODES)
+                ? (SDL_Scancode) v : SDL_GetScancodeFromName(key);
+            if (sc == SDL_SCANCODE_UNKNOWN) {
+                PORT_LOG_WARN("MELEE_KEYS: no key named \"%s\"", key);
+                continue;
+            }
+            kb_keys[action][n++] = sc;
+        }
+    }
+}
+
+/* Second input priority without reactivation, for one axis. `dir` is the
+ * axis's state across frames, `prev` the two keys' state last frame. */
+static int kb_socd(int neg, int pos, int* dir, int prev[2])
+{
+    if (neg && !prev[0]) *dir = -1;
+    if (pos && !prev[1]) *dir = (neg && !prev[0]) ? 0 : 1;
+    if ((*dir < 0 && !neg) || (*dir > 0 && !pos)) *dir = 0;
+    prev[0] = neg;
+    prev[1] = pos;
+    return *dir;
+}
+
 static void poll_keyboard_to_pad(GCPadStatus* pad)
 {
+    static int loaded;
+    static int dir_x, dir_y, dir_cx, dir_cy;
+    static int prev_x[2], prev_y[2], prev_cx[2], prev_cy[2];
     const Uint8* kb = SDL_GetKeyboardState(NULL);
+    int held[KB_N_ACTIONS];
+    int i, k;
     u32 buttons = 0;
-    
-    /* D-Pad: Arrow keys */
-    if (kb[SDL_SCANCODE_LEFT])  buttons |= GC_BTN_DPAD_L;
-    if (kb[SDL_SCANCODE_RIGHT]) buttons |= GC_BTN_DPAD_R;
-    if (kb[SDL_SCANCODE_UP])    buttons |= GC_BTN_DPAD_U;
-    if (kb[SDL_SCANCODE_DOWN])  buttons |= GC_BTN_DPAD_D;
-    
-    /* GameCube layout: A attack, B special, X/Y jump, L/R shield, Z grab.
-     * The old table put X (a *jump* button) on C and called it "shield",
-     * so a keyboard player reaching for shield or grab jumped instead. */
-    /* A (attack / confirm): Z */
-    if (kb[SDL_SCANCODE_Z]) buttons |= GC_BTN_A;
-    /* B (special): X */
-    if (kb[SDL_SCANCODE_X]) buttons |= GC_BTN_B;
-    /* X (jump): Space */
-    if (kb[SDL_SCANCODE_SPACE]) buttons |= GC_BTN_X;
-    /* Y (jump): V */
-    if (kb[SDL_SCANCODE_V]) buttons |= GC_BTN_Y;
-    /* L (shield): Shift */
-    if (kb[SDL_SCANCODE_LSHIFT] || kb[SDL_SCANCODE_RSHIFT]) buttons |= GC_BTN_L;
-    /* R (shield): Left Alt */
-    if (kb[SDL_SCANCODE_LALT]) buttons |= GC_BTN_R;
-    /* Z (grab): C or Slash */
-    if (kb[SDL_SCANCODE_C] || kb[SDL_SCANCODE_SLASH]) buttons |= GC_BTN_Z;
-    
-    /* Start: Enter */
-    if (kb[SDL_SCANCODE_RETURN]) buttons |= GC_BTN_START;
-    
-    /* Movement in Melee is entirely analog-stick driven -- the D-pad does not
-     * walk, run or jump. This used to zero the stick unconditionally ("no
-     * stick movement on keyboard"), which meant the keyboard could press
-     * buttons but could never move a fighter an inch.
-     *
-     * Arrow keys and WASD both drive the main stick; the GameCube stick is an
-     * s8 whose usable range is about +/-80 at the octagon gate, and the game
-     * treats anything past its smash threshold as a dash/smash input, so
-     * full deflection is what a real stick delivers when held to the edge.
-     * IJKL drives the C-stick. */
+    int light = 0;
+
+    if (!loaded) {
+        kb_load_keymap();
+        loaded = 1;
+    }
+    for (i = 0; i < KB_N_ACTIONS; i++) {
+        held[i] = 0;
+        for (k = 0; k < KB_MAX_KEYS && kb_keys[i][k] != 0; k++) {
+            if (kb[kb_keys[i][k]]) {
+                held[i] = 1;
+            }
+        }
+    }
+
+    if (held[KB_A]) buttons |= GC_BTN_A;
+    if (held[KB_B]) buttons |= GC_BTN_B;
+    if (held[KB_JUMP]) buttons |= GC_BTN_X;
+    if (held[KB_JUMP2]) buttons |= GC_BTN_Y;
+    if (held[KB_SHIELD]) buttons |= GC_BTN_R;
+    if (held[KB_SHIELD2]) buttons |= GC_BTN_L;
+    if (held[KB_GRAB]) buttons |= GC_BTN_Z;
+    if (held[KB_START]) buttons |= GC_BTN_START;
+    if (held[KB_DUP]) buttons |= GC_BTN_DPAD_U;
+    if (held[KB_DDOWN]) buttons |= GC_BTN_DPAD_D;
+    if (held[KB_DLEFT]) buttons |= GC_BTN_DPAD_L;
+    if (held[KB_DRIGHT]) buttons |= GC_BTN_DPAD_R;
+    light = held[KB_LIGHTSHIELD];
+
     {
         int sx = 0, sy = 0, cx = 0, cy = 0;
         int forced_stick = 0;
-        const int FULL = 80;
-        if (kb[SDL_SCANCODE_LEFT]  || kb[SDL_SCANCODE_A]) sx -= FULL;
-        if (kb[SDL_SCANCODE_RIGHT] || kb[SDL_SCANCODE_D]) sx += FULL;
-        if (kb[SDL_SCANCODE_DOWN]  || kb[SDL_SCANCODE_S]) sy -= FULL;
-        if (kb[SDL_SCANCODE_UP]    || kb[SDL_SCANCODE_W]) sy += FULL;
-        if (kb[SDL_SCANCODE_J]) cx -= FULL;
-        if (kb[SDL_SCANCODE_L]) cx += FULL;
-        if (kb[SDL_SCANCODE_K]) cy -= FULL;
-        if (kb[SDL_SCANCODE_I]) cy += FULL;
+        int h = kb_socd(held[KB_LEFT], held[KB_RIGHT], &dir_x, prev_x);
+        int v = kb_socd(held[KB_DOWN], held[KB_UP], &dir_y, prev_y);
+        int modx = held[KB_MODX] && !held[KB_MODY];
+        int mody = held[KB_MODY] && !held[KB_MODX];
+        int ax, ay; /* magnitudes */
+        if (h != 0 && v != 0) {
+            ax = modx ? 59 : mody ? 25 : 56;
+            ay = modx ? 25 : mody ? 59 : 56;
+        } else {
+            ax = modx ? 53 : mody ? 27 : 80;
+            ay = modx ? 43 : mody ? 59 : 80;
+        }
+        sx = h * ax;
+        sy = v * ay;
+        cx = kb_socd(held[KB_CLEFT], held[KB_CRIGHT], &dir_cx, prev_cx) * 80;
+        cy = kb_socd(held[KB_CDOWN], held[KB_CUP], &dir_cy, prev_cy) * 80;
         /* MELEE_PAD_FORCE="sx,sy[,buttons[,period]]" pins the stick and
          * optionally holds a button mask, so movement and attacks can be
          * exercised in a headless run with no one at the keyboard. With a
@@ -1931,6 +2072,7 @@ static void poll_keyboard_to_pad(GCPadStatus* pad)
     }
     if (buttons & GC_BTN_L) pad->analogL = 255;
     if (buttons & GC_BTN_R) pad->analogR = 255;
+    if (light && pad->analogR < 49) pad->analogR = 49;
 }
 
 /* An SDL stick pair onto a GameCube stick, the way Slippi Dolphin does it for

@@ -11,8 +11,14 @@
  * with '{'); a game packet is the port's own (magic "MNP1",
  * src/port/netplay/pc_netplay.c), forwarded unchanged to every other player
  * in the match. The relay reads only one thing from them: the newest frame
- * of each player's MSG_INPUT, so that when a player leaves it can tell the
+ * of each slot's MSG_INPUT, so that when a player leaves it can tell the
  * rest exactly which frame that player's input stops after (MSG_BYE).
+ *
+ * A page can seat more than one player: two pads on one computer are two
+ * players. The page's own player is its member; the others are its `guests`,
+ * each with a fighter and colour of its own, and each gets a slot of its own
+ * at Start, right after the member's. The page sends one input stream per
+ * slot, and every other page sees them as separate players.
  *
  * The input delay comes from the players' measured round trips. The relay
  * pings every page twice a second while it is in the lobby, and at Start
@@ -25,31 +31,52 @@
 const crypto = require('crypto');
 
 const MAX_PLAYERS = 8; // the PC build's fighter slots
+const MAX_LOCAL = 4;   // players at one page: the four pads the engine reads
 const PING_MS = 500, PING_KEEP = 20;
 const FRAME_MS = 1000 / 60;
 const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
 const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8;
 
 const room = {
-    members: [],         // in join order: { conn, id, name, ckind, color, slot, lastFrame }
-    rules: { stage: 31, stocks: 4, minutes: 8, cpus: 0, cpulevel: 9 },
+    members: [],         // in join order: { conn, id, name, ckind, color, guests, slots, lastFrame }
+    rules: { stage: 31, kind: 'stock', stocks: 4, minutes: 8, items: -1, cpus: 0, cpulevel: 9 },
     match: null,         // { players: [member], started }
 };
 let nextId = 1;
 
 const json = (conn, obj) => conn.send(Buffer.from(JSON.stringify(obj)));
 
+/* A member's players: its own, then its guests'. */
+const seatsOf = (m) => [{ name: m.name, ckind: m.ckind, color: m.color },
+    ...m.guests.map((g, i) => ({ name: `${m.name} ${i + 2}`, ckind: g.ckind, color: g.color }))];
+
+/* The members that fit in the match, in join order. A page comes in with all
+ * of its players or not at all: half of a page's players in the match
+ * would leave the others holding pads that drive nobody. */
+function seated() {
+    const out = [];
+    let n = 0;
+    for (const m of room.members) {
+        const k = 1 + m.guests.length;
+        if (n + k > MAX_PLAYERS) continue;
+        out.push(m);
+        n += k;
+    }
+    return out;
+}
+
 function lobbyState(forId) {
     const host = room.members[0];
+    const in_ = seated();
     return {
         t: 'lobby',
         you: forId,
         host: host ? host.id : null,
-        players: room.members.slice(0, MAX_PLAYERS).map((m) => ({
-            id: m.id, name: m.name, ckind: m.ckind, color: m.color, ping: pingOf(m),
+        players: in_.flatMap((m) => seatsOf(m).map((p, seat) => ({
+            id: m.id, seat, name: p.name, ckind: p.ckind, color: p.color, ping: pingOf(m), pre: m.pre, loaded: m.loaded,
             inMatch: !!(room.match && room.match.players.includes(m)),
-        })),
-        waiting: Math.max(0, room.members.length - MAX_PLAYERS),
+        }))),
+        waiting: room.members.length - in_.length,
         rules: room.rules,
         inMatch: !!room.match,
     };
@@ -84,24 +111,64 @@ function chooseDelay(players) {
 }
 
 function startMatch() {
-    const players = room.members.slice(0, MAX_PLAYERS);
+    const players = seated();
     if (players.length < 1 || room.match) return;
     const seed = crypto.randomBytes(4).readUInt32BE(0);
-    players.forEach((m, i) => { m.slot = i; m.lastFrame = -1; });
-    room.match = { players };
-    const lineup = players.map((m) => ({ slot: m.slot, name: m.name, ckind: m.ckind, color: m.color }));
+    const lineup = [];
+    for (const m of players) {
+        m.slots = [];
+        m.lastFrames = {};
+        for (const p of seatsOf(m)) {
+            m.slots.push(lineup.length);
+            m.lastFrames[lineup.length] = -1;
+            lineup.push({ slot: lineup.length, name: p.name, ckind: p.ckind, color: p.color });
+        }
+        m.slot = m.slots[0];
+        m.lastFrame = -1;
+        m.loaded = false;
+    }
+    room.match = { players, watch: setInterval(watchMatch, 5000) };
+    players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.seenFrame = -1; m.stuckSince = 0; });
     const { delay, why } = chooseDelay(players);
     for (const m of players) {
-        json(m.conn, { t: 'start', slot: m.slot, players: lineup, seed,
-                       rules: room.rules, delay, why });
+        // `pages`: with one, the match is local and needs no netplay at all,
+        // however many players that page seats.
+        json(m.conn, { t: 'start', slot: m.slot, slots: m.slots, pages: players.length,
+                       players: lineup, seed, rules: room.rules, delay, why });
     }
     console.log(`[relay] match: ${lineup.map((p) => `${p.name}(${p.ckind})`).join(' vs ')}, ` +
                 `stage ${room.rules.stage}, seed ${seed.toString(16)}, delay ${delay} (${why})`);
     broadcastLobby();
 }
 
+/* Every five seconds of a match: where each player's input has reached, and
+ * whether anything is stuck on its way to them. A player whose newest input
+ * has not moved is being waited on, or is waiting; bytes queued unsent on a
+ * socket mean the path to that page is not draining. Logged when anything
+ * looks stuck, and once a minute otherwise. One match froze with two pages
+ * waiting on each other's input and nothing in either page's log said where
+ * the packets went. */
+let watchTick = 0;
+function watchMatch() {
+    if (!room.match) return;
+    const now = Date.now(), ps = room.match.players;
+    let stuck = false;
+    for (const m of ps) {
+        if (m.lastFrame !== m.seenFrame) { m.seenFrame = m.lastFrame; m.stuckSince = now; }
+        else if (m.lastFrame >= 0 && now - m.stuckSince >= 4000 && room.members.includes(m) && !m.done) stuck = true;
+        if ((m.conn.socket && m.conn.socket.writableLength) > 64 * 1024) stuck = true;
+    }
+    if (!stuck && ++watchTick % 12 !== 0) return;
+    console.log(`[relay] match ${stuck ? 'STUCK' : 'ok'}: ` + ps.map((m) =>
+        `${m.name}(slot ${m.slots.join('+')}) input to ${m.lastFrame}` +
+        (now - m.stuckSince >= 4000 && m.lastFrame >= 0 ? ` [still ${((now - m.stuckSince) / 1000).toFixed(0)} s]` : '') +
+        `, in ${m.fwdIn} pkts, out ${m.fwdOut} pkts, unsent ${m.conn.socket ? m.conn.socket.writableLength : '?'} B` +
+        (room.members.includes(m) ? '' : ' (gone)')).join(' | '));
+}
+
 function endMatchIfEmpty() {
     if (room.match && !room.match.players.some((m) => room.members.includes(m) && !m.done)) {
+        clearInterval(room.match.watch);
         room.match = null;
         console.log('[relay] match over');
         broadcastLobby();
@@ -113,9 +180,12 @@ function forward(from, buf) {
     if (buf.length >= HDR + 5 && buf.readUInt32BE(0) === MAGIC && buf[4] === MSG_INPUT) {
         const last = buf.readUInt32BE(HDR) + buf[HDR + 4] - 1;
         if (last > from.lastFrame) from.lastFrame = last;
+        const slot = buf[5];
+        if (slot in from.lastFrames && last > from.lastFrames[slot]) from.lastFrames[slot] = last;
     }
+    from.fwdIn = (from.fwdIn || 0) + 1;
     for (const m of room.match.players) {
-        if (m !== from && room.members.includes(m)) m.conn.send(buf);
+        if (m !== from && room.members.includes(m)) { m.conn.send(buf); m.fwdOut = (m.fwdOut || 0) + 1; }
     }
 }
 
@@ -124,13 +194,17 @@ function leave(m) {
     if (i < 0) return;
     room.members.splice(i, 1);
     if (room.match && room.match.players.includes(m) && !m.done) {
-        const bye = Buffer.alloc(HDR + 4);
-        bye.writeUInt32BE(MAGIC, 0);
-        bye[4] = MSG_BYE;
-        bye[5] = m.slot;
-        bye.writeUInt32BE(m.lastFrame >>> 0, HDR);
-        for (const o of room.match.players) {
-            if (o !== m && room.members.includes(o)) o.conn.send(bye);
+        // One per slot the page played, each with that slot's own last
+        // frame: the streams are separate packets and need not end together.
+        for (const slot of m.slots) {
+            const bye = Buffer.alloc(HDR + 4);
+            bye.writeUInt32BE(MAGIC, 0);
+            bye[4] = MSG_BYE;
+            bye[5] = slot;
+            bye.writeUInt32BE(m.lastFrames[slot] >>> 0, HDR);
+            for (const o of room.match.players) {
+                if (o !== m && room.members.includes(o)) o.conn.send(bye);
+            }
         }
         console.log(`[relay] ${m.name} left the match after frame ${m.lastFrame}`);
     }
@@ -139,8 +213,8 @@ function leave(m) {
 }
 
 exports.join = (conn) => {
-    const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0,
-                slot: -1, lastFrame: -1, done: false, rtts: [], pingAt: 0, pingSeq: 0 };
+    const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
+                slot: -1, slots: [], lastFrame: -1, lastFrames: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null };
     room.members.push(m);
     /* Lobby only: in a match the page's thread is busy and a reply would
      * measure its frame time, not the network. */
@@ -172,11 +246,20 @@ exports.join = (conn) => {
                 m.name = msg.name.trim().slice(0, 16);
             if (Number.isInteger(msg.ckind) && msg.ckind >= 0 && msg.ckind < 26) m.ckind = msg.ckind;
             if (Number.isInteger(msg.color) && msg.color >= 0 && msg.color < 6) m.color = msg.color;
+            // Not while this page is in a match: its slots are fixed.
+            if (Array.isArray(msg.guests) && !(room.match && room.match.players.includes(m))) {
+                m.guests = msg.guests.slice(0, MAX_LOCAL - 1).map((g) => ({
+                    ckind: g && Number.isInteger(g.ckind) && g.ckind >= 0 && g.ckind < 26 ? g.ckind : 8,
+                    color: g && Number.isInteger(g.color) && g.color >= 0 && g.color < 6 ? g.color : 0,
+                }));
+            }
             broadcastLobby();
             break;
         case 'rules':
             if (!isHost || room.match) break;
             if (Number.isInteger(msg.stage) && msg.stage >= 2 && msg.stage <= 32) room.rules.stage = msg.stage;
+            if (msg.kind === 'stock' || msg.kind === 'time') room.rules.kind = msg.kind;
+            if (Number.isInteger(msg.items) && msg.items >= -1 && msg.items <= 4) room.rules.items = msg.items;
             if (Number.isInteger(msg.stocks) && msg.stocks >= 1 && msg.stocks <= 99) room.rules.stocks = msg.stocks;
             if (Number.isInteger(msg.minutes) && msg.minutes >= 0 && msg.minutes <= 99) room.rules.minutes = msg.minutes;
             if (Number.isInteger(msg.cpus) && msg.cpus >= 0 && msg.cpus < MAX_PLAYERS) room.rules.cpus = msg.cpus;
@@ -185,6 +268,15 @@ exports.join = (conn) => {
             break;
         case 'start':
             if (isHost) startMatch();
+            break;
+        case 'pre': // how much of the match's data this page has downloaded
+            if (Number.isInteger(msg.pct) && msg.pct >= 0 && msg.pct <= 100 && msg.pct !== m.pre) {
+                m.pre = msg.pct;
+                broadcastLobby();
+            }
+            break;
+        case 'loaded': // this page has drawn the match's first frame
+            if (!m.loaded) { m.loaded = true; broadcastLobby(); }
             break;
         case 'done': // this page's match is over; it is going back to the lobby
             m.done = true;

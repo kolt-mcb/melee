@@ -53,6 +53,49 @@ EM_ASYNC_JS(void, web_wait_frame, (double target_ms, int match_frame), {
         requestAnimationFrame(tick);
     });
 });
+/* The frame profile (tools/wasm/lobby.js sends it to the host in a report):
+ * one row a presented frame, in a ring the page reads as Module.meleeProf.
+ * Always on -- it is a dozen numbers a frame -- so a friend's slow match is
+ * already measured by the time anyone thinks to ask. Columns as `fields`;
+ * times in ms. `wall` is the page's own clock between rows, so it includes
+ * everything, the browser's work between frames too. */
+EM_JS(void, web_prof_frame, (double game, double net, double walk, double flush, double wait,
+                             double late, double shader, double swap, int match_frame, int draws,
+                             int uploads, double io, int rewinds), {
+    var p = Module.meleeProf;
+    if (!p) {
+        p = Module.meleeProf = {
+            fields: ['wall', 'game', 'net', 'walk', 'flush', 'wait', 'late', 'shader', 'swap',
+                     'mframe', 'draws', 'uploads', 'io', 'rewinds', 'gpu'],
+            cap: 36000, n: 0, last: 0, buf: null,
+        };
+        p.buf = new Float32Array(p.cap * p.fields.length);
+    }
+    var now = performance.now(), b = p.buf, o = (p.n % p.cap) * 15;
+    b[o] = p.last ? now - p.last : 0;
+    p.last = now;
+    b[o + 1] = game; b[o + 2] = net; b[o + 3] = walk; b[o + 4] = flush; b[o + 5] = wait;
+    b[o + 6] = late; b[o + 7] = shader; b[o + 8] = swap; b[o + 9] = match_frame;
+    b[o + 10] = draws; b[o + 11] = uploads; b[o + 12] = io; b[o + 13] = rewinds;
+    /* gpu: filled in frames later by the page's timer query (lobby.js
+     * glProbe), NaN until then or without one. */
+    b[o + 14] = NaN;
+    p.n++;
+    if (p.hook) p.hook(o);
+});
+/* The frame's drawing starts (render_present): the page opens its GPU timer
+ * query here, so it times this frame's GL work and not the pacer's idle wait
+ * before it -- a timer query counts the GPU's idle time too. */
+EM_JS(void, web_prof_begin, (void), {
+    var p = Module.meleeProf;
+    if (p && p.begin) p.begin();
+});
+/* For web_prof_frame: the frame's entry, the last frame's end, the pacer's
+ * wait, and how much of that wait came after the 60 Hz slot was due -- the
+ * browser giving the frame back late (its main thread busy, or Chrome
+ * holding requestAnimationFrame back while the GPU catches up). All on
+ * emscripten_get_now's clock. */
+static double s_web_entry_ms, s_web_end_ms, s_web_wait_ms, s_web_late_ms;
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -169,6 +212,10 @@ void render_present(void)
     }
     g_render_frame++;
     pc_render_frame_now = g_render_frame;
+#if defined(__EMSCRIPTEN__)
+    s_web_entry_ms = emscripten_get_now();
+    web_prof_begin();
+#endif
     if (g_render_frame >= 3) pc_gxq_maybe_start(); /* after start-up GL (archive textures) */
     pc_trace_frame(g_render_frame);
 
@@ -576,6 +623,12 @@ static void render_present_tail(int frame)
                 }
                 extern u32 gm_GetFrameCount(void);
                 web_wait_frame(s_next_ms, (int) gm_GetFrameCount());
+                {
+                    double back = emscripten_get_now();
+                    s_web_wait_ms = back - now;
+                    s_web_late_ms = back - (s_next_ms > now ? s_next_ms : now);
+                    if (s_web_late_ms < 0.0) s_web_late_ms = 0.0;
+                }
             }
 #else
             if (s_pace) {
@@ -688,6 +741,37 @@ static void render_present_tail(int frame)
         clock_gettime(CLOCK_MONOTONIC, &s_ph[4]);
         s_ph_ns[0] += PH_NS(0, 1); s_ph_ns[1] += PH_NS(1, 2);
         s_ph_ns[2] += PH_NS(2, 3); s_ph_ns[3] += PH_NS(3, 4);
+#if defined(__EMSCRIPTEN__)
+        {
+            /* One row of the page's frame profile (web_prof_frame). The
+             * counters are never reset outside MELEE_FPS's report, so the
+             * row takes deltas; "game" is the time outside render_present
+             * less the netplay wait inside it. */
+            extern double pc_net_wait_ms;
+            extern unsigned pc_net_rewinds(void);
+            extern u32 pc_diag_uploads, pc_diag_draws;
+            extern unsigned long long pc_diag_io_ns;
+            extern unsigned int gm_GetFrameCount(void);
+            static double q_net;
+            static unsigned long long q_io;
+            static u32 q_draws, q_up;
+            static unsigned q_rw;
+            double end = emscripten_get_now();
+            double net = pc_net_wait_ms - q_net;
+            double game = s_web_end_ms > 0.0 ? s_web_entry_ms - s_web_end_ms - net : 0.0;
+            unsigned rw = pc_net_rewinds();
+            web_prof_frame(game > 0.0 ? game : 0.0, net, PH_NS(0, 1) / 1e6, PH_NS(1, 2) / 1e6,
+                           s_web_wait_ms, s_web_late_ms, PH_NS(2, 3) / 1e6 - s_web_wait_ms,
+                           PH_NS(3, 4) / 1e6,
+                           (int) gm_GetFrameCount(), (int) (pc_diag_draws - q_draws),
+                           (int) (pc_diag_uploads - q_up), (double) (pc_diag_io_ns - q_io) / 1e6,
+                           (int) (rw - q_rw));
+            q_net = pc_net_wait_ms; q_io = pc_diag_io_ns; q_draws = pc_diag_draws;
+            q_up = pc_diag_uploads; q_rw = rw;
+            s_web_end_ms = end;
+            s_web_wait_ms = s_web_late_ms = 0.0;
+        }
+#endif
         /* Lockstep barrier, after the present: with MELEE_SYNC set this blocks
          * until tools/pc_lockstep.py has compared this frame against the same
          * frame on the console and released it. */

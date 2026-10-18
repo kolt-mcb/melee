@@ -14,7 +14,7 @@ const idxs = process.argv.slice(4).map(Number);
 const PORT = 9223;
 
 const chrome = spawn('chromium', [
-    '--headless=new', '--no-sandbox', '--disable-gpu',
+    '--headless=new', '--no-sandbox', '--mute-audio', '--disable-gpu',
     '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader',
     '--window-size=1280,720', `--remote-debugging-port=${PORT}`, 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'ignore'] });

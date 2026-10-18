@@ -247,3 +247,6 @@ tests/pc/cases/auto/rand_*
 tests/pc/routes/rand_*
 # A clone of decomp-permuter, not part of this tree.
 tools/decomp-permuter/
+
+# Players' reports from the web build (tools/wasm/serve.js /report)
+/reports/

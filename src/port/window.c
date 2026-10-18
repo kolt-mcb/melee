@@ -285,9 +285,14 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
      * and z-fighting would show). */
     struct gl_attempt { int major, minor, depth, stencil; };
     static const struct gl_attempt es_attempts[] = {
+#ifdef __EMSCRIPTEN__
+        /* WebGL2 is ES 3.0; emscripten refuses 3.1/3.2 outright. */
+        { 3, 0, 24, 8 }, { 3, 0, 24, 0 }, { 3, 0, 16, 0 },
+#else
         { 3, 2, 24, 8 }, { 3, 1, 24, 8 }, { 3, 0, 24, 8 },
         { 3, 2, 24, 0 }, { 3, 1, 24, 0 }, { 3, 0, 24, 0 },
         { 3, 1, 16, 0 }, { 3, 0, 16, 0 },
+#endif
     };
     static const struct gl_attempt gl_attempts[] = {
         { 3, 3, 24, 8 }, { 3, 3, 24, 0 },
@@ -380,6 +385,12 @@ Bool window_init(int* width, int* height, Bool fullscreen, const char* title)
         PORT_LOG_ERROR("No usable GL context after %d attempts", n_attempts);
         return FALSE;
     }
+#ifdef __EMSCRIPTEN__
+    /* SDL leaves text input on, and while it is on its web backend lets
+     * the browser have every printable key: Space scrolls the page, and
+     * ' and / open Firefox's quick find -- all of them game keys. */
+    SDL_EventState(SDL_TEXTINPUT, SDL_DISABLE);
+#endif
 
     /* Vsync; MELEE_NOVSYNC=1 turns it off (the 60 Hz pacer in render.c
      * then keeps the game at speed).
