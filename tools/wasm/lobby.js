@@ -147,6 +147,7 @@
       inbox,
       send(bytes) { if (ws && ws.readyState === 1) ws.send(bytes); },
       onMatchEnd(desynced) {
+        matchOver = true;
         sendReportOnce(desynced ? 'desync' : 'match');
         $('banner-text').textContent = desynced
           ? 'Match over -- but the players fell out of step (desync).' : 'Match over.';
@@ -470,17 +471,45 @@
     if (msg.t === 'ping') send({ t: 'pong', s: msg.s });        // the relay measuring the round trip
     else if (msg.t === 'lobby') { lobby = msg; if (!started) { paintLobby(); prefetchMatch(); } }
     else if (msg.t === 'start') { lastStart = msg; startMatch(msg); }
+    else if (msg.t === 'resumed') {
+      if (msg.ok) { resumeUntil = 0; console.log('[lobby] back on the relay; the match goes on'); }
+      else { console.log('[lobby] the relay no longer has this match'); lostTheHost(); }
+    }
   }
   function send(obj) { if (ws && ws.readyState === 1) ws.send(new TextEncoder().encode(JSON.stringify(obj))); }
-  let started = false;
+  let started = false, matchOver = false;
+  /* A socket that drops during a match is retried, not fatal: the relay holds
+   * the seat for a while (relay.js RESUME_MS), the engine stalls on the
+   * missing input and resends what the peer has not acknowledged, and the
+   * match carries on where it stopped once the socket is back. A proxy blip
+   * or a phone changing networks used to end the game outright. The seat is
+   * claimed with `resume`: the id the relay gave this page and the seed of
+   * the match it is in. A relay that has restarted knows neither and says so,
+   * and only then is the match lost. */
+  const RESUME_MS = 25000;
+  let resumeUntil = 0;
+  function lostTheHost() {
+    resumeUntil = 0;
+    if (matchOver) return;
+    Module.meleeNet.onMatchEnd(false);
+    $('banner-text').textContent = 'Lost the connection to the host.';
+  }
   function connect() {
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/net`);
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => send(pickMsg('hello'));
+    ws.onopen = () => {
+      const hello = pickMsg('hello');
+      if (started && lobby && lastStart) hello.resume = { id: lobby.you, seed: lastStart.seed };
+      send(hello);
+    };
     ws.onmessage = (ev) => deliver(new Uint8Array(ev.data), received);
     ws.onclose = () => {
-      if (started) { Module.meleeNet.onMatchEnd(false); $('banner-text').textContent = 'Lost the connection to the host.'; }
-      else { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); }
+      if (!started) { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); return; }
+      if (matchOver) return;   // nothing left to carry on; the page is on its way back to the lobby
+      if (!resumeUntil) resumeUntil = performance.now() + RESUME_MS;
+      if (performance.now() >= resumeUntil || !lobby || !lastStart) { lostTheHost(); return; }
+      console.log('[lobby] the relay socket closed mid-match; reconnecting');
+      setTimeout(connect, 1000);
     };
   }
 

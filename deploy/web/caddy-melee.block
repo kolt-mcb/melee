@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────
+# melee — the browser build (WASM) of Kolt's Melee port: page + disc streaming
+# (/disc.iso, HTTP range) + the /net netplay relay, all served by one node
+# process in the `melee` container (~/melee-web on grunt-node1).
+#
+# Deliberately NOT an access-gate tenant: that router is Godot-shaped — it only
+# upgrades /ws* and its asset route matches bare filenames — so it would drop
+# melee's /net socket and its byte-range disc reads. This is a plain vhost on
+# the same Google SSO as the wildcard, so sign-in stays single-sign-on.
+#
+# Exact-host vhost: Caddy prefers it over *.mcbridefarm.com, so the wildcard
+# never sees this name. LAN-only: the name resolves via a pfSense host override
+# → Caddy's macvlan IP and has NO Cloudflare record, so the public internet
+# cannot even look it up. Making it public later = a DNS record; the SSO gate
+# holds either way.
+# ─────────────────────────────────────────────────────────────────────────
+melee.mcbridefarm.com {
+	tls /etc/caddy/certs/wildcard.crt /etc/caddy/certs/wildcard.key
+
+	import gateway_logs
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# The engine is a WASM blob and the disc is fetched as a blob URL, so
+		# wasm-unsafe-eval + blob: are load-bearing. wasm-unsafe-eval is the
+		# narrow form — plain 'unsafe-eval' is not needed.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob: data:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+	}
+
+	import oauth_routes
+
+	# Same SSO gate as the wildcard, but its own rate-limit zone: a booting
+	# client pulls the 1.4 GB disc as many range requests from one IP, and the
+	# wildcard's 300/min is shared with every other subdomain.
+	@auth not path /oauth2/*
+	handle @auth {
+		rate_limit {
+			zone melee_per_ip {
+				key {client_ip}
+				events 3000
+				window 1m
+			}
+		}
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			copy_headers X-Auth-Request-Email>X-Forwarded-Email X-Auth-Request-User>X-Forwarded-User
+
+			@unauth status 401
+			handle_response @unauth {
+				redir https://{http.request.host}/oauth2/sign_in?rd={http.request.scheme}://{http.request.host}{http.request.orig_uri} 302
+			}
+		}
+		# /net is a long-lived binary WebSocket (Caddy upgrades it on its own);
+		# /disc.iso is a stream, so flush immediately rather than buffering.
+		reverse_proxy melee:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 1h
+				write_timeout 1h
+			}
+		}
+	}
+}

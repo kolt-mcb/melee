@@ -1,0 +1,24 @@
+  # melee — browser build of Kolt's Melee port (page + /disc.iso + /net relay).
+  # Not an access-gate tenant: plain Caddy vhost, same SSO. See the vhost block
+  # in caddy/Caddyfile and the wiki page melee-pc-port.
+  melee:
+    build: /home/grunt/melee-web
+    image: melee-web:local
+    container_name: melee
+    restart: unless-stopped
+    networks: [gateway]
+    volumes:
+      - /home/grunt/melee-web/web:/web:ro
+      - /home/grunt/melee-web/disc.iso:/disc/disc.iso:ro
+      # The server code too, so a deploy is a copy and not a new container:
+      # recreating it empties the lobby and ends every match in progress.
+      - /home/grunt/melee-web/tools/wasm:/app/tools/wasm:ro
+      # /reports must be a host dir: in the container's writable layer every
+      # `up -d --build melee` deleted every frame report ever written (2026-10-17).
+      - /home/grunt/melee-reports:/reports
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

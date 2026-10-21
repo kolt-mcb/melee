@@ -245,8 +245,10 @@ function handler(req, res) {
     // Container healthcheck: answers without touching the disc, so a missing or
     // unreadable ISO still lets the page load and report its own error.
     if (p === '/healthz') {
-        res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
-        return res.end('ok');
+        // Also who is here, so a deploy can wait until nobody is playing
+        // before it restarts this process (deploy/web/node1-apply.sh).
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ ok: true, ...relay.status() }));
     }
     if (p === '/disc.iso') return serveDisc(req, res);
     if (p === '/disc.z') return serveDiscFile(req, res, new URL(req.url, 'http://x'));

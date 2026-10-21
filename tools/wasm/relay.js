@@ -36,6 +36,11 @@ const PING_MS = 500, PING_KEEP = 20;
 const FRAME_MS = 1000 / 60;
 const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
 const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8;
+/* How long a seat is held for a page whose socket dropped mid-match. The
+ * engine stalls on the missing input and resends what the peer has not
+ * acknowledged, so a page that is back inside this window picks the match
+ * up where it stopped; lobby.js retries for a little less than this. */
+const RESUME_MS = 30000;
 
 const room = {
     members: [],         // in join order: { conn, id, name, ckind, color, guests, slots, lastFrame }
@@ -127,7 +132,7 @@ function startMatch() {
         m.lastFrame = -1;
         m.loaded = false;
     }
-    room.match = { players, watch: setInterval(watchMatch, 5000) };
+    room.match = { players, seed, watch: setInterval(watchMatch, 5000) };
     players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.seenFrame = -1; m.stuckSince = 0; });
     const { delay, why } = chooseDelay(players);
     for (const m of players) {
@@ -212,19 +217,52 @@ function leave(m) {
     broadcastLobby();
 }
 
+/* A deploy wants to know when nobody is playing (serve.js /healthz). */
+exports.status = () => ({
+    members: room.members.length,
+    match: !!room.match,
+    away: room.members.filter((m) => m.away).length,
+});
+
+/* The seat a dropped page may come back to: the match it was in is still
+ * running, and its grace has not run out. */
+function parked(id, seed) {
+    return room.members.find((m) => m.id === id && m.away && room.match &&
+                                    room.match.seed === seed && room.match.players.includes(m)) || null;
+}
+
 exports.join = (conn) => {
     const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
-                slot: -1, slots: [], lastFrame: -1, lastFrames: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null };
+                slot: -1, slots: [], lastFrame: -1, lastFrames: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
+                away: null };
     room.members.push(m);
+    attach(m, conn);
+    broadcastLobby();
+};
+
+/* Wire a socket to a member: at join, and again when a page whose socket
+ * dropped mid-match comes back on a new one. */
+function attach(m, conn) {
+    m.conn = conn;
     /* Lobby only: in a match the page's thread is busy and a reply would
      * measure its frame time, not the network. */
-    const pinger = setInterval(() => {
+    clearInterval(m.pinger);
+    m.pinger = setInterval(() => {
         if (room.match && room.match.players.includes(m)) return;
         m.pingSeq++;
         m.pingAt = performance.now();
         json(m.conn, { t: 'ping', s: m.pingSeq });
     }, PING_MS);
-    conn.onclose = () => { clearInterval(pinger); leave(m); };
+    conn.onclose = () => {
+        clearInterval(m.pinger);
+        if (room.match && room.match.players.includes(m) && !m.done) {
+            // Hold the seat: the page may be back before anyone notices.
+            m.away = setTimeout(() => { m.away = null; leave(m); }, RESUME_MS);
+            console.log(`[relay] ${m.name} dropped at frame ${m.lastFrame}; holding the seat ${RESUME_MS / 1000} s`);
+            return;
+        }
+        leave(m);
+    };
     conn.onmessage = (buf) => {
         if (buf[0] !== 0x7B /* '{' */) return forward(m, buf);
         let msg;
@@ -241,6 +279,21 @@ exports.join = (conn) => {
             }
             break;
         case 'hello':
+            if (msg.resume && typeof msg.resume === 'object') {
+                const p = parked(msg.resume.id, msg.resume.seed);
+                if (!p) { json(conn, { t: 'resumed', ok: false }); break; }
+                // This socket is that player's, not a newcomer's: hand it over.
+                clearTimeout(p.away);
+                p.away = null;
+                clearInterval(m.pinger);
+                room.members.splice(room.members.indexOf(m), 1);
+                attach(p, conn);
+                json(conn, { t: 'resumed', ok: true });
+                console.log(`[relay] ${p.name} is back; the match goes on from frame ${p.lastFrame}`);
+                broadcastLobby();
+                break;
+            }
+            // fallthrough: a first hello is a pick
         case 'pick':
             if (typeof msg.name === 'string' && msg.name.trim())
                 m.name = msg.name.trim().slice(0, 16);
@@ -284,5 +337,4 @@ exports.join = (conn) => {
             break;
         }
     };
-    broadcastLobby();
-};
+}
