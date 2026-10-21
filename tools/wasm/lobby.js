@@ -44,7 +44,30 @@
     [24, 'Big Blue'], [11, 'Rainbow Cruise'], [19, 'Mushroom Kingdom'], [20, 'Mushroom Kingdom II'],
     [25, 'Icicle Mountain'], [23, 'Poké Floats'], [27, 'Flat Zone'], [29, "Yoshi's Island (N64)"],
     [30, 'Kongo Jungle (N64)']];                            // StKind values
+  /* Which stage kinds have no captured frame in stages/<kind>.jpg. A tile without
+   * one is the name on the game's bevel, exactly as it was before the pictures,
+   * so this list only saves the browser a 404. It is written from what
+   * shoot_stages.sh actually brought back: a stage the renderer crashed on stays
+   * a name, and is never faked with another stage's frame. */
+  const NO_STAGE_PIC = new Set([11]);   // Rainbow Cruise: build/pc/melee-pc dies on it
   const COSTUMES = 4;            // every fighter has at least four
+  /* The character-select grid, in the game's own layout: seven across, the
+   * starters up top, the unlockables along the bottom, and the two "?" cells
+   * that pick for you (null here). Every fighter in FIGHTERS appears once. */
+  const CSS_GRID = [
+    'Mario', 'Fox', 'Captain Falcon', 'Donkey Kong', 'Yoshi', 'Samus', 'Link',
+    'Luigi', 'Falco', 'Mr. Game & Watch', 'Pikachu', 'Jigglypuff', 'Ness', 'Peach',
+    'Ice Climbers', 'Sheik', 'Zelda', 'Dr. Mario', 'Pichu', 'Marth', 'Young Link',
+    'Mewtwo', 'Roy', 'Ganondorf', null, null, 'Bowser', 'Kirby',
+  ];
+  // Fighters the game has no character-select portrait for, so their cell is
+  // drawn from the name alone.
+  const NO_PORTRAIT = new Set(['Sheik']);
+  // The name under a portrait has about seven characters of room on a phone, so
+  // these are the ones players actually say. The full name stays in the tooltip.
+  const SHORT = { 'Captain Falcon': 'Falcon', 'Donkey Kong': 'DK',
+    'Mr. Game & Watch': 'G&W', 'Jigglypuff': 'Puff', 'Young Link': 'Y.Link',
+    'Dr. Mario': 'Dr.Mario', 'Ice Climbers': 'ICs', 'Ganondorf': 'Ganon' };
   const SLOTS = 8;               // fighters in a match (the PC build's GM_MAX_PLAYERS)
   /* ---- keyboard: the game's actions, their keys, and two presets ----
    * Keys are KeyboardEvent.code values (a physical position, whatever the
@@ -237,9 +260,52 @@
     navigator.keyboard.getLayoutMap().then((m) => { layoutMap = m; paintKeys(); }).catch(() => {});
   }
   paintKeys();
-  $('fighters').innerHTML = FIGHTERS.map((f, i) => `<button data-ck="${i}">${f}</button>`).join('');
+  $('fighters').innerHTML = CSS_GRID.map((f) => f === null
+    ? '<button class="fighter rnd" data-rnd="1" title="Random"><i></i><span>?</span></button>'
+    : `<button class="fighter" data-ck="${FIGHTERS.indexOf(f)}" title="${f}"><i></i><span>${SHORT[f] || f}</span></button>`
+  ).join('');
+  document.querySelectorAll('#fighters [data-ck]').forEach((b) => {
+    // A 404 on a background paints nothing, but it is still a request: only ask
+    // for the portraits that exist.
+    if (!NO_PORTRAIT.has(FIGHTERS[+b.dataset.ck])) {
+      b.querySelector('i').style.backgroundImage = 'url(css/f' + b.dataset.ck + '.png)';
+    }
+  });
   $('colors').innerHTML = Array.from({ length: COSTUMES }, (_, i) => `<button data-col="${i}">${i + 1}</button>`).join(' ');
   $('stage').innerHTML = STAGES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('');
+  /* The stage picker is a grid, like the fighter one: 29 stages behind one line of
+   * a dropdown is a choice nobody can see. The <select> stays as the one place the
+   * number lives and the grid is painted from it, so a tile, a gamepad and the
+   * relay's own `rules` message cannot disagree about what stage is picked. */
+  $('stages').innerHTML = '<button class="stage rnd" data-st="-1" title="Random"><i></i><span>?</span></button>' +
+    STAGES.map(([v, n]) => `<button class="stage" data-st="${v}" title="${n}"><i></i><span>${n}</span></button>`).join('');
+  // Same rule as the portraits: only ask for the frames that exist, and say so on
+  // the tile, so "no picture" and "picture that 404s" are not the same look.
+  document.querySelectorAll('#stages [data-st]').forEach((b) => {
+    const v = +b.dataset.st;
+    if (v >= 0 && !NO_STAGE_PIC.has(v)) {
+      b.querySelector('i').style.backgroundImage = `url(stages/${v}.jpg)`;
+    } else if (v >= 0) {
+      b.dataset.noart = '1';
+    }
+  });
+  const stageCells = () => [...document.querySelectorAll('#stages .stage')];
+  function paintStages() {
+    const v = $('stage').value, off = $('stage').disabled;
+    stageCells().forEach((b) => { b.classList.toggle('on', b.dataset.st === v); b.disabled = off; });
+  }
+  paintStages();
+  $('stages').onclick = (e) => {
+    const b = e.target.closest('.stage');
+    if (!b || b.disabled) return;                 // a guest sees the grid and cannot touch it
+    const s = $('stage');
+    if (b.dataset.st === '-1') randomStage();     // the game's own Random cell
+    else if (s.value !== b.dataset.st) {
+      s.value = b.dataset.st;
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    cursor.set('stage', stageCells().findIndex((x) => x.dataset.st === s.value));
+  };
   $('cpulevel').innerHTML = Array.from({ length: 9 }, (_, i) => `<option>${i + 1}</option>`).join('');
   $('name').value = me.name;
 
@@ -261,9 +327,16 @@
     send(pickMsg('pick'));
     paintPicks();
   }
-  $('fighters').onclick = (e) => { const b = e.target.closest('[data-ck]'); if (b) { seat(editing).ckind = +b.dataset.ck; sendPick(); } };
+  $('fighters').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.rnd) { randomFighter(); return; }
+    seat(editing).ckind = +b.dataset.ck;
+    sendPick();
+    cursor.set('pick', CSS_GRID.indexOf(FIGHTERS[seat(editing).ckind]));
+  };
   $('colors').onclick = (e) => { const b = e.target.closest('[data-col]'); if (b) { seat(editing).color = +b.dataset.col; sendPick(); } };
-  $('seat-tabs').onclick = (e) => { const b = e.target.closest('[data-seat]'); if (b) { editing = +b.dataset.seat; paintPicks(); } };
+  $('seat-tabs').onclick = (e) => { const b = e.target.closest('[data-seat]'); if (b) { editing = +b.dataset.seat; paintPicks(); cursor.set('pick', Math.max(0, CSS_GRID.indexOf(FIGHTERS[seat(editing).ckind]))); } };
   $('locals').innerHTML = Array.from({ length: MAX_LOCAL }, (_, i) => `<option>${i + 1}</option>`).join('');
   $('locals').onchange = () => {
     const n = +$('locals').value - 1;
@@ -280,19 +353,65 @@
            minutes: Math.max(0, +$('minutes').value || 0), items: +$('items').value,
            cpus: rules.cpus, cpulevel: rules.cpulevel });
   }
-  ['stage', 'kind', 'stocks', 'minutes', 'items'].forEach((id) => { $(id).onchange = sendRules; });
-  $('cpus').onchange = () => { rules.cpus = +$('cpus').value; store.set('cpus', rules.cpus); sendRules(); };
+  ['kind', 'stocks', 'minutes', 'items'].forEach((id) => { $(id).onchange = sendRules; });
+  // The stage select is the grid's backing store: a tile, a random pick or the
+  // host's relay all land here, and the tiles repaint from the value that won.
+  $('stage').onchange = () => { sendRules(); paintStages(); };
+  $('cpus').onchange = () => { rules.cpus = +$('cpus').value; store.set('cpus', rules.cpus); sendRules(); paintStart(); };
   $('cpulevel').onchange = () => { rules.cpulevel = +$('cpulevel').value; store.set('cpulevel', rules.cpulevel); sendRules(); };
   $('btn-start').onclick = () => send({ t: 'start' });
+
+  /* Each player's pick is ringed in their port colour on the grid, the way the
+   * game's own character-select screen carries one cursor per player. The ring
+   * goes on the portrait tile: the cell's own inset shadow is its frame. */
+  function paintRings(ps) {
+    const byKind = new Map();
+    (ps || []).slice(0, SLOTS).forEach((p, i) => {
+      if (!byKind.has(p.ckind)) byKind.set(p.ckind, []);
+      byKind.get(p.ckind).push(i);
+    });
+    document.querySelectorAll('#fighters [data-ck]').forEach((b) => {
+      const own = byKind.get(+b.dataset.ck) || [];
+      b.querySelector('i').style.boxShadow =
+        own.map((i) => `inset 0 0 0 ${2 + i * 3}px var(--p${i + 1})`).join(',');
+    });
+  }
+
+  /* Start is only worth offering for a match the game can actually boot, and
+   * it is repainted from two places: the lobby, and the CPU picker -- changing
+   * the CPU count changes whether two slots are filled, and a button that only
+   * repaints on the next lobby message is a button that lies. */
+  function paintStart() {
+    if (!lobby) return;
+    const ps = lobby.players;
+    const host = isHost();
+    const n = Math.min(SLOTS, ps.length);
+    const cpus = Math.min(rules.cpus | 0, SLOTS - n);
+    const alone = host && n + cpus < 2 && !lobby.inMatch;
+    $('btn-start').disabled = !host || lobby.inMatch || n + cpus < 2;
+    $('btn-start').textContent = lobby.inMatch ? 'A match is running…'
+      : alone ? 'Needs another player or a CPU'
+      : host ? 'Start match' : 'Waiting for the host';
+    const out = !ps.some((p) => p.id === lobby.you);
+    const here = `${n} player${n === 1 ? '' : 's'} here${lobby.waiting ? `, ${lobby.waiting} waiting for a free slot` : ''}`;
+    setStatus(out ? `${here} -- not enough room for everyone on this computer: fewer players here, or wait for a slot`
+      : alone ? `${here} -- the game needs two slots filled: add a CPU, or wait for someone to join`
+      : here, out || alone);
+  }
 
   function paintLobby() {
     if (!lobby) return;
     const ps = lobby.players;
+    paintRings(ps);
     $('players').innerHTML = Array.from({ length: SLOTS }, (_, i) => i).map((i) => {
       const p = ps[i];
       if (!p) return `<div class="slot s${i} empty"><div class="who">P${i + 1}</div><div class="what">open</div></div>`;
+      // The face is the same portrait the grid uses, so a plate reads as the
+      // fighter before it reads as the text. Sheik has none (see NO_PORTRAIT).
+      const face = NO_PORTRAIT.has(FIGHTERS[p.ckind]) ? '' : ` style="background-image:url(css/f${p.ckind}.png)"`;
       return `<div class="slot s${i}${p.id === lobby.you ? ' me' : ''}">
-        <div class="who">P${i + 1} · ${escapeHtml(p.name)}${p.id === lobby.host && !p.seat ? '<span class="tag">host</span>' : ''}</div>
+        <div class="who">P${i + 1} · <b class="nm">${escapeHtml(p.name)}</b>${p.id === lobby.host && !p.seat ? '<span class="tag">host</span>' : ''}</div>
+        <div class="face"${face}></div>
         <div class="what">${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.ping != null ? ` · ${p.ping} ms` : ''}${p.inMatch ? ' · <b>in a match</b>' : ''}${p.pre != null && p.pre < 100 && !p.inMatch ? ` · <b>downloading ${p.pre}%</b>` : ''}</div></div>`;
     }).join('');
     const host = isHost();
@@ -300,6 +419,7 @@
     ['stage', 'kind', 'stocks', 'minutes', 'items', 'cpus', 'cpulevel'].forEach((id) => { $(id).disabled = !host; });
     const kind = lobby.rules.kind || 'time';   // a relay from before the choice ran time matches
     $('stage').value = lobby.rules.stage;
+    paintStages();
     $('kind').value = kind;
     $('stocks').value = lobby.rules.stocks;
     $('minutes').value = lobby.rules.minutes;
@@ -313,12 +433,12 @@
     if (!host) { rules.cpus = lobby.rules.cpus | 0; rules.cpulevel = lobby.rules.cpulevel || 9; }
     $('cpus').value = Math.min(rules.cpus, free);
     $('cpulevel').value = rules.cpulevel;
-    $('btn-start').disabled = !host || lobby.inMatch;
-    $('btn-start').textContent = lobby.inMatch ? 'A match is running…' : host ? 'Start match' : 'Waiting for the host';
-    const n = Math.min(SLOTS, ps.length);
-    const out = !ps.some((p) => p.id === lobby.you);
-    setStatus(`${n} player${n === 1 ? '' : 's'} here${lobby.waiting ? `, ${lobby.waiting} waiting for a free slot` : ''}` +
-      (out ? ' -- not enough room for everyone on this computer: fewer players here, or wait for a slot' : ''), out);
+    // The game cannot boot a match with one slot filled. It loads the stage,
+    // draws it, and then sits there forever waiting for an opponent that is
+    // never coming: meleeMatchFrame stays 0 through minutes of frames, and
+    // every solo-with-no-CPU session in the player reports ends that way.
+    // Two slots filled -- a second human or at least one CPU -- and it runs.
+    paintStart();
   }
 
   /* ---- a worse network, on purpose: ?netlag=MS&netjitter=MS&netloss=PCT ----
@@ -484,6 +604,18 @@
       } else if (netplay && secs > 8) {
         $('loading-text').textContent = 'Loading — and waiting for the other players…';
       }
+      // A load that has not drawn a single match frame in half a minute is not
+      // a slow load, it is the game waiting for something that will not come.
+      // Whatever the reason, the player gets the door instead of a stuck bar:
+      // #exit is hidden while loading, and this is what makes it show anyway.
+      if (secs > 30 && !$('loading').classList.contains('stuck')) {
+        $('loading').classList.add('stuck');
+        // The end-of-match plate below owns its own words, including this case;
+        // it repaints within 200 ms of the class landing.
+      }
+      if ($('loading').classList.contains('stuck')) {
+        $('loading-detail').textContent = 'Taking too long? Use “Back to lobby” below.';
+      }
     }, 250);
   }
   /* ---- download the match before Start ----
@@ -574,7 +706,9 @@
   }
   $('btn-lobby').onclick = backToLobby;
   // Click twice: confirm() would stop the page, and the match with it.
-  let quitArmed = 0;
+  // -Infinity, not 0: performance.now() is ms since this page loaded, so a 0
+  // start makes a click in the first three seconds look like the second one.
+  let quitArmed = -Infinity;
   $('btn-quit').onclick = async () => {
     if (performance.now() - quitArmed > 3000) {
       quitArmed = performance.now();
@@ -587,11 +721,207 @@
     await sendReportOnce('left');
     location.reload();
   };
+  /* The end of a match is the one screen the game will not leave by itself: the
+   * results and awards screens answer only a Start press (Enter on a keyboard,
+   * Start on a pad), and the controls table is hidden while you play, so a
+   * winner used to see a screen whose only way out was a mouse in a corner.
+   * So the page offers the game's own button instead: the plate is Start, one
+   * press, and so is a click anywhere on the game. What a Start press *means* is
+   * the game's business -- mid-match it pauses, on the awards screen it walks you
+   * out through them -- and the page deliberately does not try to guess where in
+   * the match you are, because it cannot: the wasm exports no scene, and
+   * Module.meleeMatchFrame keeps climbing right through the awards (measured
+   * 2026-10-21: exactly one sim frame per presented frame, and the sim has to
+   * run for the game to read a press at all). The one place a press would do
+   * harm is the loading screen, where Start re-enters VS mode, so the plate
+   * stays hidden until the match has drawn a frame -- and if a load stalls, the
+   * same plate becomes the way back to the lobby instead. */
+  let exitState = 'gone';
+
+  const exitWant = () => {
+    if (!document.body.classList.contains('playing')) return 'gone';
+    if ($('banner').classList.contains('show')) return 'gone';
+    const ld = $('loading');
+    if (!ld.classList.contains('done')) {
+      return ld.classList.contains('stuck') ? 'stuck' : 'gone';
+    }
+    return 'start';
+  };
+
+  const EXIT_WORDS = {
+    start: ['Start', 'the game\u2019s own button \u2014 it pauses a live match, and once the match is over it walks you out through the awards'],
+    stuck: ['Back to lobby', 'this match never started'],
+  };
+
+  const paintExit = () => {
+    const want = exitWant();
+    if (want === exitState) return;
+    exitState = want;
+    const words = EXIT_WORDS[want] || EXIT_WORDS.start;
+    $('btn-exit').textContent = words[0];
+    $('exit').querySelector('.hint').innerHTML = words[1];
+  };
+  setInterval(paintExit, 200);
+
+  // A Start press, sent the way the keyboard sends one: the wasm's SDL key
+  // callback reads the event off the canvas and Enter is Start
+  // (src/pc_stub/undef_stubs.c). The keyup follows so the next press is a new
+  // edge, which is what makes two clicks two awards screens and not one held key.
+  const pressStart = () => {
+    const c = $('canvas');
+    c.focus();
+    const ev = (type) => c.dispatchEvent(new KeyboardEvent(type, {
+      key: 'Enter', code: 'NumpadEnter', keyCode: 13, which: 13,
+      bubbles: true, cancelable: true }));
+    ev('keydown');
+    setTimeout(() => ev('keyup'), 60);
+  };
+
+  // Click the game itself and you have pressed Start, exactly as on a console.
+  // Real controls (the HUD, the plate, the banner) keep their own clicks.
+  window.addEventListener('pointerdown', (e) => {
+    if (!document.body.classList.contains('playing')) return;
+    if (e.target && e.target.closest && e.target.closest('button, #hud, #banner')) return;
+    if (exitWant() === 'start') { e.preventDefault(); pressStart(); }
+    else $('canvas').focus();
+  }, true);
+
+  $('btn-exit').onclick = async () => {
+    // A match that never started has nothing to lose, so one click leaves it.
+    if (exitWant() === 'stuck') {
+      $('btn-exit').textContent = 'Leaving\u2026';
+      await backToLobby();
+      return;
+    }
+    pressStart();
+  };
   $('btn-full').onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
     $('canvas').focus();
   };
+
+  /* ---- the box you move around: a gamepad or the arrow keys drive this page ----
+   *
+   * A player on a laptop with a pad in their hands should not have to reach for
+   * the mouse to pick a character. LB/RB cycle the box between the seats, the
+   * fighter grid (two-dimensional, and it wraps at the edges the way the game's
+   * own cursor does), the costume row, the stage grid and the match controls. The cursor is
+   * virtual -- nothing is focused -- so a pad press and a mouse click take the
+   * same path into sendPick()/sendRules(), and a pad can never type into the
+   * name box by accident. Only the first pad drives the page; the rest are
+   * already in the game's hands, because SDL gives pad k to player k.
+   */
+  const ZONE_DEFS = [
+    ['seat', () => $('seat-tabs').hidden ? [] : [...document.querySelectorAll('#seat-tabs [data-seat]')]],
+    ['pick', () => [...document.querySelectorAll('#fighters .fighter')], true],
+    ['kit', () => [...document.querySelectorAll('#colors [data-col]')]],
+    ['stage', () => [...document.querySelectorAll('#stages .stage')], true],
+    ['match', () => ['kind', 'stocks', 'minutes', 'items', 'cpus', 'cpulevel', 'btn-start'].map((id) => $(id))],
+  ];
+
+  /* How many columns a grid is really drawing. The stage grid fits as many as the
+   * window allows, so the count is measured, not assumed: the D-pad has to step by
+   * a row, and a row is however many tiles share the first one's top. */
+  const colsOf = (els) => {
+    if (els.length < 2) return 1;
+    const top = els[0].offsetTop;
+    let n = 0;
+    while (n < els.length && els[n].offsetTop === top) n++;
+    return Math.max(1, n);
+  };
+  const cursor = {
+    zone: 'pick', at: {}, els: [],
+    here() {                       // resolve the zone, skipping one that has nothing in it
+      const defs = ZONE_DEFS.filter((d) => d[1]().length);
+      const d = defs.find((x) => x[0] === this.zone) || defs.find((x) => x[0] === 'pick') || defs[0];
+      this.zone = d[0];
+      this.els = d[1]();
+      return this.els;
+    },
+    get el() { const e = this.here(); return e[Math.min(this.at[this.zone] | 0, e.length - 1)]; },
+    paint() {
+      document.querySelectorAll('.cur').forEach((n) => n.classList.remove('cur'));
+      const e = this.el;
+      if (e) { e.classList.add('cur'); e.scrollIntoView({ block: 'nearest' }); }
+    },
+    set(zone, i) {
+      this.zone = zone;
+      const els = this.here();
+      this.at[zone] = Math.max(0, Math.min(els.length - 1, i | 0));
+      this.paint();
+    },
+    zoneTo(d) {
+      const names = ZONE_DEFS.map((x) => x[0]);
+      this.zone = names[(names.indexOf(this.zone) + d + names.length) % names.length];
+      this.here();
+      this.paint();
+    },
+    move(dx, dy) {
+      const els = this.here(), n = els.length;
+      if (!n) return;
+      let i = Math.min(this.at[this.zone] | 0, n - 1);
+      if ((ZONE_DEFS.find((d) => d[0] === this.zone) || [])[2]) {
+        const W = colsOf(els), rows = Math.ceil(n / W);
+        let r = Math.floor(i / W), c = i % W;
+        c = (c + dx + W) % W;                       // the grid wraps, like the game's
+        r = (r + dy + rows) % rows;
+        i = Math.min(n - 1, r * W + c);
+      } else {
+        i = (i + (dx || dy) + n) % n;
+      }
+      this.at[this.zone] = i;
+      this.paint();
+    },
+    activate() {
+      const e = this.el;
+      if (!e || e.disabled) return;
+      if (e.tagName === 'SELECT' || e.type === 'number') this.step(1);
+      else e.click();
+    },
+    step(d) {                       // B walks a select or a number box backwards
+      const e = this.el;
+      if (!e || e.disabled) return;
+      if (e.tagName === 'SELECT') {
+        const i = Math.max(0, Math.min(e.options.length - 1, e.selectedIndex + d));
+        if (i !== e.selectedIndex) { e.selectedIndex = i; e.dispatchEvent(new Event('change', { bubbles: true })); }
+      } else if (e.type === 'number') {
+        const s = +e.step || 1;
+        const lo = e.min === '' ? -Infinity : +e.min, hi = e.max === '' ? Infinity : +e.max;
+        const v = Math.max(lo, Math.min(hi, (+e.value || 0) + d * s));
+        if (String(v) !== e.value) { e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+    },
+  };
+
+  function randomFighter() {
+    seat(editing).ckind = Math.floor(Math.random() * FIGHTERS.length);
+    sendPick();
+    cursor.set('pick', Math.max(0, CSS_GRID.indexOf(FIGHTERS[seat(editing).ckind])));
+  }
+  function randomStage() {
+    const s = $('stage');
+    if (s.disabled) return;                       // the host chooses the stage
+    const i = Math.floor(Math.random() * s.options.length);
+    if (i === s.selectedIndex) return;
+    s.selectedIndex = i;
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+    cursor.set('stage', s.selectedIndex + 1);     // +1: the grid's first cell is Random
+  }
+
+  /* Arrow keys do the same thing as the D-pad, but only while the page is not a
+   * match and the keys are not already spoken for: typing a name, or a control
+   * the player tabbed to, keeps its native keys. */
+  const PADKEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] };
+  window.addEventListener('keydown', (e) => {
+    if (document.body.classList.contains('playing')) return;
+    const t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const d = PADKEYS[e.key] || (e.key.length === 1 ? PADKEYS[e.key.toLowerCase()] : null);
+    if (d) { cursor.move(d[0], d[1]); e.preventDefault(); return; }
+    if (e.key === 'Enter' && tag !== 'BUTTON') { cursor.activate(); e.preventDefault(); }
+  });
 
   /* ---- gamepad: show it is seen; Start on it returns to the lobby after a match ---- */
   const pads = () => [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(Boolean);
@@ -604,13 +934,51 @@
     // The first pad is player 1's (the keyboard is too), so player k plays
     // on pad k: with more than one player here, everyone needs a pad.
     if (want > 1 && ps.length < want) t += ` -- ${want} players here: plug in ${want - ps.length} more and press a button on each`;
-    if (t !== padText) { padText = t; $('pad').textContent = t; }
+    if (t !== padText) { padText = t; $('pad').textContent = t;
+      $('padnav').classList.toggle('on', ps.length > 0); }   // the hint lights when a pad is in
     $('pad').className = 'pad ' + (ps.length && ps.length >= want ? 'ok' : 'no');
-    if ($('banner').classList.contains('show')) {
+    if (!ps.length) padPrev.clear();
+    else if ($('banner').classList.contains('show')) {
       if (ps.some((p) => p.buttons[9] && p.buttons[9].pressed)) backToLobby();     // Start
-    }
+    } else padUI(ps[0]);
     requestAnimationFrame(padLoop);
   }
+  /* Button edges, so one press is one move, and a stick that is held down walks
+   * the cursor instead of firing sixty times a second. */
+  const held = (p, i) => { const b = p.buttons[i]; return !!b && (b.pressed || b.value > 0.5); };
+  const padPrev = new Map();
+  function edge(p, i) {                     // true once, on the frame it goes down
+    const v = held(p, i), k = 'b' + i, was = padPrev.get(k);
+    padPrev.set(k, v);
+    return v && !was;
+  }
+  const DPAD = { 12: [0, -1], 13: [0, 1], 14: [-1, 0], 15: [1, 0] };
+  let stickKey = null, stickNext = 0;
+  function stick(p) {                        // the left stick, with a repeat
+    const x = Math.abs(p.axes[0]) > 0.55 ? p.axes[0] : 0;
+    const y = Math.abs(p.axes[1]) > 0.55 ? p.axes[1] : 0;
+    if (!x && !y) { stickKey = null; stickNext = 0; return null; }
+    const d = Math.abs(x) > Math.abs(y) ? (x > 0 ? [1, 0] : [-1, 0]) : (y > 0 ? [0, 1] : [0, -1]);
+    const k = d.join(), now = performance.now();
+    if (k !== stickKey) { stickKey = k; stickNext = now + 320; return d; }   // the first step is instant
+    if (now >= stickNext) { stickNext = now + 130; return d; }
+    return null;
+  }
+  function padUI(p) {
+    for (const b in DPAD) { const d = DPAD[b]; if (edge(p, +b)) cursor.move(d[0], d[1]); }
+    const d = stick(p);
+    if (d) cursor.move(d[0], d[1]);
+    if (edge(p, 0)) cursor.activate();                          // A
+    if (edge(p, 1)) cursor.step(-1);                            // B
+    if (edge(p, 2) || edge(p, 8)) randomFighter();              // X / Back
+    if (edge(p, 3)) randomStage();                              // Y
+    if (edge(p, 4)) cursor.zoneTo(-1);                          // LB
+    if (edge(p, 5)) cursor.zoneTo(1);                           // RB
+    if (edge(p, 9) && !$('btn-start').disabled) $('btn-start').click();    // Start
+  }
+  $('padnav').textContent = 'Pad: the D-pad moves the box, A picks, LB/RB switch between '
+    + 'seat, character, costume, stage and match, Start starts the match, Back picks at random. '
+    + 'The arrow keys and Enter do the same.';
   if (!window.isSecureContext) {
     $('pad').textContent = 'Gamepads need https: open this page through the https:// address.';
   } else {
@@ -1038,6 +1406,15 @@
     if (p) delete p.data;
     const r = { v: 1, kind: 'closed', time: new Date().toISOString(), name: myName(),
                 match: lastStart && { slot: lastStart.slot, seed: lastStart.seed },
+                /* Did the match ever START? Nothing else in a beacon says so, and it
+                 * is the first question a "it just says loading" report raises:
+                 * frame 0 + loading true means the page died on the loading screen,
+                 * frame > 0 means it got in and something else went wrong. The
+                 * relay's own `input to` line cannot answer it -- it reads -1 even
+                 * for a match that ran to frame 33 (proven 2026-10-21). */
+                frame: Module.meleeMatchFrame | 0,
+                loading: !$('loading').classList.contains('done'),
+                isoMB: Math.round((Module.meleeIsoBytes | 0) / 2 ** 20),
                 prof: p, errors: pageErrors.slice(-10), logs: pageLog.slice(-150) };
     try { navigator.sendBeacon('report', new Blob([JSON.stringify(r)], { type: 'application/json' })); } catch (e) { /* gone */ }
   });
@@ -1117,4 +1494,5 @@
   }
 
   paintPicks();
+  cursor.set('pick', Math.max(0, CSS_GRID.indexOf(FIGHTERS[me.ckind])));
   connect();

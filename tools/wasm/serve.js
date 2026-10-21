@@ -60,7 +60,8 @@ const ISO_TAG = `"${isoSize.toString(36)}-${Math.floor(isoStat.mtimeMs).toString
 const TYPES = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript',
     '.wasm': 'application/wasm', '.json': 'application/json',
-    '.png': 'image/png', '.css': 'text/css', '.ico': 'image/x-icon',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp', '.css': 'text/css', '.ico': 'image/x-icon',
 };
 
 function serveDisc(req, res) {
@@ -229,7 +230,18 @@ function servePage(req, res, file) {
 }
 
 function handler(req, res) {
-    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    /* The request line is whatever the client sent, and two ordinary-looking
+     * shapes of it are unparseable: `GET //` (scheme-relative, no host) and
+     * `GET /%zz` (a bad percent-escape). Throwing here is an uncaught exception
+     * inside the request handler, which takes the page, the disc stream, the
+     * reports and the netplay relay down with it -- one curl ends everybody's
+     * match. Answer 400 and stay up. */
+    let p;
+    try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); }
+    catch (e) {
+        res.writeHead(400, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
+        return res.end('bad request');
+    }
     // Container healthcheck: answers without touching the disc, so a missing or
     // unreadable ISO still lets the page load and report its own error.
     if (p === '/healthz') {
@@ -359,7 +371,11 @@ function wsAccept(req, socket) {
 
 const server = PLAIN ? http.createServer(handler) : https.createServer(certificate(), handler);
 server.on('upgrade', (req, socket) => {
-    const p = new URL(req.url, 'http://x').pathname;
+    // Same rule on the websocket handshake: a URL we cannot parse is a client to
+    // drop, not an exception to die on.
+    let p;
+    try { p = new URL(req.url, 'http://x').pathname; }
+    catch (e) { return socket.destroy(); }
     if (p === '/probe') {
         // Echo endpoint: proves the socket survives whatever proxy sits in
         // front (Caddy + the SSO gate) without touching the netplay relay.

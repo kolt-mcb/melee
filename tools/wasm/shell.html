@@ -6,14 +6,31 @@
 <title>Melee (home netplay)</title>
 <style>
   :root {
-    --bg: #0b0d12; --panel: #151922; --panel2: #1c2230; --line: #2a3140; --text: #e6e9ef;
-    --muted: #9aa3b2; --accent: #e8b931; --ok: #5fd38d; --bad: #ff6b6b;
-    --p1: #e5484d; --p2: #3e8ef7; --p3: #f5c518; --p4: #30a46c;
-    --p5: #e8833a; --p6: #8e5ce6; --p7: #2bb3c0; --p8: #d6409f;
+    /* The game's own character-select palette: the navy it is lit with, the
+     * eight port colours in the order the VS screen uses them (red, blue, green,
+     * pink, cyan, yellow, purple, orange), and the yellow box around whatever
+     * you are pointing at. */
+    --bg: #070b14; --panel: #141d31; --panel2: #1b2740; --line: #3a4a6b; --text: #eef1f7;
+    --muted: #a9b8d0; --accent: #ffd54a; --ok: #5fd38d; --bad: #ff6b6b;
+    --p1: #e0402c; --p2: #2f7de0; --p3: #38a04a; --p4: #e05fa0;
+    --p5: #2bb3c0; --p6: #f5c518; --p7: #8e5ce6; --p8: #e8833a;
+    /* Every plate in Melee's UI sits on a hard black edge, and every word on the
+     * screens is drawn with a black outline. Both are one variable here so the
+     * whole page can be re-looked without touching a rule. */
+    --edge: #04070e;
+    --out: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000,
+           2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  html, body { margin: 0; height: 100%; color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg) radial-gradient(130% 100% at 50% -10%,
+      #2a3a5c 0%, #16203a 42%, #070b14 100%) no-repeat;
+    background-attachment: fixed; }
+  /* The CSS backdrop's diagonal banding, behind everything. */
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: repeating-linear-gradient(115deg, rgba(255,255,255,.045) 0 2px,
+      transparent 2px 46px); }
   body.playing { overflow: hidden; }
   /* The game draws 4:3 inside a 16:9 surface; fit it whole, letterboxed. The
    * canvas must have no border or padding. */
@@ -21,81 +38,210 @@
     object-fit: contain; background: #000; border: 0; outline: none; display: none; }
   body.playing #canvas { display: block; }
   body.playing #lobby { display: none; }
-  #lobby { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 22px; }
-  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  #lobby { max-width: 1000px; margin: 0 auto; padding: 18px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    padding-bottom: 12px; border-bottom: 2px solid rgba(255,213,74,.28); }
+  /* The title art is your own disc's, written by tools/wasm/css_art.py. It is a
+   * background and not an <img>: a build without the art just shows the words,
+   * and there is no inline onerror here for the CSP to refuse. */
+  header::before { content: ""; flex: 0 0 auto; width: 116px; height: 78px;
+    background: url(css/logo.png) left center / contain no-repeat;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,.7)); }
+  @media (max-width: 560px) { header::before { width: 84px; height: 56px; } }
+  h1 { margin: 0; font-size: 23px; font-weight: 900; letter-spacing: .01em;
+    text-transform: uppercase; text-shadow: var(--out), 0 6px 14px rgba(0,0,0,.6); }
+  /* A menu label in the game is white caps with a black outline, and the thing
+   * it labels sits in a plate under it. The yellow tick is the cursor colour. */
+  h2 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .11em;
+    color: #fff; text-shadow: var(--out); }
+  h2::before { content: ""; flex: 0 0 auto; width: 9px; height: 9px; background: var(--accent);
+    border: 1px solid var(--edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.65); }
   .status { color: var(--muted); font-size: 14px; }
   .status.bad { color: var(--bad); }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card { background: linear-gradient(#1a2540, #0a1020); border: 1px solid rgba(150,190,255,.26);
+    border-radius: 5px; padding: 14px 15px 16px;
+    box-shadow: 0 0 0 2px var(--edge), 0 12px 28px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.09); }
   .full { grid-column: 1 / -1; }
   .players { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   @media (max-width: 560px) { .players { grid-template-columns: repeat(2, 1fr); } }
-  .slot { border-radius: 10px; padding: 10px; background: var(--panel2); border-top: 4px solid var(--line); min-height: 86px; }
-  .slot.s0 { border-top-color: var(--p1); } .slot.s1 { border-top-color: var(--p2); }
-  .slot.s2 { border-top-color: var(--p3); } .slot.s3 { border-top-color: var(--p4); }
-  .slot.s4 { border-top-color: var(--p5); } .slot.s5 { border-top-color: var(--p6); }
-  .slot.s6 { border-top-color: var(--p7); } .slot.s7 { border-top-color: var(--p8); }
-  .slot .who { font-weight: 600; } .slot .what { color: var(--muted); font-size: 13px; }
-  .slot.me { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .slot.empty { opacity: .45; }
-  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 99px; background: #ffffff14; color: var(--muted); margin-left: 4px; }
-  .fighters { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
-  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--panel2); color: var(--text); padding: 8px 10px; }
-  button:hover { border-color: #3b4458; }
-  button.on { border-color: var(--accent); background: #e8b9311f; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a1a; font-weight: 700; padding: 12px 22px; font-size: 16px; }
-  button:disabled { opacity: .45; cursor: default; }
+  /* A player is a VS-screen plate: their port colour as a name bar, their
+   * fighter's face, and the details under it. */
+  .slot { display: grid; grid-template-columns: 44px 1fr; align-content: start;
+    background: var(--panel2); border: 1px solid rgba(150,190,255,.2); border-radius: 4px;
+    box-shadow: 0 0 0 2px var(--edge), inset 0 1px 0 rgba(255,255,255,.07);
+    min-height: 86px; overflow: hidden; }
+  .slot.s0 { --pc: var(--p1); } .slot.s1 { --pc: var(--p2); }
+  .slot.s2 { --pc: var(--p3); } .slot.s3 { --pc: var(--p4); }
+  .slot.s4 { --pc: var(--p5); } .slot.s5 { --pc: var(--p6); }
+  .slot.s6 { --pc: var(--p7); } .slot.s7 { --pc: var(--p8); }
+  .slot .who { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 5px;
+    padding: 2px 6px; font-size: 12px; font-weight: 800;
+    letter-spacing: .04em; text-transform: uppercase; overflow: hidden;
+    color: #fff; text-shadow: var(--out);
+    background: var(--pc, var(--line)); border-bottom: 1px solid var(--edge); }
+  /* The name is the only thing in the bar allowed to give up space: the port
+   * number and the host badge must stay readable however someone names themselves. */
+  .slot .who .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .who .tag { margin-left: 0; flex: 0 0 auto; }
+  .slot .face { width: 44px; aspect-ratio: 8 / 7; margin: 7px 0 7px 7px; border: 1px solid var(--edge);
+    background: center / cover no-repeat #101a2e; image-rendering: pixelated; }
+  .slot .what { align-self: center; padding: 4px 8px; color: var(--muted); font-size: 12.5px;
+    overflow-wrap: anywhere; }
+  .slot.empty { opacity: .45; grid-template-columns: 1fr; }
+  .slot.empty .who { background: var(--line); }
+  .slot.empty .what { padding: 4px 8px 8px; white-space: nowrap; }
+  .slot.me { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .05em;
+    text-transform: uppercase; padding: 0 5px; border-radius: 2px; margin-left: 5px;
+    background: var(--accent); color: #1a1301; border: 1px solid var(--edge); }
+  /* Yellow is the cursor's colour and the pick's colour. The words beside the
+   * title are neither, and a yellow plate inline in an uppercase title reads as
+   * part of the title -- so this one is the plate blue instead. */
+  h1 .tag { font-size: 10px; letter-spacing: .1em; vertical-align: 3px; margin-left: 7px;
+    background: rgba(150,190,255,.16); color: var(--muted); border-color: rgba(150,190,255,.3); }
+  @media (max-width: 560px) { h1 { font-size: 19px; } h1 .tag { vertical-align: 2px; } }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .hint.on { color: var(--accent); }
+  .fighters { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+  /* One cell = the game's own portrait and the name under it. The portrait is a
+   * background, not an <img>, so a build without the art (it comes out of your
+   * own disc; tools/wasm/css_art.py writes it, and it is not in git) shows the
+   * name on an empty cell instead of a broken-image icon. */
+  /* The stage picker is the game's stage select: the same plates, in a grid. It is
+   * not a dropdown because that is not what the screen is -- and the pictures are
+   * not on the disc: the game draws every stage there as a 3D diorama out of
+   * MnSlMap.dat, so the frames are captured instead of found (one real frame per
+   * stage out of the PC build -- shoot_stages.sh) and served from stages/<kind>.jpg.
+   * A stage with no frame is still the name on the same bevel, so a build without
+   * the art loses the photos and nothing else. */
+  .stages { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 5px; }
+  .fighter, .stage { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0;
+    color: #fff; font: 800 9.5px/1.05 system-ui, sans-serif; text-transform: uppercase;
+    letter-spacing: .02em; text-align: center; overflow: hidden;
+    border: 2px solid var(--edge); border-radius: 3px; background: #060a14;
+    box-shadow: inset 0 0 0 1px rgba(150,190,255,.14); }
+  .fighter i, .stage i { display: block; width: 100%; border-radius: 0;
+    background: center / cover no-repeat #131c30; }
+  .fighter i { aspect-ratio: 8 / 7; image-rendering: pixelated; }
+  /* The game's own frame is 4:3, so the tile is too: nothing gets cropped and
+   * nothing gets stretched. */
+  .stage i { aspect-ratio: 4 / 3; }
+  .fighter.rnd i, .stage.rnd i { background-color: #0d1526; }
+  .fighter span, .stage span { max-width: 100%; min-height: 1.5em; padding: 2px 1px 3px;
+    overflow: hidden; background: rgba(5,8,16,.86); text-shadow: var(--out); }
+  .fighter:hover, .stage:hover { border-color: #9fc0ff; }
+  .fighter.on, .stage.on { border-color: var(--accent); }
+  .fighter.on span, .stage.on span { background: var(--accent); color: #1a1301; text-shadow: none; }
+  /* The pad/keyboard cursor: the box you move around, yellow on your pick. */
+  .fighter.cur, button.cur, select.cur, input.cur, .tab.cur { outline: 4px solid var(--accent);
+    outline-offset: 1px; box-shadow: 0 0 0 3px var(--edge), 0 0 16px rgba(255,213,74,.45); }
+  button.on.cur { outline-color: var(--accent); }
+  @media (max-width: 560px) {
+    .fighters, .stages { gap: 4px; }
+    .fighter { font-size: 8px; border-radius: 2px; }
+    .fighter span { min-height: 1.6em; }
+    .stages { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+    .stage { font-size: 8px; border-radius: 2px; }
+  }
+  /* Menu buttons in the game are bevelled plates with a hard black edge; the one
+   * you are on gets the yellow box, and the one you take gets the yellow plate. */
+  button { font: inherit; font-weight: 700; cursor: pointer; border-radius: 4px;
+    border: 1px solid rgba(150,190,255,.36); background: linear-gradient(#243350, #16203a);
+    color: var(--text); padding: 8px 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 0 0 1px var(--edge), 0 2px 0 var(--edge); }
+  button:hover { border-color: #9fc0ff; }
+  button:active { transform: translateY(2px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 0 0 1px var(--edge); }
+  button.on { border-color: var(--accent); color: #fff;
+    background: linear-gradient(#4a3d16, #2a220c);
+    box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 1px var(--edge), 0 2px 0 var(--edge); }
+  button.primary { background: linear-gradient(#ffe680, #efb01c); border-color: var(--edge);
+    color: #1a1301; font-weight: 900; padding: 12px 22px; font-size: 16px;
+    text-transform: uppercase; letter-spacing: .06em;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.55), inset 0 -3px 0 rgba(0,0,0,.22),
+    0 0 0 2px var(--edge), 0 4px 0 #6b4a06; }
+  button.primary:active { transform: translateY(3px);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 0 0 2px var(--edge); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  /* The costume row is the game's colour chips: squares, not words. */
+  #colors button { width: 27px; height: 27px; padding: 0; font-size: 12px; text-align: center; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
   .row[hidden] { display: none; }
-  label { color: var(--muted); font-size: 13px; }
-  input, select { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 8px; padding: 7px 9px; }
+  label { color: var(--muted); font-size: 13px; font-weight: 600; }
+  input, select { font: inherit; background: #101a2e; color: var(--text);
+    border: 1px solid rgba(150,190,255,.3); border-radius: 4px; padding: 7px 9px;
+    box-shadow: inset 0 2px 0 rgba(0,0,0,.35), 0 0 0 1px var(--edge); }
   input[type=number] { width: 70px; }
   .pad { font-size: 13px; }
   .pad.ok { color: var(--ok); } .pad.no { color: var(--muted); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  td { padding: 3px 4px; border-bottom: 1px solid #ffffff0d; }
+  td { padding: 3px 4px; border-bottom: 1px solid rgba(150,190,255,.12); }
   td:first-child { color: var(--muted); width: 45%; }
-  button.key { padding: 2px 6px; min-width: 64px; text-align: left; background: transparent; border-color: transparent; }
-  button.key:hover, button.key.on { border-color: var(--line); }
-  kbd { font: 12px ui-monospace, monospace; background: #0b0d12; border: 1px solid var(--line);
-    border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+  button.key { padding: 2px 6px; min-width: 64px; text-align: left; font-weight: 600;
+    background: transparent; border-color: transparent;
+    box-shadow: none; }
+  button.key:hover, button.key.on { border-color: var(--line);
+    box-shadow: inset 0 0 0 1px rgba(150,190,255,.2); }
+  kbd { font: 12px ui-monospace, monospace; background: #0b0d12; color: var(--text);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 5px; }
   #banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 5; display: none;
-    background: #000c; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; gap: 12px; align-items: center; }
+    background: #000c; border: 1px solid rgba(150,190,255,.3); border-radius: 5px;
+    box-shadow: 0 0 0 2px var(--edge), 0 12px 28px rgba(0,0,0,.6);
+    padding: 12px 16px; gap: 12px; align-items: center; }
   #banner.show { display: flex; }
+  /* The end-of-match door. The game leaves its results and awards screens only
+     on Start -- a key nothing on screen used to mention -- so the plate IS the
+     game's Start button: one press, anywhere on the game, or here. It stays
+     dimmed during a match because mid-match that press is a pause; the HUD's
+     "Leave match" is still the hard exit. */
+  #exit { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 4;
+    display: none; flex-direction: column; align-items: center; gap: 6px;
+    opacity: .4; transition: opacity .25s; }
+  body.playing #loading.done ~ #exit { display: flex; }
+  /* ... and if the match never gets to its first frame, the same plate is the
+     only way back short of reloading the tab. lobby.js adds .stuck at 30 s. */
+  body.playing #loading.stuck ~ #exit { display: flex; }
+  body.playing #exit:hover, body.playing #exit:focus-within { opacity: 1; }
+  /* Once the game has been told to leave, the banner owns the way out. */
+  #banner.show ~ #exit { display: none !important; }
+  #exit .hint { font-size: 12px; color: #c3d0e8; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
   #hud { position: fixed; top: 10px; right: 10px; z-index: 3; display: none; gap: 6px; opacity: 0; transition: opacity .3s; }
-  body.playing #hud { display: flex; }
-  body.playing:hover #hud { opacity: .85; }
+  body.playing #hud { display: flex; opacity: .5; }
+  body.playing:hover #hud { opacity: .95; }
   #hud button { padding: 6px 10px; font-size: 13px; background: #000a; }
   button.report { padding: 4px 9px; font-size: 13px; color: var(--muted); }
-  #gpu { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 10px;
-    border: 1px solid var(--bad); background: #ff6b6b14; font-size: 14px; }
+  #gpu { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 4px;
+    border: 1px solid var(--bad); background: #ff6b6b14; font-size: 14px;
+    box-shadow: 0 0 0 2px var(--edge); }
   #gpu.show { display: block; }
   #gpu code { font: 13px ui-monospace, monospace; }
   /* Over the canvas from Start until the match's first frame: the stage
    * load draws nothing but black. */
   #loading { position: fixed; inset: 0; z-index: 4; display: none; flex-direction: column;
     align-items: center; justify-content: center; gap: 16px; background: #000;
-    transition: opacity .4s; color: var(--muted); font-size: 15px; }
+    transition: opacity .4s; color: #fff; font-size: 15px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .14em; text-shadow: var(--out); }
   body.playing #loading { display: flex; }
   #loading.done { opacity: 0; pointer-events: none; }
   #loading .spin { width: 42px; height: 42px; border-radius: 50%; border: 4px solid #ffffff1f;
     border-top-color: var(--accent); animation: spin .9s linear infinite; }
-  #loading .detail { font-size: 13px; color: #6b7384; min-height: 1.2em; }
+  #loading .detail { font-size: 13px; font-weight: 400; letter-spacing: .02em;
+    text-transform: none; text-shadow: none; color: #7d8aa3; min-height: 1.2em; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #loading .spin { animation-duration: 3s; } }
-  #loading .bar { width: min(320px, 70vw); height: 6px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
+  #loading .bar { width: min(320px, 70vw); height: 8px; border-radius: 0; background: #ffffff1f;
+    border: 1px solid var(--edge); overflow: hidden; }
   #loading .bar[hidden] { display: none; }
-  #loading-fill { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .25s linear; }
+  #loading-fill { height: 100%; width: 0; background: var(--accent); border-radius: 0; transition: width .25s linear; }
   #fps { position: fixed; top: 10px; left: 10px; z-index: 3; display: none; padding: 3px 8px;
-    border-radius: 6px; background: #000a; font: 13px ui-monospace, monospace; color: var(--muted); }
+    border-radius: 3px; background: #000a; font: 13px ui-monospace, monospace; color: var(--muted); }
   body.playing #fps.show { display: block; }
   #fps.slow { color: var(--bad); }
-</style>
+  </style>
 <link rel="icon" href="data:,">
 </head>
 <body>
@@ -107,6 +253,8 @@
 <div id="fps"></div>
 <div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-report-hud" title="Send the host this page's log and frame timings">Send report</button><button id="btn-quit">Leave match</button></div>
 <div id="banner"><span id="banner-text">Match over.</span><button id="btn-report-banner">Send report</button><button class="primary" id="btn-lobby">Back to lobby</button></div>
+<div id="exit"><button class="primary" id="btn-exit">Start</button>
+  <div class="hint">the game&rsquo;s own button &mdash; it pauses a live match, and once the match is over it walks you out through the awards</div></div>
 
 <div id="lobby">
   <header>
@@ -139,11 +287,20 @@
       <div class="row seat-tabs" id="seat-tabs" hidden></div>
       <div class="fighters" id="fighters"></div>
       <div class="row"><label>Costume</label><span id="colors"></span></div>
+      <div class="hint" id="padnav"></div>
+    </section>
+
+    <section class="card full">
+      <h2>Stage</h2>
+      <div class="stages" id="stages"></div>
+      <!-- The stage number still lives in exactly one place: this select. The grid
+           above is a second face on it, so sendRules, the relay's rules message and
+           a random pick all still read and write the same value. -->
+      <select id="stage" hidden tabindex="-1" aria-hidden="true"></select>
     </section>
 
     <section class="card">
       <h2>Match <span class="tag" id="host-note"></span></h2>
-      <div class="row"><label>Stage</label><select id="stage"></select></div>
       <div class="row">
         <label>Mode <select id="kind"><option value="stock">Stock</option><option value="time">Time</option></select></label>
         <label>Items <select id="items"><option value="-1">Off</option><option value="0">Very low</option>
