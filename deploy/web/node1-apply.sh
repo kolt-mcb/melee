@@ -84,8 +84,18 @@ wait_empty() {
 }
 
 want=$(server_sha)
-# Nothing of ours is in the image, so this is a cache hit once it exists.
-docker compose build -q melee
+# Build only when the Dockerfile changed or there is no image. This host's
+# builder does not cache, so every build is a new image id, and a new id
+# means a recreate below -- the very thing this script is here to avoid.
+DF_STAMP=$REMOTE/.built-dockerfile.sha
+df=$(sha256sum "$REMOTE/Dockerfile" | cut -c1-16)
+if ! docker image inspect melee-web:local >/dev/null 2>&1 || [ "$df" != "$(cat "$DF_STAMP" 2>/dev/null || true)" ]; then
+  say "melee: building the image (Dockerfile changed)"
+  docker compose build -q melee 2>&1 | grep -v 'configured to build using Bake' || true
+  echo "$df" > "$DF_STAMP"
+else
+  say "melee: image up to date (Dockerfile unchanged)"
+fi
 why=""
 if [ "$(docker inspect -f '{{.State.Running}}' melee 2>/dev/null || true)" != true ]; then
   why="not running"
