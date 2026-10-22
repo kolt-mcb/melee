@@ -1532,6 +1532,30 @@ static void pc_pad_inputs_apply(GCPadStatus* p, int pad)
     }
 }
 
+/* A pad the MELEE_SYNC driver sets over the socket ("PAD <n> ..." in
+ * pc_trace.c), for an agent that decides each frame's input from what it
+ * saw on the previous one. It holds until the driver sends another, which is
+ * what a controller does between polls. Applied after the recorded inputs so
+ * the two never both write the same pad. */
+GCPadStatus pc_sync_pads[4];
+int pc_sync_pad_on[4];
+
+static void pc_pad_sync_apply(GCPadStatus* p, int pad)
+{
+    const GCPadStatus* s;
+    if (pad < 0 || pad > 3 || !pc_sync_pad_on[pad]) {
+        return;
+    }
+    s = &pc_sync_pads[pad];
+    p->button = s->button;
+    p->stickX = s->stickX;
+    p->stickY = s->stickY;
+    p->subStickX = s->subStickX;
+    p->subStickY = s->subStickY;
+    p->analogL = s->analogL;
+    p->analogR = s->analogR;
+}
+
 /* MELEE_PAD_SCRIPT drives player 1 from a frame-keyed script so menu and CSS
  * navigation can be exercised in a headless run. MELEE_PAD_FORCE pins the
  * stick for a whole run, which is enough for walking a fighter around but
@@ -2563,6 +2587,7 @@ void HSD_PadRenewRawStatus(bool unused)
          * bits so a replayed stick goes through exactly what a live one
          * does. */
         pc_pad_inputs_apply(&g_gc_pads[pad], pad);
+        pc_pad_sync_apply(&g_gc_pads[pad], pad);
 
         /* Not clamped here: the console keeps the raw bytes in the raw queue
          * and on the wire, and clamps only on the way to the master status

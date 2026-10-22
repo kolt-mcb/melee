@@ -336,6 +336,78 @@ void render_present(void)
     pc_gxq_run_frame_tail(render_present_tail, g_render_frame);
 }
 
+/* MELEE_SYNC_PIXELS=1: every presented frame is read back, cropped to the
+ * GameCube framebuffer's rect like a screenshot, and kept for the sync
+ * socket (pc_trace_sync_wait sends it as an "F" block). An agent driving the
+ * game over MELEE_SYNC sees exactly what the screen shows, at the window's
+ * size, so "-w 256 192" gives it a 256x192 picture a frame. Read before the
+ * swap, for the same reason the screenshot is. Rows are bottom-up, as
+ * glReadPixels gives them; the driver flips. */
+static unsigned char* g_sync_px;
+static int g_sync_px_cap, g_sync_px_w, g_sync_px_h;
+static int g_sync_px_on = -1;
+
+const unsigned char* pc_render_sync_pixels(int* w, int* h)
+{
+    *w = g_sync_px_w;
+    *h = g_sync_px_h;
+    return g_sync_px_w > 0 ? g_sync_px : NULL;
+}
+
+static void render_sync_grab(void)
+{
+    SDL_Window* win;
+    int vw = 0, vh = 0, rect[4], cx, cy, cw, ch, need;
+    float fbw = 640.0f, fbh = 480.0f;
+
+    if (g_sync_px_on < 0) {
+        g_sync_px_on = getenv("MELEE_SYNC_PIXELS") != NULL;
+    }
+    if (!g_sync_px_on) {
+        return;
+    }
+    win = window_get_sdl_window();
+    SDL_GetWindowSize(win, &vw, &vh);
+    cx = 0; cy = 0; cw = vw; ch = vh;
+    pc_get_fb_size(&fbw, &fbh);
+    pc_fb_rect_to_window(0.0f, 0.0f, fbw, fbh, rect);
+    if (rect[2] > 0 && rect[3] > 0 && rect[0] >= 0 && rect[1] >= 0 &&
+        rect[0] + rect[2] <= vw && rect[1] + rect[3] <= vh)
+    {
+        cx = rect[0]; cy = rect[1]; cw = rect[2]; ch = rect[3];
+    }
+    /* RGBA always: ES guarantees only that readback, and the extra byte is
+     * dropped in place below either way. */
+    need = cw * ch * 4;
+    if (need <= 0) {
+        g_sync_px_w = g_sync_px_h = 0;
+        return;
+    }
+    if (need > g_sync_px_cap) {
+        unsigned char* nb = realloc(g_sync_px, (size_t) need);
+        if (nb == NULL) {
+            g_sync_px_w = g_sync_px_h = 0;
+            return;
+        }
+        g_sync_px = nb;
+        g_sync_px_cap = need;
+    }
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glFinish();
+    glReadBuffer(GL_BACK);
+    glReadPixels(cx, cy, cw, ch, GL_RGBA, GL_UNSIGNED_BYTE, g_sync_px);
+    {
+        int i, n = cw * ch;
+        for (i = 0; i < n; i++) {
+            g_sync_px[i * 3]     = g_sync_px[i * 4];
+            g_sync_px[i * 3 + 1] = g_sync_px[i * 4 + 1];
+            g_sync_px[i * 3 + 2] = g_sync_px[i * 4 + 2];
+        }
+    }
+    g_sync_px_w = cw;
+    g_sync_px_h = ch;
+}
+
 /* The second half of render_present (see there). */
 static void render_present_tail(int frame)
 {
@@ -505,6 +577,8 @@ static void render_present_tail(int frame)
             }
         }
     }
+
+    render_sync_grab();
 
     /* PC port: MELEE_FPS=1 prints the measured frame rate every 60
      * presented frames -- wall-clock time per game frame, and the
