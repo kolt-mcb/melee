@@ -250,10 +250,3 @@ tools/decomp-permuter/
 
 # Players' reports from the web build (tools/wasm/serve.js /report)
 /reports/
-
-# RL / imitation data and runs (tools/rl)
-/data/
-/runs/
-
-# Game discs -- never commit
-*.iso
