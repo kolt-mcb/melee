@@ -46,6 +46,11 @@ const WEB = path.resolve(opt('--dir', path.join(ROOT, 'build', 'wasm')));
 const ISO = opt('--iso', process.env.MELEE_ISO || '');
 const REPORTS = path.resolve(opt('--reports', process.env.MELEE_REPORTS || path.join(ROOT, 'reports')));
 const REPORT_MAX_BYTES = 32 << 20, REPORT_MAX_FILES = 2000;
+// A /net frame is tiny: a game packet is ~130 B, a lobby message a little JSON.
+// wsAccept reads the frame length as a full 64-bit field and buffers the whole
+// message, so without a ceiling one page could send a multi-gigabyte frame and
+// OOM this process -- which is the page, the disc stream and the relay at once.
+const MAX_WS_MSG = 64 << 10;
 const relay = require('./relay.js');
 
 if (!ISO || !fs.existsSync(ISO)) {
@@ -352,6 +357,9 @@ function wsAccept(req, socket) {
             let len = buf[1] & 0x7f, off = 2;
             if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; }
             else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+            // Drop the client before buffering an oversized frame, rather than
+            // growing `buf` to whatever length it claimed.
+            if (len > MAX_WS_MSG) return close();
             const mask = masked ? buf.slice(off, off + 4) : null;
             if (masked) off += 4;
             if (buf.length < off + len) return;

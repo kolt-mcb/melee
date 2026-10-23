@@ -51,9 +51,12 @@ const MAX_LOCAL = 4;   // players at one page: the four pads the engine reads
 const PING_MS = 500, PING_KEEP = 20;
 const FRAME_MS = 1000 / 60;
 const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
-const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8;
+const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_HASH = 5, MSG_BYE = 6, HDR = 8;
 const PAD_BYTES = 10, WINDOW = 12;   // pc_netplay.c NET_PAD_BYTES, NET_WINDOW
 const KEEP_PADS = 256;               // each slot's newest pads, for the leaver's last frames
+const MAX_MEMBERS = 64;              // the whole room; a home lobby is a handful
+const PER_IDENT_MAX = 8;             // sockets one SSO identity may hold at once
+const OFFER_MIN_MS = 1000;           // least time between a page's datagram-channel offers
 console.log(`[relay] datagram channel: ${rtc.describe()}`);
 /* How long a seat is held for a page whose socket dropped mid-match. The
  * engine stalls on the missing input and resends what the peer has not
@@ -119,6 +122,7 @@ function lobbyState(forId) {
         rules: room.rules,
         inMatch: !!room.match,
         rtc: rtc.available,
+        ice: rtc.iceServers,   // STUN for the page's RTCPeerConnection (rtc.js MELEE_STUN)
     };
 }
 
@@ -256,6 +260,19 @@ function keepPads(from, slot, base, count, buf) {
  * everything, where it is not) by WebSocket. */
 function forward(from, buf, viaDgram) {
     if (!room.match || !room.match.players.includes(from)) return;
+    /* A page may speak only for the seats it was given (from.slots). The slot
+     * it is for lives in the packet, not in who sent it, so without this a page
+     * could forge another player's inputs (a desync, or a self-destruct in
+     * their slot) or kick another player: a MSG_BYE for a slot freezes it on
+     * every other page from the frame it names. MSG_BYE is the relay's to send
+     * when a socket drops (leave()), never a page's, so one from a page is
+     * always forged. The slot byte is at offset 5, inside the 8-byte header. */
+    if (buf.length >= HDR && buf.readUInt32BE(0) === MAGIC) {
+        const type = buf[4], slot = buf[5];
+        if (type === MSG_BYE) return;
+        if ((type === MSG_INPUT || type === MSG_HASH) &&
+            !(from.slots && from.slots.includes(slot))) return;
+    }
     const input = buf.length >= HDR + 5 && buf.readUInt32BE(0) === MAGIC && buf[4] === MSG_INPUT;
     if (input) {
         const base = buf.readUInt32BE(HDR), count = buf[HDR + 4];
@@ -348,10 +365,28 @@ function parked(id, seed) {
                                     room.match.seed === seed && room.match.players.includes(m)) || null;
 }
 
-exports.join = (conn) => {
-    const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
+exports.join = (conn, req) => {
+    /* One SSO'd user, one room, no limit on sockets used to mean a single page
+     * (or a buggy tab, or an abuser) could open thousands: each is a member
+     * with its own 500 ms pinger and is walked on every lobby broadcast. Cap
+     * the room, and cap how many sockets one identity may hold at once. Behind
+     * the gateway every socket arrives from Caddy, so the per-IP address is the
+     * proxy's; the SSO email it forwards (X-Forwarded-Email) is the real
+     * identity, with the socket address as the fallback off-gateway. Counted
+     * from room.members itself, so the resume path (which splices a member)
+     * needs no separate bookkeeping. */
+    const ident = (req && req.headers && req.headers['x-forwarded-email']) ||
+                  (conn.socket && conn.socket.remoteAddress) || '?';
+    if (room.members.length >= MAX_MEMBERS ||
+        room.members.filter((o) => o.ident === ident).length >= PER_IDENT_MAX) {
+        console.log(`[relay] refusing a socket from ${ident}: ` +
+                    `${room.members.length}/${MAX_MEMBERS} in the room`);
+        try { conn.socket && conn.socket.destroy(); } catch (e) { /* */ }
+        return;
+    }
+    const m = { conn, id: nextId++, ident, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
                 slot: -1, slots: [], lastFrame: -1, lastFrames: {}, pads: {}, solid: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
-                away: null };
+                lastOfferAt: 0, away: null };
     room.members.push(m);
     attach(m, conn);
     broadcastLobby();
@@ -454,7 +489,17 @@ function attach(m, conn) {
             if (!m.loaded) { m.loaded = true; broadcastLobby(); }
             break;
         case 'rtc': // the page's offer of a datagram channel (rtc.js)
-            if (msg.type === 'offer') { conn.who = m.name; rtc.offer(conn, msg, json); }
+            // A page offers once per WebSocket; each offer tears down and
+            // rebuilds a node-datachannel PeerConnection (ICE, DTLS, a UDP
+            // socket), so a burst of them is pure churn. Ignore offers that
+            // come faster than one a second.
+            if (msg.type === 'offer') {
+                const now = performance.now();
+                if (now - m.lastOfferAt < OFFER_MIN_MS) break;
+                m.lastOfferAt = now;
+                conn.who = m.name;
+                rtc.offer(conn, msg, json);
+            }
             break;
         case 'rtc-ice':
             rtc.candidate(conn, msg);

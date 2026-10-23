@@ -14,12 +14,24 @@
     # melee.mcbridefarm.com resolves to. Unset or unreachable, every page
     # simply keeps its inputs on the /net WebSocket, as before.
     ports:
-      - "9400:9400/udp"
+      # Bound to ONE host address (MELEE_RTC_BIND, the host's LAN address), not
+      # 0.0.0.0: a bare "9400:9400/udp" listens on every host interface -- the
+      # VM bridge, the docker bridges -- not just the intended LAN path. Set it
+      # in the gateway .env alongside MELEE_RTC_HOST; unset, it binds loopback
+      # only and no page can open a channel (they keep to the WebSocket), which
+      # is the safe way to fail. Packets a router forwards (or punches through
+      # to) this host's LAN address land on this bind.
+      - "${MELEE_RTC_BIND:-127.0.0.1}:9400:9400/udp"
     environment:
       # The image ships with it off; on once the port and the host are set.
       MELEE_RTC: "${MELEE_RTC:-0}"
       MELEE_RTC_PORT: "9400"
       MELEE_RTC_HOST: "${MELEE_RTC_HOST:-}"
+      # A STUN server for the players' browsers (rtc.js). Set, and with a
+      # pfSense "static port" outbound NAT rule for this host's UDP 9400, a
+      # remote player's channel opens through the router's own outbound state
+      # and the WAN port forward can be removed. Empty = LAN or forward only.
+      MELEE_STUN: "${MELEE_STUN:-}"
     volumes:
       - /home/grunt/melee-web/web:/web:ro
       - /home/grunt/melee-web/disc.iso:/disc/disc.iso:ro

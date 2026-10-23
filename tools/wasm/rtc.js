@@ -20,7 +20,9 @@
  *
  * One UDP port for every page (ICE UDP mux):
  *   MELEE_RTC_PORT  the port, default 9400. Publish it as UDP, same number
- *                   inside and out (docker: "9400:9400/udp").
+ *                   inside and out, and bound to the host's one LAN address
+ *                   (docker: "${MELEE_RTC_BIND}:9400:9400/udp" -- see
+ *                   deploy/web/compose-melee.block), not 0.0.0.0.
  *   MELEE_RTC_HOST  the address the players reach that port on, when it is
  *                   not one of this machine's own (in a container, the host's
  *                   LAN address). The relay then announces exactly that
@@ -28,6 +30,21 @@
  *                   preference -- "192.168.1.10,203.0.113.7": players on the
  *                   LAN reach the first, players outside it the forwarded
  *                   public one, and neither needs the router's NAT reflection.
+ *   MELEE_STUN      a STUN server (or comma list) the players' browsers use
+ *                   to learn their own public address -- "stun:host:3478".
+ *                   Handed to each page in the lobby state (lobby.js builds
+ *                   its RTCPeerConnection with it). With it, a player outside
+ *                   the LAN needs NO inbound port forward: the relay sends its
+ *                   ICE check toward the browser's public candidate, which
+ *                   opens an outbound state on the router, and the browser's
+ *                   packets come in on that state. The router's outbound NAT
+ *                   must then keep this port stable (pfSense: "static port"
+ *                   on an outbound NAT rule for this host, UDP MELEE_RTC_PORT;
+ *                   its default picks a fresh random port per destination,
+ *                   which nothing can punch through). Unset, the browser
+ *                   offers only its LAN address, and a remote player reaches
+ *                   the relay only through a forward. A player whose own
+ *                   router will not cooperate simply stays on the WebSocket.
  *   MELEE_RTC=0     off.
  *
  * Liveness: each side sends a one-byte keepalive every 250 ms, and a channel
@@ -41,6 +58,10 @@ const QUIET_MS = 1500;
 const PORT = parseInt(process.env.MELEE_RTC_PORT || '9400', 10);
 const HOSTS = (process.env.MELEE_RTC_HOST || '').split(',').map((h) => h.trim()).filter(Boolean);
 const HOST = HOSTS.join(',');
+// Only stun: / stuns: URLs: a turn: server would need credentials this does
+// not carry, and the page must not be handed arbitrary URLs to dial.
+const STUN = (process.env.MELEE_STUN || '').split(',').map((u) => u.trim())
+    .filter((u) => /^stuns?:[A-Za-z0-9.-]+(:\d{1,5})?$/.test(u));
 
 let ndc = null;
 let why = '';
@@ -53,7 +74,9 @@ if (ndc) {
     try { ndc.initLogger('Error'); } catch (e) { /* older versions */ }
 }
 exports.available = !!ndc;
-exports.describe = () => (ndc ? `on, UDP ${PORT}${HOST ? ` announced as ${HOST}` : ''}` : why);
+exports.iceServers = STUN;   // what the pages build their RTCPeerConnection with
+exports.describe = () => (ndc ? `on, UDP ${PORT}${HOST ? ` announced as ${HOST}` : ''}` +
+                                `${STUN.length ? `, pages use STUN ${STUN.join(',')}` : ', no STUN (LAN or a forward only)'}` : why);
 
 const KEEPALIVE = Buffer.from([0]);
 

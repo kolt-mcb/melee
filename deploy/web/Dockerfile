@@ -20,7 +20,11 @@ WORKDIR /app
 # require() finds from /app/tools/wasm. It ships a prebuilt linux-x64-musl
 # binary, so nothing compiles. Without it the relay runs as before, inputs on
 # the WebSocket only.
-RUN npm install --prefix /app --omit=dev --no-audit --no-fund --no-save node-datachannel@0.33.4 \
+# --ignore-scripts: node-datachannel ships a prebuilt binary (its platform
+# package is a plain optionalDependency, resolved at runtime by detect-libc),
+# so no install script is needed, and skipping them removes a build-time
+# code-execution surface. The require() below confirms the binary still loads.
+RUN npm install --prefix /app --omit=dev --no-audit --no-fund --no-save --ignore-scripts node-datachannel@0.33.4 \
  && node -e "require('/app/node_modules/node-datachannel')"
 # Players' crash and frame-rate reports land in /reports: mount a volume
 # there to keep them past a restart.

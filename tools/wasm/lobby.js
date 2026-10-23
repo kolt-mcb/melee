@@ -589,7 +589,14 @@
     dgram.early = [];
     let pc;
     try {
-      pc = new RTCPeerConnection({ iceServers: [] });
+      // The relay's STUN servers, if it names any (rtc.js MELEE_STUN): with
+      // one, this browser also offers its public address, and a relay behind
+      // a router with a stable outbound mapping can reach it without any
+      // inbound port forward. Without, only the LAN address is offered.
+      const ice = Array.isArray(lobby && lobby.ice)
+        ? lobby.ice.filter((u) => typeof u === 'string' && /^stuns?:/.test(u)).map((urls) => ({ urls }))
+        : [];
+      pc = new RTCPeerConnection({ iceServers: ice });
       dgram.pc = pc;
       const dc = pc.createDataChannel('melee-inputs', { ordered: false, maxRetransmits: 0 });
       dc.binaryType = 'arraybuffer';
