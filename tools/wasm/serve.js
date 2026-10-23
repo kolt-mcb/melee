@@ -212,14 +212,17 @@ function packedOf(file, st, enc) {
  * (through lobby.js, Module.locateFile) melee.wasm with ?v=<their ETag>: a
  * new build is a new URL, which no cache can answer with an old one. */
 const tagOf = (st) => `${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}`;
+const fileVersion = (name) => {
+    let f = path.join(WEB, name);
+    if (!fs.existsSync(f)) f = path.join(ROOT, 'tools', 'wasm', name);   // the dev fallback below
+    try { return tagOf(fs.statSync(f)); } catch (e) { return '0'; }
+};
+// The relay keeps pages on an older engine out of a match.
+relay.setWasmVersion(() => fileVersion('melee.wasm'));
 function servePage(req, res, file) {
     let html;
     try { html = fs.readFileSync(file, 'utf8'); } catch (e) { res.writeHead(404); return res.end('not found'); }
-    const v = (name) => {
-        let f = path.join(WEB, name);
-        if (!fs.existsSync(f)) f = path.join(ROOT, 'tools', 'wasm', name);   // the dev fallback below
-        try { return tagOf(fs.statSync(f)); } catch (e) { return '0'; }
-    };
+    const v = fileVersion;
     html = html.replace('<script src="lobby.js"></script>',
                         `<script src="lobby.js?v=${v('lobby.js')}" data-wasm-v="${v('melee.wasm')}"></script>`)
                .replace('src="melee.js"', `src="melee.js?v=${v('melee.js')}"`);

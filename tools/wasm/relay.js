@@ -49,6 +49,19 @@ const room = {
 };
 let nextId = 1;
 
+/* The engine every page should be running: serve.js hands over a function
+ * that stats the deployed melee.wasm (the same tag the page is stamped with).
+ * Pages on different engines cannot play one match -- 2026-10-23 one page
+ * loaded before a deploy played a three-way against two loaded after it, the
+ * two builds read the third pad differently, and the match desynced at frame
+ * 50. A page says which engine it runs in its hello; one that says nothing is
+ * older than this check, and so stale too. */
+let currentWasm = () => null;
+exports.setWasmVersion = (fn) => { currentWasm = fn; };
+// Not before the page's hello: the socket is a member, and is broadcast to,
+// a moment before the hello saying which engine it runs arrives.
+const stale = (m) => { const cur = currentWasm(); return !!cur && m.said && m.wasm !== cur; };
+
 const json = (conn, obj) => conn.send(Buffer.from(JSON.stringify(obj)));
 
 /* A member's players: its own, then its guests'. */
@@ -78,7 +91,9 @@ function lobbyState(forId) {
         you: forId,
         host: host ? host.id : null,
         players: in_.flatMap((m) => seatsOf(m).map((p, seat) => ({
-            id: m.id, seat, name: p.name, ckind: p.ckind, color: p.color, ping: pingOf(m), pre: m.pre, loaded: m.loaded,
+            // The name says it too: a stale page runs a lobby that predates
+            // `stale`, and its player has to see it somewhere.
+            id: m.id, seat, name: stale(m) ? `${p.name} (old version: reload)` : p.name, stale: stale(m), ckind: p.ckind, color: p.color, ping: pingOf(m), pre: m.pre, loaded: m.loaded,
             inMatch: !!(room.match && room.match.players.includes(m)),
         }))),
         waiting: room.members.length - in_.length,
@@ -88,7 +103,11 @@ function lobbyState(forId) {
 }
 
 function broadcastLobby() {
-    for (const m of room.members) json(m.conn, lobbyState(m.id));
+    for (const m of room.members) {
+        json(m.conn, lobbyState(m.id));
+        // A page in a match plays it out on the engine it started with.
+        if (stale(m) && !(room.match && room.match.players.includes(m))) json(m.conn, { t: 'stale' });
+    }
 }
 
 /* A player's round trip to the relay: the 90th percentile of the recent
@@ -118,6 +137,12 @@ function chooseDelay(players) {
 function startMatch() {
     const players = seated();
     if (players.length < 1 || room.match) return;
+    const old = players.filter(stale);
+    if (old.length) {
+        console.log(`[relay] not starting: ${old.map((m) => m.name).join(', ')} on an old engine (${old.map((m) => m.wasm || 'unstamped').join(', ')}, current ${currentWasm()})`);
+        broadcastLobby();
+        return;
+    }
     const seed = crypto.randomBytes(4).readUInt32BE(0);
     const lineup = [];
     for (const m of players) {
@@ -295,6 +320,8 @@ function attach(m, conn) {
             }
             // fallthrough: a first hello is a pick
         case 'pick':
+            m.said = true;
+            if (typeof msg.wasm === 'string') m.wasm = msg.wasm.slice(0, 64);
             if (typeof msg.name === 'string' && msg.name.trim())
                 m.name = msg.name.trim().slice(0, 16);
             if (Number.isInteger(msg.ckind) && msg.ckind >= 0 && msg.ckind < 26) m.ckind = msg.ckind;

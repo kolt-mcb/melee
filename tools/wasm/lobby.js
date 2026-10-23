@@ -388,7 +388,9 @@
       `<button data-seat="${k}" class="${k === editing ? 'on' : ''}">${k === 0 ? 'You (pad 1 / keyboard)' : `Player ${k + 1} (pad ${k + 1})`}</button>`).join(' ');
     $('fighter-title').textContent = guests.length ? 'Fighters on this computer' : 'Your fighter';
   }
-  const pickMsg = (t) => ({ t, name: me.name, ckind: me.ckind, color: me.color, guests });
+  // `wasm`: the relay keeps a page on an older engine than the deployed one
+  // out of a match (relay.js, stale) and asks it to reload.
+  const pickMsg = (t) => ({ t, name: me.name, ckind: me.ckind, color: me.color, guests, wasm: wasmVersion || null });
   function sendPick() {
     store.set('name', me.name); store.set('ckind', me.ckind); store.set('color', me.color);
     store.set('guests', guests);
@@ -538,6 +540,19 @@
     if (msg.t === 'ping') send({ t: 'pong', s: msg.s });        // the relay measuring the round trip
     else if (msg.t === 'lobby') { lobby = msg; if (!started) { paintLobby(); prefetchMatch(); } }
     else if (msg.t === 'start') { lastStart = msg; startMatch(msg); }
+    else if (msg.t === 'stale' && !started) {
+      // A deploy since this page loaded. The page is never cached, so a
+      // reload brings the new engine; at most one a minute, in case the
+      // files are mid-copy and the version is still settling.
+      let last = 0;
+      try { last = +sessionStorage.getItem('melee.staleAt') || 0; } catch (e) { /* private mode */ }
+      if (Date.now() - last > 60000) {
+        try { sessionStorage.setItem('melee.staleAt', String(Date.now())); } catch (e) { /* private mode */ }
+        console.log('[lobby] a new version is deployed; reloading');
+        setStatus('A new version is out: reloading…');
+        setTimeout(() => location.reload(), 300);
+      }
+    }
     else if (msg.t === 'resumed') {
       if (msg.ok) { resumeUntil = 0; console.log('[lobby] back on the relay; the match goes on'); }
       else { console.log('[lobby] the relay no longer has this match'); lostTheHost(); }
