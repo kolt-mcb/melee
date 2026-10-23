@@ -2129,23 +2129,15 @@ static void pc_web_unit_begin(void)
         g_vbo_lap++;
     }
 }
-/* What this file left bound to GL_COPY_WRITE_BUFFER. g_vbo stays there
- * between commits: binding it and unbinding it again around every commit
- * was two of the frame's ~2,800 WebGL calls per draw, each one decoded and
- * executed by the browser's GPU process, which is what a weak laptop's
- * frame waits on (see lobby.js, `drain`). */
-static GLuint g_web_cw;
 static void pc_web_vbo_commit(void)
 {
     if (!g_web_pending || g_web_ring == NULL) return;
     /* The copy target: binding g_vbo there disturbs neither the array
      * binding the state shadow tracks nor any VAO, and WebGL allows it
      * for a buffer that also holds indices. */
-    if (g_web_cw != g_vbo) {
-        glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
-        g_web_cw = g_vbo;
-    }
+    glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
     glBufferData(GL_COPY_WRITE_BUFFER, g_vbo_off, g_web_ring, GL_STREAM_DRAW);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
     g_web_pending = 0;
     g_web_committed = 1;
 }
@@ -6348,9 +6340,6 @@ static void bridge_create_gl(void)
 
 {
     if (g_vbo) glDeleteBuffers(1, &g_vbo);
-#ifdef __EMSCRIPTEN__
-    g_web_cw = 0; /* a deleted buffer leaves every binding */
-#endif
     if (g_vao) glDeleteVertexArrays(1, &g_vao);
     glGenVertexArrays(1, &g_vao);
     glGenBuffers(1, &g_vbo);
@@ -9176,14 +9165,14 @@ static GLuint g_off_sw_tex;
 static u32 g_off_sw_w, g_off_sw_h;
 #endif /* __EMSCRIPTEN__ */
 
-/* Returns nonzero when the following draws will go to the off-screen target.
- * The caller must reach GXCopyTex; pc_gx_offscreen_cancel() undoes it. */
 #ifdef __EMSCRIPTEN__
 void pc_web_gpu_seg(int seg); /* render.c: the page's GPU timer, by pass */
 #define PC_GPU_SEG(k) pc_web_gpu_seg(k)
 #else
 #define PC_GPU_SEG(k) ((void) 0)
 #endif
+/* Returns nonzero when the following draws will go to the off-screen target.
+ * The caller must reach GXCopyTex; pc_gx_offscreen_cancel() undoes it. */
 int pc_gx_offscreen_begin(int w, int h)
 {
     if (!pc_efb_offscreen_on() || g_off_active || w <= 0 || h <= 0 ||
@@ -12161,7 +12150,6 @@ static void dl_gpu_upload(GLuint buf, unsigned char* map, GLsizeiptr off, const 
         glBindBuffer(GL_COPY_WRITE_BUFFER, buf);
         glBufferSubData(GL_COPY_WRITE_BUFFER, off, bytes, src);
         glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
-        g_web_cw = 0;
 #endif
     } else {
         gls_bind_vbo(buf);
