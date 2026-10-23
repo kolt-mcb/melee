@@ -141,8 +141,8 @@ function pingOf(m) {
 /* One player's input reaches another through the relay in about half of each
  * one's round trip; the slowest such pair sets the delay. Plus one frame,
  * because the pages' frames are not in phase: an input can leave just after
- * the peer's frame began. Two at least -- one already failed on a clean
- * local link -- and at most 10. */
+ * the peer's frame began, and one more for the path's jitter. Two at
+ * least -- one already failed on a clean local link -- and at most 12. */
 function chooseDelay(players) {
     if (FIXED_DELAY > 0) return { delay: FIXED_DELAY, why: 'fixed (MELEE_NET_DELAY)' };
     if (players.length < 2) return { delay: 3, why: 'one player' };
@@ -150,7 +150,11 @@ function chooseDelay(players) {
     if (pings.some((p) => p === null)) return { delay: 3, why: 'not enough ping samples' };
     const [a, b] = [...pings].sort((x, y) => y - x);
     const oneWay = (a + b) / 2;
-    const delay = Math.max(2, Math.min(10, Math.ceil(oneWay / FRAME_MS) + 1));
+    // One frame more than the path needs, for its jitter: with the delay
+    // just covering the 90th-percentile path, a three-way on 2026-10-23
+    // (Starlink at 170 ms among them) spent 7-13% of the match waiting on
+    // 50-250 ms swings. And the cap leaves room for that margin.
+    const delay = Math.max(2, Math.min(12, Math.ceil(oneWay / FRAME_MS) + 2));
     return { delay, why: `pings ${pings.join('/')} ms, slowest path ~${oneWay.toFixed(0)} ms` };
 }
 
