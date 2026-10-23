@@ -2119,6 +2119,7 @@ static unsigned g_vbo_seg;
  * again rather than point into a store that has been replaced. */
 static unsigned char* g_web_ring;
 static int g_web_pending;   /* bytes written since the last commit */
+static GLuint g_web_ibo;    /* g_vao's element buffer: a batch's indices */
 static int g_web_committed; /* a commit since the last write: start a unit */
 static void pc_web_unit_begin(void)
 {
@@ -2501,6 +2502,7 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
 }
 
 static int pc_indexed_on(void);
+static int pc_gpu_dl_on(void);
 static int pc_xdl_on(void);
 static int pc_tri_class(GLenum m);
 static void pc_ubo_commit(void);
@@ -2568,13 +2570,22 @@ static void pc_batch_flush(void)
      * calls, ~1650 a frame in a match. Expanded to triangle indices the
      * whole batch is one glDrawElementsBaseVertex, and strips, fans and
      * lists can share it. Points and lines keep the per-primitive path. */
+#if defined(__EMSCRIPTEN__)
+    /* WebGL2 has no base-vertex draw, so the indices carry the base. Every
+     * flush commits the ring as a fresh store from offset 0 (a "unit",
+     * pc_web_vbo_commit), so the base is only the uniform block in front of
+     * the vertices and u16 indices nearly always reach. */
+    const u32 ibase = (u32) base;
+#else
+    const u32 ibase = 0;
+#endif
     if (pc_indexed_on() && g_batch_n > 1 && pc_tri_class(g_batch_mode) &&
-        g_stage_n <= 65535u)
+        g_stage_n + ibase <= 65535u)
     {
         u32 n = 0;
         int ok = 1;
         for (i = 0; i < g_batch_n && ok; i++) {
-            u32 f = (u32) g_batch_first[i], c = (u32) g_batch_count[i], k;
+            u32 f = (u32) g_batch_first[i] + ibase, c = (u32) g_batch_count[i], k;
             switch (g_batch_pmode[i]) {
             case GL_TRIANGLES:
                 for (k = 0; k + 2 < c; k += 3) {
@@ -2599,11 +2610,26 @@ static void pc_batch_flush(void)
             }
         }
         if (ok && n > 0) {
+#if defined(__EMSCRIPTEN__)
+            /* One draw for the batch where WEBGL_multi_draw was one call but
+             * a draw per primitive behind it: ANGLE's D3D11 and Metal
+             * backends loop over the list, a native draw each with its
+             * validation. g_web_ibo is g_vao's element buffer (bridge_create_gl),
+             * and g_vao is bound above. Only the opt-in GPU-resident lists
+             * bind other element buffers, possibly under g_vao. */
+            PC_VBO_COMMIT();
+            if (pc_gpu_dl_on()) glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_web_ibo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr) (n * sizeof(u16)), g_istage,
+                         GL_STREAM_DRAW);
+            pc_gl_crumb_draw();
+            glDrawElements(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT, (const void*) 0);
+#else
             GLintptr ioff = pc_vbo_stream_raw(g_istage, (GLsizeiptr) (n * sizeof(u16)));
             pc_gl_crumb_draw();
             PC_VBO_COMMIT();
             glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT,
                                      (const void*) ioff, base);
+#endif
             pc_gl_crumb_after();
             pc_diag_batch_calls++;
             pc_diag_draw_calls++;
@@ -2733,15 +2759,11 @@ static int pc_web_multidraw(void)
 
 static int pc_indexed_on(void)
 {
-#if defined(__EMSCRIPTEN__)
-    /* WebGL2 is GLES 3.0 and has no base-vertex draw, which the indexed batch
-     * needs; the per-primitive path below is what the web build draws with. */
-    return 0;
-#else
+    /* WebGL2 is GLES 3.0 and has no base-vertex draw: the web build puts
+     * the base into the indices instead (pc_batch_flush). */
     static int on = -1;
     if (on < 0) on = getenv("MELEE_NO_INDEXED") == NULL;
     return on;
-#endif
 }
 static int pc_tri_class(GLenum m)
 {
@@ -6340,12 +6362,17 @@ static void bridge_create_gl(void)
     /* The vertex ring doubles as the index ring: a batch's indices are
      * streamed into it right after the batch's vertices (see
      * pc_batch_flush), so the same fences cover both. The element binding
-     * is VAO state, recorded here once. WebGL forbids one buffer serving as
-     * both, and draws nothing indexed from the ring (pc_indexed_on). */
+     * is VAO state, recorded here once. */
 #ifndef __EMSCRIPTEN__
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_vbo);
+#else
+    /* WebGL forbids one buffer serving as both: the web's indices get a
+     * buffer of their own, written per batch (pc_batch_flush). */
+    if (g_web_ibo) glDeleteBuffers(1, &g_web_ibo);
+    glGenBuffers(1, &g_web_ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_web_ibo);
 #endif
-    
+
     gls_bind_vbo(0);
     gls_bind_vao(0);
 }
@@ -11230,6 +11257,11 @@ typedef struct DlEntry {
     u8 gpu_slot_min, gpu_slot_max;
     s32 gpu_vbase;
     u32 gpu_ioff, gpu_icount;
+    /* Model-space bounds of every position, for dl_offscreen. cull_state 0
+     * not computed yet, 1 bounds valid, 2 never cull (lines or points,
+     * which have a width; a position the draw path would clamp). */
+    u8 cull_state;
+    f32 bmin[3], bmax[3];
 } DlEntry;
 #define DL_MAP_N 4096
 #define DL_CACHE_CAP (96u << 20)
@@ -11721,6 +11753,137 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
         clock_gettime(CLOCK_MONOTONIC, &r1);
         pc_diag_replay_ns += (u64) ((r1.tv_sec - r0.tv_sec) * 1000000000ll + (r1.tv_nsec - r0.tv_nsec));
     }
+}
+
+/* ------------------------------------------------------------------
+ * Off-screen display lists.
+ *
+ * The console draws every list the game hands it and lets the clipper throw
+ * away what falls outside the view; there a list costs its vertices and no
+ * more. Here every primitive of a list is a draw -- on the web, without
+ * GPU-resident lists, a WebGL call and, under ANGLE's D3D11 backend, a D3D
+ * draw with its validation -- whether or not any of it lands on screen.
+ * Big Blue is the extreme: its ocean, domes, oil rigs and rocks (map 1, ~700
+ * primitives) are drawn every frame of the stretch on the track, when the
+ * camera looks at the sky, and its road and cars are drawn from far past the
+ * screen's edges.
+ *
+ * So a cached list whose bounds, under the matrices it would be drawn with,
+ * lie wholly outside the clip volume is not drawn: GL would clip every
+ * fragment of it. The test is the GL clip volume's side planes (and w > 0)
+ * applied to the eight corners of the list's model-space box -- a plane all
+ * eight lie beyond has the whole box beyond it, so this can only skip what
+ * would draw nothing. Depth planes are left alone. Only lists drawn with
+ * one position matrix qualify: a per-vertex matrix index (skinning) puts
+ * each vertex under its own matrix. Nothing the game reads comes from here;
+ * what the skipped replay would have left in the GX vertex state (the last
+ * colour, normal, coordinates; GXBegin's per-format types) is set as the
+ * replay would have set it, so the draws after are unchanged.
+ * MELEE_NO_DLCULL=1 turns it off. */
+u32 pc_diag_dl_culled, pc_diag_dl_culled_prims;
+static int pc_dlcull_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NO_DLCULL") == NULL;
+    return on;
+}
+static void dl_cull_bounds(DlEntry* e)
+{
+    u32 i;
+    e->cull_state = 2;
+    if (e->nverts == 0) return;
+    for (i = 0; i < e->nprims; i++) {
+        u32 p = e->prims[i].gcn_prim;
+        if (p != GX_QUADS && p != GX_TRIANGLES && p != GX_TRIANGLESTRIP && p != GX_TRIANGLEFAN) return;
+    }
+    for (i = 0; i < e->nverts; i++) {
+        const DlVert* v = &e->verts[i];
+        int k;
+        if (!(v->flags & DLV_POS)) return;
+        for (k = 0; k < 3; k++) {
+            f32 c = v->pos[k];
+            if (!(c > -1e5f && c < 1e5f)) return; /* NaN too */
+            if (i == 0 || c < e->bmin[k]) e->bmin[k] = c;
+            if (i == 0 || c > e->bmax[k]) e->bmax[k] = c;
+        }
+    }
+    e->cull_state = 1;
+}
+static int dl_offscreen(DlEntry* e)
+{
+    const f32 (*m)[4];
+    const f32 (*P)[4] = (const f32 (*)[4]) g_state.proj_matrix;
+    f32 sq = g_vp_squeeze < 1.0f ? g_vp_squeeze : 1.0f;
+    f32 mvp[4][4];
+    u32 out_l = 0xFF, out_r = 0xFF, out_b = 0xFF, out_t = 0xFF, out_w = 0xFF;
+    int i, j, c;
+    if (!pc_dlcull_on()) return 0;
+    if (e->cull_state == 0) dl_cull_bounds(e);
+    if (e->cull_state != 1) return 0;
+    if (!g_state.mtx3d_active || g_state.va_mode[0] != 0 || !g_state.pos_enabled ||
+        g_state.current_mtx_id >= 28) {
+        return 0;
+    }
+    m = (const f32 (*)[4]) g_state.mtx_array[g_state.current_mtx_id];
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            mvp[i][j] = P[i][0] * m[0][j] + P[i][1] * m[1][j] + P[i][2] * m[2][j] +
+                        (j == 3 ? P[i][3] : 0.0f);
+    for (j = 0; j < 4; j++) mvp[0][j] *= sq;
+    for (c = 0; c < 8; c++) {
+        f32 x = (c & 1) ? e->bmax[0] : e->bmin[0];
+        f32 y = (c & 2) ? e->bmax[1] : e->bmin[1];
+        f32 z = (c & 4) ? e->bmax[2] : e->bmin[2];
+        f32 cx = mvp[0][0] * x + mvp[0][1] * y + mvp[0][2] * z + mvp[0][3];
+        f32 cy = mvp[1][0] * x + mvp[1][1] * y + mvp[1][2] * z + mvp[1][3];
+        f32 cw = mvp[3][0] * x + mvp[3][1] * y + mvp[3][2] * z + mvp[3][3];
+        /* A margin of a hundredth of w: rounding never decides it. */
+        f32 eps = 0.01f * fabsf(cw);
+        out_l &= (cx < -cw - eps);
+        out_r &= (cx > cw + eps);
+        out_b &= (cy < -cw - eps);
+        out_t &= (cy > cw + eps);
+        out_w &= (cw < 0.0f);
+        if (!(out_l | out_r | out_b | out_t | out_w)) return 0;
+    }
+    return 1;
+}
+/* What dl_replay leaves behind, without drawing: GXBegin's flush and
+ * per-format state, then the last vertex's attributes (every vertex of a
+ * list carries the same ones). Lists that qualify have no matrix index, so
+ * the position matrix and normal need no skinning. */
+static void dl_skip_replay(const DlEntry* e)
+{
+    const DlVert* s = &e->verts[e->nverts - 1];
+    u32 i;
+    if (g_state.vert_count > 0) bridge_upload_and_draw();
+    for (i = 0; i < e->nprims; i++) {
+        u32 vtxfmt = e->prims[i].vat;
+        if (vtxfmt < 8) {
+            if (g_vf_tex0_set[vtxfmt]) { g_state.tex0_comp_type = g_vf_tex0_type[vtxfmt]; g_state.tex0_frac = g_vf_tex0_frac[vtxfmt]; }
+            if (g_vf_pos_set[vtxfmt]) { g_state.pos_comp_type = g_vf_pos_type[vtxfmt]; g_state.pos_frac = g_vf_pos_frac[vtxfmt]; }
+        }
+    }
+    if (!g_state.nrm_enabled) {
+        g_state.last_nrm[0] = 0.0f; g_state.last_nrm[1] = 0.0f; g_state.last_nrm[2] = 1.0f;
+    }
+    g_state.prim_type = e->prims[e->nprims - 1].gcn_prim;
+    g_state.batch_vtxfmt = e->prims[e->nprims - 1].vat;
+    g_state.in_primitive = FALSE;
+    g_state.last_pos[0] = s->pos[0]; g_state.last_pos[1] = s->pos[1]; g_state.last_pos[2] = s->pos[2];
+    if (s->flags & DLV_CLR) {
+        g_state.cur_color.r = s->col[0]; g_state.cur_color.g = s->col[1];
+        g_state.cur_color.b = s->col[2]; g_state.cur_color.a = s->col[3];
+        g_state.last_clr[0] = s->col[0] / 255.0f; g_state.last_clr[1] = s->col[1] / 255.0f;
+        g_state.last_clr[2] = s->col[2] / 255.0f; g_state.last_clr[3] = s->col[3] / 255.0f;
+    }
+    if (s->flags & DLV_NRM) {
+        g_state.last_nrm[0] = s->nrm[0]; g_state.last_nrm[1] = s->nrm[1]; g_state.last_nrm[2] = s->nrm[2];
+    }
+    if (s->flags & DLV_T0) { g_state.last_tex0[0] = s->t0[0]; g_state.last_tex0[1] = s->t0[1]; }
+    if (s->flags & DLV_T1) { g_state.last_tex1[0] = s->t1[0]; g_state.last_tex1[1] = s->t1[1]; }
+    pc_diag_dl_culled++;
+    pc_diag_dl_culled_prims += e->nprims;
 }
 
 /* The same GX calls the direct path makes per vertex, from the decode. */
@@ -12408,6 +12571,10 @@ void GXCallDisplayList(void* list, u32 nbytes)
         }
         if (e != NULL) {
             e->last_frame = g_state.frame_count;
+            if (e->nprims > 0 && dl_offscreen(e)) {
+                dl_skip_replay(e);
+                goto dl_end;
+            }
             n_draws += (int) e->nprims;
             if (!dl_gpu_draw(e)) dl_replay(e);
             goto dl_end;
