@@ -2,10 +2,44 @@
 #include <stdlib.h>
 #include "audio.h"
 #include "log.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#else
+#define EMSCRIPTEN_KEEPALIVE
+#endif
 
 static SDL_AudioDeviceID g_audio_dev = 0;
 static Uint8* g_audio_buffer = NULL;
 static const int AUDIO_BUFFER_SIZE = 4096;
+
+/* Master volume, 0..100, applied to the mixed stream on its way to the
+ * device -- after the mixer, which the simulation reads (pc_ax.c), so a
+ * quiet page and a loud one still run the same match. MELEE_VOLUME=<n>
+ * sets the starting level (default 100); the web page's slider changes it
+ * while a match runs (pc_web_set_volume). The level is an amplitude: 50 is
+ * half the sample values, about -6 dB. Silence is still queued at 0, so the
+ * device's cushion and clock are the same whatever the setting. */
+static int g_audio_volume = -1;
+static int audio_volume(void)
+{
+    if (g_audio_volume < 0) {
+        const char* v = getenv("MELEE_VOLUME");
+        int n = v != NULL ? atoi(v) : 100;
+        g_audio_volume = n < 0 ? 0 : n > 100 ? 100 : n;
+    }
+    return g_audio_volume;
+}
+void audio_set_volume(int percent)
+{
+    int n = percent < 0 ? 0 : percent > 100 ? 100 : percent;
+    if (n != audio_volume()) {
+        g_audio_volume = n;
+        fprintf(stderr, "[AUDIO] volume %d%%\n", n);
+    }
+}
+int audio_get_volume(void) { return audio_volume(); }
+/* The page calls this: Module._pc_web_set_volume(n). */
+EMSCRIPTEN_KEEPALIVE void pc_web_set_volume(int percent) { audio_set_volume(percent); }
 
 /* Queue-based audio: no SDL audio callback is set, so SDL_QueueAudio()
  * (via audio_submit) is the only way to feed PCM. A callback and the
@@ -69,6 +103,19 @@ void audio_submit(const void* buffer, int num_bytes)
     }
     if (dump) fwrite(buffer, 1, (size_t) num_bytes, dump);
     if (!g_audio_dev) return;
+    /* The master volume: the mixer's frame is 160 stereo s16 samples (640
+     * bytes), scaled in place into a copy so the mixer's own buffer, which
+     * the dump above and the game see, is untouched. */
+    {
+        static s16 scaled[AX_FRAME_BYTES_MAX / 2];
+        int vol = audio_volume();
+        if (vol < 100 && num_bytes > 0 && (size_t) num_bytes <= sizeof(scaled)) {
+            const s16* in = (const s16*) buffer;
+            int i, n = num_bytes / 2;
+            for (i = 0; i < n; i++) scaled[i] = (s16) (((s32) in[i] * vol) / 100);
+            buffer = scaled;
+        }
+    }
     /* The mixer runs a fixed number of frames per game frame (see
      * pc_ax_pump) -- it has to, the simulation reads it -- so keeping the
      * device fed is this queue's job. It used to start empty and only drop

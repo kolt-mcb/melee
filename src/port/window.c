@@ -478,20 +478,30 @@ EM_JS(int, web_canvas_device_px, (int* w, int* h), {
  * Capped at 1440 lines (MELEE_IRES_MAX_LINES, 0 for none), as on Android:
  * already 3x the GameCube's framebuffer, and a 5K display at native size is
  * fill rate spent on nothing visible. */
+static int s_web_cap = -1;   /* lines; 0 for none, -1 until first read */
+static int s_web_tick;
+/* The page's graphics picker, mid-match: Module._pc_web_set_max_lines(n).
+ * The next poll refits the canvas, and the game draws every frame into
+ * whatever size the window has, so the change is one frame away. */
+EMSCRIPTEN_KEEPALIVE void pc_web_set_max_lines(int n)
+{
+    s_web_cap = n < 0 ? 0 : n;
+    s_web_tick = 0;
+    fprintf(stderr, "[WEB] graphics: up to %d lines\n", s_web_cap);
+}
 static void web_fit_canvas(void)
 {
-    static int s_tick, s_cap = -1;
     int w = 0, h = 0, cw = 0, ch = 0;
-    if ((s_tick++ % 15) != 0 || g_sdl_window == NULL) return;
+    if ((s_web_tick++ % 15) != 0 || g_sdl_window == NULL) return;
     if (!web_canvas_device_px(&w, &h)) return;
-    if (s_cap < 0) {
+    if (s_web_cap < 0) {
         const char* e = getenv("MELEE_IRES_MAX_LINES");
-        s_cap = e != NULL ? atoi(e) : 1440;
-        if (s_cap < 0) s_cap = 0;
+        s_web_cap = e != NULL ? atoi(e) : 1440;
+        if (s_web_cap < 0) s_web_cap = 0;
     }
-    if (s_cap > 0 && h > s_cap) {
-        w = (int) ((double) w * s_cap / h + 0.5);
-        h = s_cap;
+    if (s_web_cap > 0 && h > s_web_cap) {
+        w = (int) ((double) w * s_web_cap / h + 0.5);
+        h = s_web_cap;
     }
     SDL_GetWindowSize(g_sdl_window, &cw, &ch);
     if (w != cw || h != ch) {

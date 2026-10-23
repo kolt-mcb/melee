@@ -213,6 +213,16 @@
   body.playing #hud { display: flex; opacity: .5; }
   body.playing:hover #hud { opacity: .95; }
   #hud button { padding: 6px 10px; font-size: 13px; background: #000a; }
+  #hud select { padding: 5px 7px; font-size: 13px; background: #000a; }
+  /* The sound controls: a mute button and a volume slider, in the lobby and
+     on the match screen. The slider is the browser's own, in the page's colour. */
+  .sound { display: inline-flex; align-items: center; gap: 6px; }
+  .sound button { padding: 5px 8px; font-size: 14px; line-height: 1; min-width: 36px; }
+  .sound button.off { color: var(--bad); }
+  .sound input[type=range] { width: 110px; padding: 0; margin: 0; background: transparent;
+    border: 0; box-shadow: none; accent-color: var(--accent); cursor: pointer; }
+  #hud .sound button { background: #000a; }
+  #hud .sound input[type=range] { width: 90px; }
   button.report { padding: 4px 9px; font-size: 13px; color: var(--muted); }
   #gpu { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 4px;
     border: 1px solid var(--bad); background: #ff6b6b14; font-size: 14px;
@@ -251,7 +261,9 @@
   <div class="bar" id="loading-bar" hidden><div id="loading-fill"></div></div>
   <div class="detail" id="loading-detail"></div></div>
 <div id="fps"></div>
-<div id="hud"><button id="btn-full">Fullscreen</button><button id="btn-report-hud" title="Send the host this page's log and frame timings">Send report</button><button id="btn-quit">Leave match</button></div>
+<div id="hud"><span class="sound"><button id="btn-mute-hud" title="Mute">&#x1F50A;</button><input type="range" id="vol-hud" min="0" max="100" step="1" title="Volume"></span>
+  <select id="gfx-hud" title="Graphics: fewer lines run faster on weak graphics; the picture is stretched to fit"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+  <button id="btn-full">Fullscreen</button><button id="btn-report-hud" title="Send the host this page's log and frame timings">Send report</button><button id="btn-quit">Leave match</button></div>
 <div id="banner"><span id="banner-text">Match over.</span><button id="btn-report-banner">Send report</button><button class="primary" id="btn-lobby">Back to lobby</button></div>
 <div id="exit"><button class="primary" id="btn-exit">Start</button>
   <div class="hint">the game&rsquo;s own button &mdash; it pauses a live match, and once the match is over it walks you out through the awards</div></div>
@@ -277,7 +289,8 @@
       </div>
       <div class="row"><label>Graphics <select id="gfx" title="Fewer lines run faster on weak graphics; the picture is stretched to fit">
           <option value="auto">Auto</option><option value="high">High (up to 1440 lines)</option>
-          <option value="medium">Medium (720 lines)</option><option value="low">Low (480 lines, the GameCube's own)</option></select></label></div>
+          <option value="medium">Medium (720 lines)</option><option value="low">Low (480 lines, the GameCube's own)</option></select></label>
+        <label class="sound" title="The game's sound, this browser only; the slider and the mute button are on the match screen too">Sound <button id="btn-mute" title="Mute">&#x1F50A;</button><input type="range" id="vol" min="0" max="100" step="1" title="Volume"></label></div>
       <div class="row"><span class="pad no" id="dl" role="status"></span>
         <button id="btn-download" title="Every stage and fighter, about 200 MB, kept by this browser: later matches load without waiting on the host">Download the whole game</button></div>
     </section>

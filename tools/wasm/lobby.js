@@ -779,6 +779,7 @@
     if (cpuCount) env.MELEE_BOOT_CPU = levels.join(',');
     env.MELEE_KEYS = keysEnv();
     env.MELEE_IRES_MAX_LINES = String(gfxLines());
+    env.MELEE_VOLUME = String(volumeAmp());
     if (pages > 1) {
       Object.assign(env, {
         MELEE_NET: 'web', MELEE_NET_SLOT: String(msg.slot), MELEE_NET_PLAYERS: String(humans),
@@ -1511,11 +1512,71 @@
     const pick = store.get('gfx', 'auto');
     return GFX[pick === 'auto' ? gfxAuto : pick] || GFX.high;
   };
+  /* Two faces on one setting: the lobby's select and the match screen's
+   * (#gfx-hud). A change mid-match reaches the engine at once: window.c
+   * refits the canvas to the new cap on its next poll, and the game draws
+   * every frame at whatever size the canvas has, so the picture changes
+   * within a frame or two. Before a match it is handed over in the start
+   * environment (MELEE_IRES_MAX_LINES). */
   const paintGfx = () => {
-    $('gfx').value = store.get('gfx', 'auto');
-    $('gfx').options[0].textContent = `Auto (${gfxAuto[0].toUpperCase() + gfxAuto.slice(1)})`;
+    for (const el of [$('gfx'), $('gfx-hud')]) {
+      el.value = store.get('gfx', 'auto');
+      el.options[0].textContent = `Auto (${gfxAuto[0].toUpperCase() + gfxAuto.slice(1)})`;
+    }
   };
-  $('gfx').onchange = () => { store.set('gfx', $('gfx').value); paintGfx(); };
+  for (const el of [$('gfx'), $('gfx-hud')]) {
+    el.onchange = () => {
+      store.set('gfx', el.value);
+      paintGfx();
+      // Only once the engine runs: before a match the value travels in the
+      // start environment, and an export called before main() has no stdio.
+      if (document.body.classList.contains('playing') && typeof Module._pc_web_set_max_lines === 'function') {
+        try { Module._pc_web_set_max_lines(gfxLines()); } catch (e) { console.log('[lobby] graphics:', e.message); }
+        $('canvas').focus();
+      }
+    };
+  }
+
+  /* ---- sound: a master volume and a mute, kept by this browser ----
+   * The slider is perceptual: its square is the amplitude the engine applies
+   * (src/port/audio.c, after the mixer, so it never touches the match itself).
+   * 50 on the slider is a quarter of the sample values, about -12 dB. A
+   * change reaches the engine at once (Module._pc_web_set_volume); before a
+   * match it goes in the start environment (MELEE_VOLUME). */
+  const volumeAmp = () => (store.get('muted', false) ? 0
+    : Math.round(100 * Math.pow(Math.max(0, Math.min(100, store.get('volume', 100))) / 100, 2)));
+  const SOUND = [['vol', 'btn-mute'], ['vol-hud', 'btn-mute-hud']];
+  const paintSound = () => {
+    const muted = store.get('muted', false), v = store.get('volume', 100);
+    for (const [slider, mute] of SOUND) {
+      $(slider).value = v;
+      $(slider).title = `Volume ${v}%`;
+      $(mute).textContent = muted || v === 0 ? '\u{1F507}' : v < 50 ? '\u{1F509}' : '\u{1F50A}';
+      $(mute).title = muted ? 'Unmute' : 'Mute';
+      $(mute).classList.toggle('off', muted);
+    }
+  };
+  const applySound = () => {
+    paintSound();
+    if (document.body.classList.contains('playing') && typeof Module._pc_web_set_volume === 'function') {
+      try { Module._pc_web_set_volume(volumeAmp()); } catch (e) { console.log('[lobby] volume:', e.message); }
+    }
+  };
+  for (const [slider, mute] of SOUND) {
+    $(slider).oninput = () => {
+      store.set('volume', parseInt($(slider).value, 10) || 0);
+      // Moving the slider is asking to hear it.
+      if (store.get('muted', false)) store.set('muted', false);
+      applySound();
+    };
+    $(slider).onchange = () => { if (document.body.classList.contains('playing')) $('canvas').focus(); };
+    $(mute).onclick = () => {
+      store.set('muted', !store.get('muted', false));
+      applySound();
+      if (document.body.classList.contains('playing')) $('canvas').focus();
+    };
+  }
+  paintSound();
 
   (function checkGpu() {
     const probe = (opts) => {
