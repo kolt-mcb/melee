@@ -19,9 +19,28 @@
  *   shader   shader warm-up and deferred variant compiles
  *   swap     upscale + swap
  *   draws, uploads, io (ms), rewinds (rollback corrections) per frame
- *   gpu      the frame's GPU time (timer query), where the browser has one
+ *   base     draws on the base program: the eight-stage TEV shader driven by
+ *            uniforms, standing in for a variant still compiling -- several
+ *            times a variant's cost per pixel
+ *   pend     variants still compiling (each one's draws are on `base`)
+ *   efb      EFB copies (GXCopyTex) this frame
+ *   gpu      the frame's GPU time (timer query), where the browser has one,
+ *            from the frame's first draw to its last (not the pacer's wait);
+ *            idle gaps between the browser's commands count too, so on a
+ *            GPU that keeps up it reads about `walk`
+ *   gpuoff   the part of gpu in off-screen passes (the fighters' shadows)
+ *   gpucopy  the part of gpu in EFB copies and their clears
+ *   drain    every 8th frame: how long after the frame's last draw the GPU
+ *            finished it (a fence). Small: the GPU keeps up. Large: the GPU
+ *            -- or the browser's GPU process, or its compositor on the same
+ *            GPU -- is behind, and `late` will follow.
  * So a slow frame is this machine's CPU when game/walk/shader are big, the
- * other players when net is, and the GPU or the browser when late is.
+ * other players when net is, and the GPU or the browser when late is;
+ * gpu/drain/base say whether the GPU is the one.
+ *
+ * Reports from before 2026-10-23 (no `drain` column) have a `gpu` that ran
+ * through the pacer's wait: it is the frame's wall time less the game's,
+ * not GPU time, and reads 12-14 ms on any GPU.
  */
 'use strict';
 const fs = require('fs');
@@ -36,6 +55,51 @@ if (!target) {
 }
 
 const load = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
+
+/* The GPU's share, and the shader variants' (columns base/pend/gpu*,
+ * src/port/render.c web_prof_frame), over the match's frames. */
+function gpuSummary(prof) {
+    const f = prof.fields || [];
+    const st = prof.summary.stats;
+    if (!f.includes('drain')) {
+        if (f.includes('gpu')) {
+            console.log('  (this report\'s gpu column predates 2026-10-23: it ran through the pacer\'s wait, ' +
+                        'so it is wall time less game time, not GPU time)');
+        }
+        return;
+    }
+    const m = (c) => (st[c] ? st[c].mean : NaN);
+    if (Number.isFinite(m('gpu')) && st.gpu.max > 0) {
+        console.log(`  gpu: ${m('gpu')} ms a frame (p95 ${st.gpu.p95}): main scene ${(m('gpu') - m('gpuoff') - m('gpucopy')).toFixed(2)}, ` +
+                    `shadows ${m('gpuoff')}, EFB copies ${m('gpucopy')}; drain ${m('drain')} ms (p95 ${st.drain.p95}) ` +
+                    `against walk ${m('walk')} -- ` +
+                    (m('drain') > 8 || m('gpu') > m('walk') + 4 ? 'the GPU side is behind' : 'the GPU keeps up'));
+    } else {
+        console.log('  gpu: no timer query in this browser');
+    }
+    if (!prof.data) return;
+    const buf = Buffer.from(prof.data, 'base64');
+    const fl = new Float32Array(buf.buffer, buf.byteOffset, buf.length / 4);
+    const F = f.length, I = (c) => f.indexOf(c);
+    let rows = 0, draws = 0, base = 0, withBase = 0, maxPend = 0, lastPend = -1, lastBase = -1, gBase = 0, nBase = 0, gNo = 0, nNo = 0;
+    for (let i = 0; i + F <= fl.length; i += F) {
+        const mf = fl[i + I('mframe')];
+        if (!(mf > 0)) continue;
+        rows++;
+        const b = fl[i + I('base')], g = fl[i + I('gpu')];
+        draws += fl[i + I('draws')];
+        base += b;
+        if (b > 0) { withBase++; lastBase = mf; }
+        if (fl[i + I('pend')] > 0) lastPend = mf;
+        maxPend = Math.max(maxPend, fl[i + I('pend')]);
+        if (Number.isFinite(g)) { if (b > 20) { gBase += g; nBase++; } else if (b === 0) { gNo += g; nNo++; } }
+    }
+    if (!rows) return;
+    console.log(`  shaders: ${(100 * base / (draws || 1)).toFixed(2)}% of the match's draws on the base program, ` +
+                `in ${withBase} of ${rows} frames (last at match frame ${lastBase}); up to ${maxPend} variants compiling, ` +
+                `the last at match frame ${lastPend}` +
+                (nBase && nNo ? `; gpu ${(gBase / nBase).toFixed(2)} ms in frames with over 20 base draws, ${(gNo / nNo).toFixed(2)} with none` : ''));
+}
 const s = (sum) => (sum ? `${sum.fps} fps, ${sum.over20ms}/${sum.frames} frames >20ms, ${sum.over50ms} >50ms` : 'no profile');
 
 if (fs.statSync(target).isDirectory()) {
@@ -100,6 +164,7 @@ if (prof && prof.summary) {
         const own = ['game', 'net', 'walk', 'flush', 'late', 'shader', 'swap'].map((c) => [c, a[c] || 0]).sort((x, y) => y[1] - x[1]);
         console.log(`  slow frames go mostly to: ${own.slice(0, 3).map(([c, v]) => `${c} ${v} ms`).join(', ')}`);
     }
+    gpuSummary(prof);
     if (prof.worst && prof.worst.length) {
         console.log('\nworst frames:');
         const f = prof.fields;
@@ -139,7 +204,7 @@ if (gp && gp.top) {
 
 const nlog = opt('--logs', '40');
 const logs = r.logs || [];
-const tail = nlog === 'all' ? logs : logs.slice(-parseInt(nlog, 10));
+const tail = nlog === 'all' ? logs : parseInt(nlog, 10) > 0 ? logs.slice(-parseInt(nlog, 10)) : [];
 if (tail.length) {
     console.log(`\nlog (${tail.length} of ${logs.length} lines):`);
     for (const [t, lvl, text] of tail) console.log(`  ${(t / 1000).toFixed(2).padStart(8)} ${lvl} ${text}`);

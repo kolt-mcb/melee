@@ -61,27 +61,38 @@ EM_ASYNC_JS(void, web_wait_frame, (double target_ms, int match_frame), {
  * everything, the browser's work between frames too. */
 EM_JS(void, web_prof_frame, (double game, double net, double walk, double flush, double wait,
                              double late, double shader, double swap, int match_frame, int draws,
-                             int uploads, double io, int rewinds), {
+                             int uploads, double io, int rewinds, int base, int pend, int efb), {
     var p = Module.meleeProf;
     if (!p) {
         p = Module.meleeProf = {
             fields: ['wall', 'game', 'net', 'walk', 'flush', 'wait', 'late', 'shader', 'swap',
-                     'mframe', 'draws', 'uploads', 'io', 'rewinds', 'gpu'],
+                     'mframe', 'draws', 'uploads', 'io', 'rewinds', 'base', 'pend', 'efb',
+                     'gpu', 'gpuoff', 'gpucopy', 'drain'],
             cap: 36000, n: 0, last: 0, buf: null,
         };
         p.buf = new Float32Array(p.cap * p.fields.length);
     }
-    var now = performance.now(), b = p.buf, o = (p.n % p.cap) * 15;
+    var now = performance.now(), b = p.buf, o = (p.n % p.cap) * 21;
     b[o] = p.last ? now - p.last : 0;
     p.last = now;
     b[o + 1] = game; b[o + 2] = net; b[o + 3] = walk; b[o + 4] = flush; b[o + 5] = wait;
     b[o + 6] = late; b[o + 7] = shader; b[o + 8] = swap; b[o + 9] = match_frame;
     b[o + 10] = draws; b[o + 11] = uploads; b[o + 12] = io; b[o + 13] = rewinds;
-    /* gpu: filled in frames later by the page's timer query (lobby.js
-     * glProbe), NaN until then or without one. */
-    b[o + 14] = NaN;
+    b[o + 14] = base; b[o + 15] = pend; b[o + 16] = efb;
+    /* gpu..drain: filled in frames later by the page's timer queries
+     * (lobby.js glProbe), NaN until then or without them. */
+    b[o + 17] = NaN; b[o + 18] = NaN; b[o + 19] = NaN; b[o + 20] = NaN;
     p.n++;
     if (p.hook) p.hook(o);
+});
+/* The bridge moves the page's GPU timer between passes: 0 the main scene, 1
+ * an off-screen pass (the shadows), 2 an EFB copy and its clear, 3 the
+ * present (the upscale). -1 stops it: the frame's drawing is done and the
+ * pacer is about to wait. The page sums each frame's queries by pass (gpu is
+ * all of them, gpuoff and gpucopy their parts). */
+EM_JS(void, pc_web_gpu_seg, (int seg), {
+    var p = Module.meleeProf;
+    if (p && p.seg) p.seg(seg);
 });
 /* The frame's drawing starts (render_present): the page opens its GPU timer
  * query here, so it times this frame's GL work and not the pacer's idle wait
@@ -341,6 +352,13 @@ static void render_present_tail(int frame)
 {
     gx_frame_end();
     clock_gettime(CLOCK_MONOTONIC, &s_ph[2]);
+#if defined(__EMSCRIPTEN__)
+    /* The frame's drawing is all issued: stop the page's GPU timer before
+     * the pacer's wait below. A timer query counts the GPU's idle time, and
+     * left running through the wait it read the wait as GPU time -- 12-14 ms
+     * a frame on any GPU, whatever the resolution or shader. */
+    pc_web_gpu_seg(-1);
+#endif
     
     /* Capture rendered frames for the Dolphin reference harness and for
      * ad-hoc debugging. MUST read pixels BEFORE window_swap() -- after the
@@ -732,6 +750,9 @@ static void render_present_tail(int frame)
             /* The scene framebuffer of an internal resolution, scaled into
              * the window (nothing when rendering at window resolution). */
             extern void pc_ires_present(void);
+#if defined(__EMSCRIPTEN__)
+            pc_web_gpu_seg(3); /* the upscale, if there is a scene framebuffer */
+#endif
             pc_ires_present();
         }
         pc_fb_discard_depth();
@@ -749,12 +770,13 @@ static void render_present_tail(int frame)
              * less the netplay wait inside it. */
             extern double pc_net_wait_ms;
             extern unsigned pc_net_rewinds(void);
-            extern u32 pc_diag_uploads, pc_diag_draws;
+            extern u32 pc_diag_uploads, pc_diag_draws, pc_diag_uber_draws, pc_diag_efb_copies;
+            extern int pc_shc_deferred(void);
             extern unsigned long long pc_diag_io_ns;
             extern unsigned int gm_GetFrameCount(void);
             static double q_net;
             static unsigned long long q_io;
-            static u32 q_draws, q_up;
+            static u32 q_draws, q_up, q_uber, q_efb;
             static unsigned q_rw;
             double end = emscripten_get_now();
             double net = pc_net_wait_ms - q_net;
@@ -765,7 +787,11 @@ static void render_present_tail(int frame)
                            PH_NS(3, 4) / 1e6,
                            (int) gm_GetFrameCount(), (int) (pc_diag_draws - q_draws),
                            (int) (pc_diag_uploads - q_up), (double) (pc_diag_io_ns - q_io) / 1e6,
-                           (int) (rw - q_rw));
+                           (int) (rw - q_rw), (int) (pc_diag_uber_draws - q_uber), pc_shc_deferred(),
+                           /* MELEE_FPS's report zeroes this one */
+                           pc_diag_efb_copies >= q_efb ? (int) (pc_diag_efb_copies - q_efb)
+                                                       : (int) pc_diag_efb_copies);
+            q_uber = pc_diag_uber_draws; q_efb = pc_diag_efb_copies;
             q_net = pc_net_wait_ms; q_io = pc_diag_io_ns; q_draws = pc_diag_draws;
             q_up = pc_diag_uploads; q_rw = rw;
             s_web_end_ms = end;

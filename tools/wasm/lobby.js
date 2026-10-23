@@ -1255,7 +1255,19 @@
    *
    *   gpu     each frame's GPU time, from EXT_disjoint_timer_query_webgl2,
    *           written into the profile's `gpu` column a few frames late
-   *           (where the browser offers the extension at all)
+   *           (where the browser offers the extension at all). The bridge
+   *           moves the timer between passes (render.c pc_web_gpu_seg), so
+   *           `gpuoff` is the part in off-screen passes (the shadows) and
+   *           `gpucopy` the part in EFB copies; the rest is the main scene.
+   *           The timer stops when the frame's drawing is issued, before the
+   *           pacer's wait (until 2026-10-23 it ran through the wait, and
+   *           every GPU read 12-14 ms). A timer query still counts the GPU's
+   *           idle time between commands, so on a GPU that keeps up, `gpu`
+   *           is about how long the browser took to hand it the frame.
+   *   drain   every 8th frame: how long after the frame's last WebGL call
+   *           the GPU finished it (a fence, polled). Near zero, the GPU
+   *           keeps up and `gpu` is mostly submission; tens of ms, the GPU
+   *           (or the browser's GPU process) is the one behind.
    *   calls   every WebGL call timed, counted and its upload bytes summed,
    *           for 300 frames: on its own once a match runs slow (a second
    *           of frames averaging over 25 ms), or at match frame 600 for a
@@ -1264,7 +1276,7 @@
    *
    * Both go in the report (glInfo, glProf), with the context the game got. */
   const glProbe = { ctx: null, timer: null, queries: [], prof: null, done: null, info: null,
-                    walls: [], hooked: false };
+                    walls: [], hooked: false, open: null, segs: null, fence: null };
   function glAttach(gl, asked) {
     if (glProbe.ctx) return;
     glProbe.ctx = gl;
@@ -1341,24 +1353,38 @@
    * close this frame's timer query and open the next, collect finished ones,
    * and run the call profile. */
   function glOnFrame(o) {
-    const p = Module.meleeProf, gl = glProbe.ctx, F = p.fields.length;
+    const p = Module.meleeProf, gl = glProbe.ctx, F = p.fields;
     if (gl && glProbe.timer) {
-      const T = glProbe.timer;
+      const T = glProbe.timer, G = F.indexOf('gpu');
       if (glProbe.open) {
         gl.endQuery(T.TIME_ELAPSED_EXT);
-        glProbe.queries.push({ q: glProbe.open, o, n: p.n });
+        glProbe.segs.push(glProbe.open);
         glProbe.open = null;
+      }
+      if (glProbe.segs) {
+        glProbe.queries.push({ segs: glProbe.segs, o, n: p.n });
+        glProbe.segs = null;
       }
       while (glProbe.queries.length) {
         const h = glProbe.queries[0];
-        if (!gl.getQueryParameter(h.q, gl.QUERY_RESULT_AVAILABLE)) break;
+        if (!h.segs.every((s) => gl.getQueryParameter(s.q, gl.QUERY_RESULT_AVAILABLE))) break;
         glProbe.queries.shift();
-        const ns = gl.getQueryParameter(h.q, gl.QUERY_RESULT);
-        gl.deleteQuery(h.q);
-        if (!gl.getParameter(T.GPU_DISJOINT_EXT) && p.n - h.n < p.cap) p.buf[h.o + F - 1] = ns / 1e6;
+        const sum = [0, 0, 0, 0];
+        for (const s of h.segs) {
+          sum[s.k] += gl.getQueryParameter(s.q, gl.QUERY_RESULT) / 1e6;
+          gl.deleteQuery(s.q);
+        }
+        if (!gl.getParameter(T.GPU_DISJOINT_EXT) && p.n - h.n < p.cap) {
+          p.buf[h.o + G] = sum[0] + sum[1] + sum[2] + sum[3];
+          p.buf[h.o + G + 1] = sum[1];
+          p.buf[h.o + G + 2] = sum[2];
+        }
       }
+      const dl = glProbe.drainLate;
+      if (dl && dl.n === p.n - 1) p.buf[o + F.indexOf('drain')] = dl.dt;
+      if (dl && dl.n <= p.n - 1) glProbe.drainLate = null;
     }
-    const mframe = p.buf[o + p.fields.indexOf('mframe')];
+    const mframe = p.buf[o + F.indexOf('mframe')];
     if (glProbe.prof && ++glProbe.prof.frames >= glProbe.prof.want) glProfStop();
     if (mframe > 0 && !glProbe.prof && !glProbe.done) {
       const w = glProbe.walls;
@@ -1370,16 +1396,65 @@
       else if (mframe >= 600) glProfStart(300, 'baseline at frame 600');
     }
   }
+  /* The frame's drawing is all issued (render.c stops the timer there,
+   * before the pacer's wait): fence it, and poll -- each poll its own task,
+   * WebGL only updates a sync's status between tasks -- until the GPU has
+   * passed it, for the `drain` column of the row this frame will write
+   * (row n: the profile has n rows until the frame's own). */
+  const drainChan = new MessageChannel();
+  function glDrain(gl) {
+    const p = Module.meleeProf, n = p.n;
+    let f;
+    try { f = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); } catch (e) { return; }
+    if (!f) return;
+    const t0 = performance.now();
+    glProbe.fence = f;
+    drainChan.port1.onmessage = () => {
+      const dt = performance.now() - t0;
+      if (gl.isContextLost()) { glProbe.fence = null; return; }
+      if (gl.getSyncParameter(f, gl.SYNC_STATUS) === gl.SIGNALED || dt > 200) {
+        gl.deleteSync(f);
+        glProbe.fence = null;
+        if (p.n > n) { if (p.n - n < p.cap) p.buf[(n % p.cap) * p.fields.length + p.fields.indexOf('drain')] = dt; }
+        else glProbe.drainLate = { n, dt };
+        return;
+      }
+      drainChan.port2.postMessage(0);
+    };
+    drainChan.port2.postMessage(0);
+  }
   function glOnBegin() {
     const gl = glProbe.ctx, T = glProbe.timer;
-    if (!gl || !T || glProbe.open || glProbe.queries.length >= 8) return;
-    glProbe.open = gl.createQuery();
-    gl.beginQuery(T.TIME_ELAPSED_EXT, glProbe.open);
+    if (!gl || !T || glProbe.segs || glProbe.queries.length >= 8) return;
+    glProbe.segs = [];
+    glProbe.open = { q: gl.createQuery(), k: 0 };
+    gl.beginQuery(T.TIME_ELAPSED_EXT, glProbe.open.q);
+  }
+  /* The bridge entering pass k (render.c pc_web_gpu_seg): close the
+   * running query and open the next under k; -1 closes it and opens none
+   * (the drawing is done; the pacer's wait is next). */
+  function glOnSeg(k) {
+    const gl = glProbe.ctx, T = glProbe.timer;
+    if (!gl || !T || !glProbe.segs) return;
+    if (glProbe.open && glProbe.open.k === k) return;
+    if (glProbe.open) {
+      gl.endQuery(T.TIME_ELAPSED_EXT);
+      glProbe.segs.push(glProbe.open);
+      glProbe.open = null;
+    }
+    if (k < 0) {
+      if (!glProbe.fence && Module.meleeProf.n % 8 === 0) glDrain(gl);
+      return;
+    }
+    if (glProbe.segs.length > 64) return;
+    glProbe.open = { q: gl.createQuery(), k };
+    gl.beginQuery(T.TIME_ELAPSED_EXT, glProbe.open.q);
   }
   setInterval(() => {
     if (!glProbe.hooked && Module.meleeProf) {
       Module.meleeProf.hook = glOnFrame;
       Module.meleeProf.begin = glOnBegin;
+      Module.meleeProf.seg = glOnSeg;
       glProbe.hooked = true;
     }
   }, 200);

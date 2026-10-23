@@ -12,12 +12,18 @@
  *   profile:start   start the CPU profiler (wasm functions by name)
  *   profile:stop    stop it; the top functions by self time go to the
  *                   console log and the whole profile to <outdir>/cpu.cpuprofile
+ *   trace:start[:CATS]  start a Chrome trace (default categories: toplevel,
+ *                   gpu, gpu.service, gpu.angle) -- the browser's GPU process
+ *                   included, which runs every WebGL call the page makes
+ *   trace:stop      stop it; the whole trace goes to <outdir>/trace.json and
+ *                   the busiest events of each process's threads to the log
  *   stacks:N        pause the page N times, half a second apart, and log
  *                   where it was each time (the profiler cannot start on a
  *                   page whose thread never yields; a debugger pause can)
  *   file:PATH       give the page's disc-image input this file (the shell's
  *                   picker, without a dialog)
  *
+ * DRIVE_WINDOW=W,H sets the browser window (default 1280,800).
  * NAME is a DOM key code: Enter, KeyZ, KeyX, ArrowLeft, Space, ...
  * The console goes to <outdir>/console.txt.
  */
@@ -34,14 +40,19 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'melee-drive-'));
 
 /* DRIVE_GPU=1 renders on the machine's GPU (ANGLE over EGL, which needs no
  * display) instead of SwiftShader: the only way to measure a frame rate. */
+/* DRIVE_VSYNC=1 keeps the browser's 60 Hz frame clock. Without it the
+ * compositor begins frames as fast as it can -- thousands a second, each a
+ * requestAnimationFrame for the page and work for the GPU process -- which
+ * is fine for a frame rate but pollutes any measurement of the GPU process
+ * or of GPU time. */
 const GL_FLAGS = process.env.DRIVE_GPU === '1'
-    ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist',
-       '--enable-gpu', '--disable-gpu-vsync', '--disable-frame-rate-limit']
+    ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist', '--enable-gpu',
+       ...(process.env.DRIVE_VSYNC === '1' ? [] : ['--disable-gpu-vsync', '--disable-frame-rate-limit'])]
     : ['--disable-gpu', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'];
 const chrome = spawn(process.env.CHROME || 'chromium', [
     '--headless=new', '--no-sandbox', '--mute-audio', ...GL_FLAGS,
     '--autoplay-policy=no-user-gesture-required',
-    '--window-size=1280,800', '--hide-scrollbars',
+    `--window-size=${process.env.DRIVE_WINDOW || '1280,800'}`, '--hide-scrollbars',
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`, 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
@@ -90,11 +101,16 @@ function keyParams(code) {
 
     const log = [];
     let onPaused = null;
+    let traceEvents = null, traceDone = null;
     await new Promise(r => ws.onopen = r);
     ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data);
         if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); return; }
-        if (m.method === 'Debugger.paused') {
+        if (m.method === 'Tracing.dataCollected') {
+            if (traceEvents) traceEvents.push(...m.params.value);
+        } else if (m.method === 'Tracing.tracingComplete') {
+            if (traceDone) traceDone();
+        } else if (m.method === 'Debugger.paused') {
             if (onPaused) onPaused(m.params);
         } else if (m.method === 'Runtime.consoleAPICalled') {
             const text = (m.params.args || [])
@@ -156,6 +172,40 @@ function keyParams(code) {
                 for (const [name, c] of top) {
                     log.push(`[profile] ${(100 * c / total).toFixed(1).padStart(5)}%  ${name}`);
                 }
+            }
+        } else if (op === 'trace' && arg === 'start') {
+            traceEvents = [];
+            const cats = step.split(':').slice(2).join(':') || 'toplevel,gpu,gpu.service,gpu.angle';
+            await sendT('Tracing.start', { transferMode: 'ReportEvents',
+                traceConfig: { includedCategories: cats.split(',') } });
+        } else if (op === 'trace' && arg === 'stop') {
+            const done = new Promise((res) => { traceDone = res; });
+            await sendT('Tracing.end', {});
+            await Promise.race([done, sleep(60000)]);
+            const ev = traceEvents || [];
+            traceEvents = null;
+            fs.writeFileSync(path.join(outdir, 'trace.json'), JSON.stringify({ traceEvents: ev }));
+            /* Per process and thread: wall time by event name (complete
+             * events, nested ones counted too), over the traced span. */
+            const pname = new Map(), tname = new Map(), sum = new Map();
+            let t0 = Infinity, t1 = 0;
+            for (const e of ev) {
+                if (e.ph === 'M' && e.name === 'process_name') pname.set(e.pid, e.args.name);
+                if (e.ph === 'M' && e.name === 'thread_name') tname.set(`${e.pid}/${e.tid}`, e.args.name);
+                if (e.ph !== 'X' || !e.dur) continue;
+                t0 = Math.min(t0, e.ts); t1 = Math.max(t1, e.ts + e.dur);
+                const k = `${e.pid}/${e.tid}|${e.name}`;
+                const v = sum.get(k) || [0, 0];
+                v[0] += e.dur; v[1]++;
+                sum.set(k, v);
+            }
+            const span = (t1 - t0) / 1e6;
+            log.push(`[trace] ${ev.length} events over ${span.toFixed(1)} s`);
+            for (const [k, [dur, n]] of [...sum].sort((a, b) => b[1][0] - a[1][0]).slice(0, 40)) {
+                const [pt, name] = k.split('|');
+                const [pid] = pt.split('/');
+                log.push(`[trace] ${(dur / 1e3 / span).toFixed(2).padStart(7)} ms/s ${String(n).padStart(7)}x  ` +
+                         `${pname.get(+pid) || pid}/${tname.get(pt) || pt}  ${name}`);
             }
         } else if (op === 'stacks') {
             await sendT('Debugger.enable', {});
