@@ -703,7 +703,9 @@
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
       const hello = pickMsg('hello');
-      if (started && lobby && lastStart) hello.resume = { id: lobby.you, seed: lastStart.seed };
+      // The token came to this page alone in its lobby state; without it the
+      // relay would hand the seat to whoever first asked with the public id.
+      if (started && lobby && lastStart) hello.resume = { id: lobby.you, seed: lastStart.seed, token: lobby.token };
       send(hello);
     };
     ws.onmessage = (ev) => deliver(new Uint8Array(ev.data), received);

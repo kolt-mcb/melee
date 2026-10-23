@@ -123,6 +123,9 @@ function lobbyState(forId) {
         inMatch: !!room.match,
         rtc: rtc.available,
         ice: rtc.iceServers,   // STUN for the page's RTCPeerConnection (rtc.js MELEE_STUN)
+        // This page's own secret for reclaiming its seat after a drop (parked).
+        // The state is built per member, so it never carries anyone else's.
+        token: (room.members.find((m) => m.id === forId) || {}).token || null,
     };
 }
 
@@ -260,20 +263,23 @@ function keepPads(from, slot, base, count, buf) {
  * everything, where it is not) by WebSocket. */
 function forward(from, buf, viaDgram) {
     if (!room.match || !room.match.players.includes(from)) return;
-    /* A page may speak only for the seats it was given (from.slots). The slot
-     * it is for lives in the packet, not in who sent it, so without this a page
-     * could forge another player's inputs (a desync, or a self-destruct in
-     * their slot) or kick another player: a MSG_BYE for a slot freezes it on
-     * every other page from the frame it names. MSG_BYE is the relay's to send
-     * when a socket drops (leave()), never a page's, so one from a page is
-     * always forged. The slot byte is at offset 5, inside the 8-byte header. */
-    if (buf.length >= HDR && buf.readUInt32BE(0) === MAGIC) {
-        const type = buf[4], slot = buf[5];
-        if (type === MSG_BYE) return;
-        if ((type === MSG_INPUT || type === MSG_HASH) &&
-            !(from.slots && from.slots.includes(slot))) return;
-    }
-    const input = buf.length >= HDR + 5 && buf.readUInt32BE(0) === MAGIC && buf[4] === MSG_INPUT;
+    /* A page may send exactly two things into a match, MSG_INPUT and MSG_HASH,
+     * and only for the seats it was given (from.slots): the slot lives in the
+     * packet, not in who sent it, so without this a page could forge another
+     * player's inputs (a desync, or moves in their slot). Everything else is
+     * dropped here, an allowlist and not a denylist. MSG_BYE is the relay's to
+     * send when a socket drops (leave()); a BYE from a page would freeze that
+     * slot on every other page. MSG_HELLO/SETUP/READY are the UDP build's
+     * handshake, which the web lobby replaces -- yet a page still ACCEPTS a
+     * MSG_SETUP (pc_netplay.c net_handle refuses it only on the UDP host), so
+     * one forged packet would rewrite every other page's slot, delay and seed
+     * mid-match. A packet without the magic is nothing the engine reads. */
+    if (buf.length < HDR || buf.readUInt32BE(0) !== MAGIC) return;
+    const type = buf[4], slot = buf[5];
+    if (type !== MSG_INPUT && type !== MSG_HASH) return;
+    if (!(from.slots && from.slots.includes(slot))) return;
+    if (type === MSG_INPUT && buf.length < HDR + 5) return;
+    const input = type === MSG_INPUT;
     if (input) {
         const base = buf.readUInt32BE(HDR), count = buf[HDR + 4];
         if (count > WINDOW || buf.length < HDR + 5 + count * PAD_BYTES) return;
@@ -360,8 +366,12 @@ exports.status = () => ({
 
 /* The seat a dropped page may come back to: the match it was in is still
  * running, and its grace has not run out. */
-function parked(id, seed) {
-    return room.members.find((m) => m.id === id && m.away && room.match &&
+function parked(id, seed, token) {
+    // The id is in every lobby broadcast and the seed in every start message,
+    // so on their own any page in the room could claim a dropped player's seat
+    // during the hold. The token went to that page alone (lobbyState).
+    if (typeof token !== 'string' || !token) return null;
+    return room.members.find((m) => m.id === id && m.away && m.token === token && room.match &&
                                     room.match.seed === seed && room.match.players.includes(m)) || null;
 }
 
@@ -384,7 +394,8 @@ exports.join = (conn, req) => {
         try { conn.socket && conn.socket.destroy(); } catch (e) { /* */ }
         return;
     }
-    const m = { conn, id: nextId++, ident, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
+    const m = { conn, id: nextId++, ident, token: crypto.randomBytes(16).toString('hex'),
+                name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
                 slot: -1, slots: [], lastFrame: -1, lastFrames: {}, pads: {}, solid: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
                 lastOfferAt: 0, away: null };
     room.members.push(m);
@@ -435,7 +446,7 @@ function attach(m, conn) {
             break;
         case 'hello':
             if (msg.resume && typeof msg.resume === 'object') {
-                const p = parked(msg.resume.id, msg.resume.seed);
+                const p = parked(msg.resume.id, msg.resume.seed, msg.resume.token);
                 if (!p) { json(conn, { t: 'resumed', ok: false }); break; }
                 // This socket is that player's, not a newcomer's: hand it over.
                 clearTimeout(p.away);

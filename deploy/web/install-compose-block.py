@@ -94,6 +94,70 @@ if not any(re.match(r"^\s*MELEE_STUN:", lines[i]) for i in range(start, end)):
     ]
     did.append(f"MELEE_STUN env (line {anchor + 2})")
 
+# 4. Its own network, shared with Caddy alone. On the common `gateway` bridge
+#    every other tenant container could reach melee:8000 with no SSO (the gate
+#    is Caddy's). Three edits: the melee service's networks line, a named
+#    top-level network, and caddy attached to it. node1-apply.sh then connects
+#    the RUNNING caddy to it (docker network connect), so no Caddy restart;
+#    caddy's compose config has changed, so the next `up -d caddy` recreates
+#    it once -- the user's call, when the gateway is quiet.
+NET = "melee-net"
+end = service_end()
+for i in range(start, end):
+    m = re.match(r"^(\s*)networks:\s*\[\s*gateway\s*\]\s*$", lines[i])
+    if m:
+        lines[i] = f"{m.group(1)}networks: [{NET}]\n"
+        did.append(f"melee on its own network {NET} (line {i + 1})")
+        break
+text = "".join(lines)
+if not re.search(rf"^  {re.escape(NET)}:\s*$", text, re.M):
+    top = next((i for i, l in enumerate(lines) if l.startswith("networks:")), None)
+    if top is None:
+        print("no top-level `networks:` to add melee-net to; refusing to guess", file=sys.stderr)
+        sys.exit(1)
+    lines[top + 1:top + 1] = [
+        f"  # melee's own bridge: only the melee service and caddy are on it\n",
+        f"  # (deploy/web/compose-melee.block, install-compose-block.py).\n",
+        f"  {NET}:\n",
+        f"    name: {NET}\n",
+        f"    driver: bridge\n",
+    ]
+    did.append(f"top-level network {NET} (line {top + 2})")
+# caddy: add the network to its list, whichever form the list takes.
+cstart = next((i for i, l in enumerate(lines) if re.match(r"^  caddy:\s*$", l)), None)
+if cstart is None:
+    print("no caddy service to attach to melee-net; refusing to guess", file=sys.stderr)
+    sys.exit(1)
+cend = next((i for i in range(cstart + 1, len(lines))
+             if re.match(r"^  [a-z0-9_-]+:", lines[i]) or re.match(r"^[a-z]", lines[i])), len(lines))
+cnet = next((i for i in range(cstart, cend) if re.match(r"^\s*networks:", lines[i])), None)
+if cnet is None:
+    print("the caddy service has no networks: line; refusing to guess", file=sys.stderr)
+    sys.exit(1)
+inline = re.match(r"^(\s*)networks:\s*\[(.*)\]\s*$", lines[cnet])
+if inline:
+    items = [s.strip() for s in inline.group(2).split(",") if s.strip()]
+    if NET not in items:
+        lines[cnet] = f"{inline.group(1)}networks: [{', '.join(items + [NET])}]\n"
+        did.append(f"caddy attached to {NET} (line {cnet + 1})")
+else:
+    # Block form: the list items follow, each "- name", until the indent drops.
+    base = len(re.match(r"^(\s*)", lines[cnet]).group(1))
+    j = cnet + 1
+    have = False
+    while j < cend and (lines[j].strip() == "" or len(lines[j]) - len(lines[j].lstrip()) > base):
+        if re.match(rf"^\s*-\s*{re.escape(NET)}\s*$", lines[j]):
+            have = True
+        j += 1
+    if not have:
+        last = next((k for k in range(j - 1, cnet, -1) if lines[k].strip().startswith("-")), None)
+        if last is None:
+            print("caddy's networks: list has no items to copy the indent from; refusing to guess", file=sys.stderr)
+            sys.exit(1)
+        indent = re.match(r"^(\s*)", lines[last]).group(1)
+        lines[last + 1:last + 1] = [f"{indent}- {NET}\n"]
+        did.append(f"caddy attached to {NET} (line {last + 2})")
+
 if did:
     open(PATH, "w").write("".join(lines))
     print("updated the existing melee service: " + "; ".join(did))

@@ -45,7 +45,11 @@ const PORT = parseInt(opt('--port', PLAIN ? '8000' : '8443'), 10);
 const WEB = path.resolve(opt('--dir', path.join(ROOT, 'build', 'wasm')));
 const ISO = opt('--iso', process.env.MELEE_ISO || '');
 const REPORTS = path.resolve(opt('--reports', process.env.MELEE_REPORTS || path.join(ROOT, 'reports')));
-const REPORT_MAX_BYTES = 32 << 20, REPORT_MAX_FILES = 2000;
+// Sized to what reports are: on 2026-10-23 the 133 on node1 had a median of
+// 0.6 MB, a 95th percentile of 2.5 MB and a largest of 3.3 MB. Any signed-in
+// page can send one, so the two caps bound the disk a bad actor can fill:
+// 8 MB x 1000 = 8 GB, where the old 32 MB x 2000 allowed 64 GB.
+const REPORT_MAX_BYTES = 8 << 20, REPORT_MAX_FILES = 1000;
 // A /net frame is tiny: a game packet is ~130 B, a lobby message a little JSON.
 // wsAccept reads the frame length as a full 64-bit field and buffers the whole
 // message, so without a ceiling one page could send a multi-gigabyte frame and

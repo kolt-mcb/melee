@@ -122,6 +122,21 @@ else
 fi
 docker ps --filter name=^/melee$ --format 'melee: {{.Names}} {{.Status}}'
 
+# 3b. melee lives on its own network, melee-net, that only caddy shares (the
+# installer put it in the compose file). Attach the RUNNING caddy to it here,
+# which needs no restart: `up -d melee` above does not touch caddy, and a
+# Caddy restart cuts every mcbridefarm.com connection. Idempotent. Caddy's
+# compose config now lists the network too, so its next `up -d caddy` (the
+# user's, when the gateway is quiet) recreates it already attached.
+if docker network inspect melee-net >/dev/null 2>&1; then
+  caddy_id=$(docker compose ps -q caddy 2>/dev/null || true)
+  if [ -n "$caddy_id" ] && ! docker network inspect melee-net -f '{{range .Containers}}{{.Name}} {{end}}' | grep -q caddy; then
+    docker network connect melee-net "$caddy_id" && say "caddy: attached to melee-net (no restart)"
+  else
+    say "caddy: already on melee-net"
+  fi
+fi
+
 # 4. health, from node1 into the container's bridge IP (the melee container
 # publishes no port on purpose -- only Caddy, on the same bridge, talks to it)
 IP=$(melee_ip)

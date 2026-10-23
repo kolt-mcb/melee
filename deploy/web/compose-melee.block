@@ -6,7 +6,13 @@
     image: melee-web:local
     container_name: melee
     restart: unless-stopped
-    networks: [gateway]
+    # Its own network, shared with Caddy alone (install-compose-block.py adds
+    # melee-net at the top level and attaches caddy; node1-apply.sh connects
+    # the running caddy to it without a restart). On the shared `gateway`
+    # bridge every other tenant container reached this port with no SSO at
+    # all -- the gate is Caddy's, and this container trusts whatever reaches
+    # 8000, X-Forwarded-Email included.
+    networks: [melee-net]
     # The datagram channel for game inputs (tools/wasm/rtc.js): one UDP port,
     # the same number inside and out, NOT through Caddy (it is not HTTP).
     # MELEE_RTC_HOST is the address the players' browsers reach this host's

@@ -25,7 +25,13 @@ WORKDIR /app
 # so no install script is needed, and skipping them removes a build-time
 # code-execution surface. The require() below confirms the binary still loads.
 RUN npm install --prefix /app --omit=dev --no-audit --no-fund --no-save --ignore-scripts node-datachannel@0.33.4 \
- && node -e "require('/app/node_modules/node-datachannel')"
+ && node -e "require('/app/node_modules/node-datachannel')" \
+ && node -e "const fs=require('fs');try{const s=fs.readFileSync('/app/node_modules/@node-datachannel/linux-x64-musl/node_datachannel.node').toString('latin1');const m=s.match(/OpenSSL \d+\.\d+\.\d+[a-z]*(\s+\d+ \w+ \d{4})?/);console.log('node-datachannel bundles: '+(m?m[0]:'OpenSSL version string not found'))}catch(e){console.log('node-datachannel bundles: ?',e.message)}"
+# The line above prints the OpenSSL the prebuilt statically links (1.1.1w as of
+# 0.33.4 -- end-of-life since 2023-09, no upstream fixes). It is unreachable
+# until ICE completes with credentials issued over the SSO'd WebSocket, so it
+# is a tracking item: when a node-datachannel release bundles OpenSSL 3.x,
+# bump the pin above. `docker compose build melee` shows the line.
 # Players' crash and frame-rate reports land in /reports: mount a volume
 # there to keep them past a restart.
 RUN mkdir -p /reports /app/tools/wasm && chown node:node /reports

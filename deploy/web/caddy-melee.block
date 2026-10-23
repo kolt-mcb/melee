@@ -13,6 +13,13 @@
 # → Caddy's macvlan IP and has NO Cloudflare record, so the public internet
 # cannot even look it up. Making it public later = a DNS record; the SSO gate
 # holds either way.
+#
+# This block is what node1 RUNS (brought back in step 2026-10-23: the copy here
+# had only the oauth2-proxy gate and no allowlist, so a fresh install from it
+# would have admitted any Google account). It needs the melee-authz sidecar
+# from the gateway compose (authz/melee-authz.mjs, port 4181, reads
+# MELEE_ALLOWED_EMAILS from the gateway .env); node1-apply.sh installs this
+# vhost only when absent and never touches an installed one.
 # ─────────────────────────────────────────────────────────────────────────
 melee.mcbridefarm.com {
 	tls /etc/caddy/certs/wildcard.crt /etc/caddy/certs/wildcard.key
@@ -32,11 +39,21 @@ melee.mcbridefarm.com {
 
 	import oauth_routes
 
-	# Same SSO gate as the wildcard, but its own rate-limit zone: a booting
-	# client pulls the 1.4 GB disc as many range requests from one IP, and the
-	# wildcard's 300/min is shared with every other subdomain.
+	# Two gates, in this order: a Google session (oauth2-proxy), then an
+	# approved address (melee-authz, which asks oauth2-proxy and decides).
+	#
+	# Why a sidecar and not a matcher here: Caddy evaluates route matchers
+	# BEFORE forward_auth runs, so a matcher in this vhost cannot see the
+	# X-Forwarded-Email that forward_auth copies in. A `header_regexp
+	# X-Forwarded-Email` gate therefore denies everyone -- and `caddy validate`
+	# calls that config perfectly correct. The decision has to be made by
+	# whatever answers the auth request. See authz/melee-authz.mjs.
 	@auth not path /oauth2/*
+
 	handle @auth {
+		# Same SSO gate as the wildcard, but its own rate-limit zone: a booting
+		# client pulls the 1.4 GB disc as many range requests from one IP, and the
+		# wildcard's 300/min is shared with every other subdomain.
 		rate_limit {
 			zone melee_per_ip {
 				key {client_ip}
@@ -44,15 +61,30 @@ melee.mcbridefarm.com {
 				window 1m
 			}
 		}
-		forward_auth oauth2-proxy:4180 {
-			uri /oauth2/auth
+		forward_auth melee-authz:4181 {
+			uri /auth
 			copy_headers X-Auth-Request-Email>X-Forwarded-Email X-Auth-Request-User>X-Forwarded-User
 
+			# 401 from the sidecar means "no session" -- same redirect the other
+			# vhosts use. (handle_response cannot copy_headers from the auth answer;
+			# the validator rejects it, so the URL is built here instead.)
 			@unauth status 401
 			handle_response @unauth {
 				redir https://{http.request.host}/oauth2/sign_in?rd={http.request.scheme}://{http.request.host}{http.request.orig_uri} 302
 			}
+
+			# 403 means "signed in, not on the list" -- and there is deliberately
+			# no handle_response block here. Proven on node1 with a throwaway front and
+			# a stub on loopback: with no handle_response, forward_auth copies the auth
+			# answer's status, headers AND body to the client. So the page belongs to
+			# the sidecar (authz/melee-authz.mjs), which is the whole reason it is a
+			# sidecar: editing the copy is `docker compose restart melee-authz` and
+			# leaves the gateway alone, instead of a Caddy restart that re-claims the
+			# LAN lease and drops /net plus any disc download in flight. A respond
+			# line here would squash it -- which is exactly what happened on 2026-10-16
+			# when this block still held the old one-line text/plain sentence.
 		}
+
 		# /net is a long-lived binary WebSocket (Caddy upgrades it on its own);
 		# /disc.iso is a stream, so flush immediately rather than buffering.
 		reverse_proxy melee:8000 {
