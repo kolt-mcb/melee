@@ -5516,6 +5516,10 @@ static int pc_web_parallel(void)
     return on;
 }
 
+/* For render.c's valve: whether a deferred variant's compile runs in the
+ * background here, or on this thread. */
+int pc_web_parallel_shaders(void) { return pc_web_parallel(); }
+
 static int pc_par_has(u32 h)
 {
     int i;
@@ -5597,6 +5601,7 @@ void pc_web_prog_poll(void)
 }
 #else
 void pc_web_prog_poll(void) {}
+int pc_web_parallel_shaders(void) { return 0; }
 #endif
 
 static u32 pc_spec_hash(void)

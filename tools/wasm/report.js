@@ -2,7 +2,7 @@
 /* Read a report a player's page sent the host (tools/wasm/serve.js keeps them
  * in reports/; tools/wasm/lobby.js "reports" says what is in one).
  *
- *   node tools/wasm/report.js reports/<file>.json [--logs N|all] [--csv out.csv]
+ *   node tools/wasm/report.js reports/<file>.json [--logs N|all] [--dips N|all] [--csv out.csv]
  *   node tools/wasm/report.js reports/            # one line per report
  *
  * The frame profile's columns (src/port/render.c, web_prof_frame), in ms:
@@ -38,6 +38,11 @@
  * other players when net is, and the GPU or the browser when late is;
  * gpu/drain/base say whether the GPU is the one.
  *
+ * `dips` is that verdict made for every frame over 20 ms in the match, as
+ * lobby.js made it at the time (its [DIP] lines, in the log): episodes of
+ * consecutive slow frames, each with the columns averaged over it, its
+ * worst frame, and where the time went.
+ *
  * Reports from before 2026-10-23 (no `drain` column) have a `gpu` that ran
  * through the pacer's wait: it is the frame's wall time less the game's,
  * not GPU time, and reads 12-14 ms on any GPU.
@@ -50,7 +55,7 @@ const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : dflt; };
 const target = args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--')));
 if (!target) {
-    console.error('usage: node tools/wasm/report.js <report.json | reports-dir> [--logs N|all] [--csv out.csv]');
+    console.error('usage: node tools/wasm/report.js <report.json | reports-dir> [--logs N|all] [--dips N|all] [--csv out.csv]');
     process.exit(2);
 }
 
@@ -100,7 +105,10 @@ function gpuSummary(prof) {
                 `the last at match frame ${lastPend}` +
                 (nBase && nNo ? `; gpu ${(gBase / nBase).toFixed(2)} ms in frames with over 20 base draws, ${(gNo / nNo).toFixed(2)} with none` : ''));
 }
-const s = (sum) => (sum ? `${sum.fps} fps, ${sum.over20ms}/${sum.frames} frames >20ms, ${sum.over50ms} >50ms` : 'no profile');
+const s = (sum) => (!sum ? 'no profile'
+    : sum.lost != null ? `${sum.fps} fps, ${sum.lost} of ${sum.frames} frames lost, ${sum.hitches} hitches` +
+                         (sum.refreshHz ? ` (${sum.refreshHz} Hz display)` : '')
+    : `${sum.fps} fps, ${sum.over20ms}/${sum.frames} frames >20ms, ${sum.over50ms} >50ms`);
 
 if (fs.statSync(target).isDirectory()) {
     for (const f of fs.readdirSync(target).filter((x) => x.endsWith('.json')).sort()) {
@@ -151,7 +159,10 @@ if (r.errors && r.errors.length > (r.crash ? 1 : 0)) {
 const prof = r.prof;
 if (prof && prof.summary) {
     const sum = prof.summary;
-    console.log(`\nframes: ${s(sum)}, ${sum.over33ms} >33ms, over ${sum.seconds} s (${prof.matchRows} in the match)`);
+    console.log(`\nframes: ${s(sum)}, over ${sum.seconds} s (${prof.matchRows} in the match)` +
+                (sum.lost != null ? `; ${sum.over20ms} frames >20ms, ${sum.over33ms} >33ms, ${sum.over50ms} >50ms` +
+                 (sum.refreshHz && sum.refreshHz !== 60 ? ` (a ${sum.refreshHz} Hz display shows 60 fps unevenly; a hitch here is over ${sum.hitchMs} ms)` : '')
+                 : `, ${sum.over33ms} >33ms`));
     const cols = Object.keys(sum.stats);
     const w = 9;
     console.log('  ' + 'ms'.padEnd(8) + cols.map((c) => c.padStart(w)).join(''));
@@ -171,6 +182,20 @@ if (prof && prof.summary) {
         console.log('  ' + f.map((c) => c.padStart(8)).join(''));
         for (const row of prof.worst.slice(0, 15)) console.log('  ' + f.map((c) => String(row[c]).padStart(8)).join(''));
     }
+    const d = r.dips;
+    if (d && d.episodes) {
+        const nd = opt('--dips', '25');
+        const list = nd === 'all' ? d.list : d.list.slice(0, parseInt(nd, 10) || 0);
+        console.log(`\ndips: ${d.lost != null ? `${d.lost} frames lost and ${d.hitches} hitches (over ${d.hitchMs} ms on a ${d.refreshHz || '?'} Hz display)`
+                                              : `${d.frames} frames over ${d.over} ms`} in ${d.episodes} episodes` +
+                    (d.dropped ? ` (${d.dropped} not kept)` : '') + (list.length < d.list.length ? `; the first ${list.length} (--dips all for every one)` : ''));
+        for (const e of list) {
+            const at = e.n === 1 ? `frame ${e.from}`.padEnd(18) : `frames ${e.from}-${e.to}`.padEnd(18);
+            const what = e.lost != null ? ` lost ${e.lost} hitch ${e.hitches}` : '';
+            const sz = e.n === 1 ? `${String(e.worstMs).padStart(6)} ms${what}` : `${String(e.n).padStart(3)}x avg ${e.avgMs} worst ${e.worstMs} @${e.worstAt}${what}`;
+            console.log(`  ${at} ${sz.padEnd(44)} ${(e.top || []).slice(0, 3).map(([c, v]) => `${c} ${v}`).join(', ')} -> ${e.where}`);
+        }
+    } else if (d && d.frames === 0) console.log('\ndips: none (no frame lost, no hitch)');
     const csv = opt('--csv');
     if (csv && prof.data) {
         const buf = Buffer.from(prof.data, 'base64');

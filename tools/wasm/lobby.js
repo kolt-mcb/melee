@@ -1423,6 +1423,7 @@
       if (dl && dl.n <= p.n - 1) glProbe.drainLate = null;
     }
     const mframe = p.buf[o + F.indexOf('mframe')];
+    dipOnFrame(o, mframe);
     if (glProbe.prof && ++glProbe.prof.frames >= glProbe.prof.want) glProfStop();
     if (mframe > 0 && !glProbe.prof && !glProbe.done) {
       const w = glProbe.walls;
@@ -1648,8 +1649,9 @@
 
   /* ---- reports: what the host needs to fix a friend's slow or broken match ----
    * A report is the page's log, any crash, the browser and GPU, the match,
-   * and the engine's frame profile (Module.meleeProf, one row a frame from
-   * src/port/render.c's web_prof_frame: where each frame's time went). It is
+   * the engine's frame profile (Module.meleeProf, one row a frame from
+   * src/port/render.c's web_prof_frame: where each frame's time went) and
+   * the dips cut from it (`dips`, the [DIP] lines below). It is
    * POSTed to the host's server (tools/wasm/serve.js), which keeps it in its
    * reports directory; `node tools/wasm/report.js <file>` reads one.
    *
@@ -1663,7 +1665,7 @@
   });
   // Main-thread stalls the browser itself saw (Chrome): garbage collection,
   // another tab, an extension.
-  const longTasks = { count: 0, ms: 0, worst: [] };
+  const longTasks = { count: 0, ms: 0, worst: [], recent: [] };
   try {
     new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
@@ -1671,13 +1673,158 @@
         longTasks.worst.push([Math.round(e.startTime), Math.round(e.duration)]);
         longTasks.worst.sort((a, b) => b[1] - a[1]);
         longTasks.worst.length = Math.min(longTasks.worst.length, 30);
+        // The last few in order, for the [DIP] lines to match against.
+        longTasks.recent.push([e.startTime, e.duration]);
+        if (longTasks.recent.length > 40) longTasks.recent.shift();
       }
     }).observe({ type: 'longtask', buffered: true });
   } catch (e) { /* not this browser */ }
 
+  /* ---- the display's refresh rate, from requestAnimationFrame's cadence ----
+   * The engine paces itself to 60 Hz on the browser's frame clock, and that
+   * clock is the display's: on a 75 Hz monitor the frames land on a 13.3 ms
+   * grid as 13, 13, 13, 27 ms (the average is 16.7), on a 90 Hz phone as
+   * 11, 22. Those long frames are not dips, and a 20 ms rule called them
+   * so: a Mac on a 75 Hz display reported 450 slow frames and "48 fps" for
+   * a match it ran at 60 (2026-10-23). The median interval over the last
+   * two seconds, while the tab is visible. */
+  const FRAME = 1000 / 60;
+  const display = { period: 0, hz: 0, last: 0, samples: [] };
+  (function watchRefresh() {
+    const tick = (ts) => {
+      const d = ts - display.last;
+      display.last = ts;
+      if (d > 2 && d < 100) {
+        display.samples.push(d);
+        if (display.samples.length > 120) display.samples.shift();
+        if (display.samples.length >= 30) {
+          const s = [...display.samples].sort((a, b) => a - b);
+          display.period = s[s.length >> 1];
+          display.hz = Math.round(1000 / display.period);
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })();
+  /* The longest interval between presents that 60 fps needs on this display
+   * (one period at 60 or 120 Hz, two at 75 or 90, three at 144), plus half a
+   * period and a little for the frame's own work varying: past that, the
+   * frame stayed on screen one refresh longer than the pattern ever asks,
+   * which is a hitch the eye sees. 27 ms on a 60 Hz display. */
+  const hitchMs = () => {
+    const P = display.period || FRAME;
+    return Math.ceil(FRAME / P - 0.05) * P + P / 2 + 2;
+  };
+
+  /* ---- dips: every frame the game lost or that hitched, and why ----
+   * The report's percentiles say a match ran slow; they do not say which
+   * frames, or what each was doing when it did. A dip is a row of the
+   * profile that (a) cost the game a frame: the time between presents is
+   * run through a bucket against the 60 Hz schedule, and each full frame it
+   * overflows by is a frame the game did not get to run that second (a
+   * machine at 48 fps loses one in four; a 75 Hz display's 13/13/13/27
+   * pattern loses none), or (b) hitched: stayed on screen longer than the
+   * display's pattern needs (hitchMs above). Dips are logged as they happen,
+   * as episodes: a run of them -- a gap of fewer than DIP_SETTLE good frames
+   * does not end one -- is one [DIP] line with the columns averaged over its
+   * frames, its worst frame in full, and the column the time went to
+   * (report.js's header says what each means). An isolated dip is an episode
+   * of one. The line waits those good frames so the GPU timer for its
+   * frames has resolved (it lands a frame or two late), and no line comes
+   * within DIP_LINE_MS of the last: a machine at 30 fps says so once a
+   * second, not sixty times. The load's frames are not dips (mframe 0), nor
+   * is the first match frame, which carries the load's tail. The report
+   * keeps every episode (`dips`); the row data has every frame. */
+  const DIP_SETTLE = 6, DIP_EPISODE_MAX = 300, DIP_EPISODES_KEEP = 500, DIP_LINE_MS = 1000;
+  const dips = { frames: 0, lost: 0, hitches: 0, slip: 0, episodes: [], dropped: 0, ep: null, lastLine: 0 };
+  // The columns a frame's own time is split into; the rest are counts.
+  const DIP_OWN = ['game', 'net', 'walk', 'flush', 'late', 'shader', 'swap', 'io'];
+  const fx = (v) => (Number.isFinite(v) ? +v.toFixed(2) : null);
+  function dipWhere(avg, t0, t1) {
+    const top = DIP_OWN.map((c) => [c, avg[c] || 0]).sort((a, b) => b[1] - a[1]);
+    const c = top[0][0];
+    const stall = longTasks.recent.find(([s, d]) => s < t1 && s + d > t0);
+    let where;
+    if (c === 'net') where = 'waiting on the other players (net)';
+    else if (c === 'late') {
+      if (stall) where = `the browser's main thread (a ${Math.round(stall[1])} ms long task: GC, another tab, an extension)`;
+      else if (Number.isFinite(avg.gpu) && (avg.gpu > avg.walk + 4 || avg.drain > 8)) {
+        where = `the GPU (gpu ${avg.gpu} ms against walk ${avg.walk}` + (Number.isFinite(avg.drain) ? `, drain ${avg.drain}` : '') + ')';
+      } else where = 'the browser handing frames back late (its main thread or GPU process; no long task seen)';
+    } else if (c === 'shader') where = `shader compiles (${avg.pend} variants pending, ${avg.base} draws a frame on the base program)`;
+    else if (c === 'io') where = 'the disc (io)';
+    else where = `this machine's CPU (${c})`;
+    return { top, where };
+  }
+  function dipFlush() {
+    const ep = dips.ep;
+    if (!ep) return;
+    dips.ep = null;
+    const p = Module.meleeProf, F = p.fields, W = F.length, n = ep.offs.length;
+    const sum = new Float64Array(W), cnt = new Int32Array(W), avg = {}, worst = {};
+    for (const o of ep.offs) {
+      for (let i = 0; i < W; i++) { const v = p.buf[o + i]; if (Number.isFinite(v)) { sum[i] += v; cnt[i]++; } }
+    }
+    F.forEach((f, i) => { avg[f] = cnt[i] ? +(sum[i] / cnt[i]).toFixed(2) : null; worst[f] = fx(p.buf[ep.worstO + i]); });
+    delete avg.mframe;
+    const { top, where } = dipWhere(avg, ep.t0, ep.t1);
+    const e = { from: ep.first, to: ep.last, n, lost: ep.lost, hitches: ep.hitches, ms: Math.round(ep.t1 - ep.t0),
+                avgMs: avg.wall, worstMs: worst.wall, worstAt: worst.mframe, where,
+                top: top.filter(([, v]) => v >= 0.05).map(([c, v]) => [c, +v.toFixed(1)]), avg, worst };
+    if (dips.episodes.length < DIP_EPISODES_KEEP) dips.episodes.push(e); else dips.dropped++;
+    const split = (row) => F.filter((f) => f !== 'mframe' && f !== 'wall' && row[f] !== null && row[f] !== 0)
+      .map((f) => `${f} ${row[f]}`).join(' ');
+    const what = `${ep.lost} frame${ep.lost === 1 ? '' : 's'} lost, ${ep.hitches} hitch${ep.hitches === 1 ? '' : 'es'}`;
+    const head = n === 1
+      ? `[DIP] match frame ${ep.first}: ${worst.wall} ms (${what})`
+      : `[DIP] ${n} frames in match frames ${ep.first}-${ep.last} (${e.ms < 1000 ? `${e.ms} ms` : `${(e.ms / 1000).toFixed(1)} s`}): ` +
+        `${what}; avg ${avg.wall} ms, worst ${worst.wall} at ${worst.mframe}`;
+    console.warn(`${head} -- ${e.top.slice(0, 3).map(([c, v]) => `${c} ${v}`).join(', ')} ms a frame, so ${where}` +
+                 (n === 1 ? ` | ${split(worst)}` : ` | avg: ${split(avg)} | worst: ${split(worst)}`));
+    dips.lastLine = performance.now();
+  }
+  function dipOnFrame(o, mframe) {
+    const p = Module.meleeProf, wall = p.buf[o], ep = dips.ep, now = performance.now();
+    if (mframe < 2) {
+      // Out of the match (a results screen, a leave): the episode is over.
+      dips.slip = 0;
+      if (ep) dipFlush();
+      return;
+    }
+    dips.slip = Math.max(0, dips.slip + wall - FRAME);
+    let lost = 0;
+    while (dips.slip >= FRAME) { dips.slip -= FRAME; lost++; }
+    const hitch = wall > hitchMs() ? 1 : 0;
+    if (lost || hitch) {
+      dips.frames++; dips.lost += lost; dips.hitches += hitch;
+      if (!ep) {
+        dips.ep = { offs: [o], first: mframe, last: mframe, worstO: o, worstWall: wall, lost, hitches: hitch,
+                    good: 0, t0: now - wall, t1: now };
+      } else {
+        ep.offs.push(o); ep.last = mframe; ep.good = 0; ep.t1 = now; ep.lost += lost; ep.hitches += hitch;
+        if (wall > ep.worstWall) { ep.worstO = o; ep.worstWall = wall; }
+      }
+      if (dips.ep.offs.length >= DIP_EPISODE_MAX) dipFlush();
+    } else if (ep && ++ep.good >= DIP_SETTLE && now - dips.lastLine >= DIP_LINE_MS) dipFlush();
+  }
+
+  /* The dips for a report: the episode under way is closed first, so a
+   * report sent mid-episode (a crash, a closed tab) still carries it. A
+   * beacon has 64 KB: it gets the last twenty episodes without their rows. */
+  function dipReport(small) {
+    if (Module.meleeProf) dipFlush();
+    const r = { frames: dips.frames, lost: dips.lost, hitches: dips.hitches, hitchMs: +hitchMs().toFixed(1),
+                refreshHz: display.hz, episodes: dips.episodes.length + dips.dropped, dropped: dips.dropped };
+    r.list = small ? dips.episodes.slice(-20).map(({ avg, worst, ...e }) => e) : dips.episodes;
+    return r;
+  }
+
   /* The profile, oldest row first, and what it says. "Slow" frames are the
-   * ones over 20 ms (a missed 60 Hz vsync); the average of each column over
-   * them is the answer to "where did the time go". */
+   * dips (see there: a frame lost against the 60 Hz schedule, or a hitch on
+   * this display); the average of each column over them is the answer to
+   * "where did the time go". The counts over 20/33/50 ms stay for older
+   * tooling; on a display that is not 60 Hz they overcount. */
   function profile() {
     const p = Module.meleeProf;
     if (!p || !p.n) return null;
@@ -1698,7 +1845,17 @@
       stats[f] = { mean: +(v.reduce((a, b) => a + b, 0) / (v.length || 1)).toFixed(2),
                    p50: q(0.5), p95: q(0.95), p99: q(0.99), max: q(1) };
     }
-    const slow = use.filter((r) => col(r, 'wall') > 20);
+    const slow = [];
+    let lost = 0, hitches = 0, slip = 0;
+    const over = hitchMs();
+    for (const r of use) {
+      const w = col(r, 'wall');
+      slip = Math.max(0, slip + w - FRAME);
+      let l = 0;
+      while (slip >= FRAME) { slip -= FRAME; l++; }
+      const h = w > over ? 1 : 0;
+      if (l || h) { slow.push(r); lost += l; hitches += h; }
+    }
     const inSlow = {};
     for (const f of p.fields) {
       if (f === 'mframe' || f === 'wall') continue;
@@ -1716,7 +1873,8 @@
       summary: {
         frames: use.length, seconds: +(wallSum / 1000).toFixed(1),
         fps: +(use.length * 1000 / (wallSum || 1)).toFixed(1),
-        over20ms: slow.length, over33ms: use.filter((r) => col(r, 'wall') > 33.4).length,
+        lost, hitches, hitchMs: +over.toFixed(1), refreshHz: display.hz, dips: slow.length,
+        over20ms: use.filter((r) => col(r, 'wall') > 20).length, over33ms: use.filter((r) => col(r, 'wall') > 33.4).length,
         over50ms: use.filter((r) => col(r, 'wall') > 50).length,
         stats, slowFramesAverage: inSlow,
       },
@@ -1759,6 +1917,7 @@
                       opened: dgram.opened, failed: dgram.failed, off: NO_RTC } },
       hidden: { count: hidden.count, ms: Math.round(hidden.ms + (hidden.since ? performance.now() - hidden.since : 0)) },
       longTasks: { count: longTasks.count, ms: Math.round(longTasks.ms), worst: longTasks.worst },
+      dips: dipReport(),
       disc: { net: Module.meleeIsoNet || null, prefetch: Module.meleeIsoPrefetchState || null },
       glInfo: glProbe.info, glProf: glProbe.done || (glProbe.prof ? { running: glProbe.prof.frames } : null),
       matchFrame: Module.meleeMatchFrame | 0, framesPresented: Module.meleeFrames | 0,
@@ -1817,7 +1976,7 @@
                 frame: Module.meleeMatchFrame | 0,
                 loading: !$('loading').classList.contains('done'),
                 isoMB: Math.round((Module.meleeIsoBytes | 0) / 2 ** 20),
-                prof: p, errors: pageErrors.slice(-10), logs: pageLog.slice(-150) };
+                prof: p, dips: dipReport(true), errors: pageErrors.slice(-10), logs: pageLog.slice(-150) };
     try { navigator.sendBeacon('report', new Blob([JSON.stringify(r)], { type: 'application/json' })); } catch (e) { /* gone */ }
   });
 

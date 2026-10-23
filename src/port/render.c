@@ -718,16 +718,25 @@ static void render_present_tail(int frame)
                 struct timespec now;
                 long long dt;
 #if defined(__EMSCRIPTEN__)
-                /* The web compiles deferred variants in parallel: starting
-                 * one costs nothing, so every deferred variant is started at
+                /* The web compiles deferred variants in parallel where the
+                 * browser can (KHR_parallel_shader_compile): starting one
+                 * costs nothing, so every deferred variant is started at
                  * once instead of waiting for a slow frame, and the finished
-                 * ones are picked up each frame (gx_gl_bridge.c). */
+                 * ones are picked up each frame (gx_gl_bridge.c). Without
+                 * the extension -- Android Chrome on a Mali-G715, 2026-10-23
+                 * -- each start is the whole compile on this thread, and
+                 * twenty-four at once froze the phone for two seconds at
+                 * match frames 844-856: frames of 727, 523, 416 and 191 ms.
+                 * That browser gets the valve below instead, one a frame. */
                 {
                     extern void pc_web_prog_poll(void);
-                    int n = 24;
+                    extern int pc_web_parallel_shaders(void);
                     pc_web_prog_poll();
-                    while (n-- > 0 && pc_shc_deferred() > 0 &&
-                           pc_shc_compile_one_deferred()) {}
+                    if (pc_web_parallel_shaders()) {
+                        int n = 24;
+                        while (n-- > 0 && pc_shc_deferred() > 0 &&
+                               pc_shc_compile_one_deferred()) {}
+                    }
                 }
 #endif
                 clock_gettime(CLOCK_MONOTONIC, &now);
@@ -740,6 +749,13 @@ static void render_present_tail(int frame)
                      * end the episode in three frames instead of seventeen. */
                     int n = (int) (dt / 40000000LL);
                     if (n > 8) n = 8;
+#if defined(__EMSCRIPTEN__)
+                    /* Not on the web: there the slow frame IS a compile
+                     * (half a second each on that phone), so scaling by it
+                     * only feeds back. One, and the base program carries the
+                     * rest until the next slow frame. */
+                    n = 1;
+#endif
                     while (n-- > 0 && pc_shc_compile_one_deferred()) {}
                 }
                 s_last = now;
@@ -823,10 +839,21 @@ static void render_present_tail(int frame)
                 double wall_ns = (after.tv_sec - s_prev.tv_sec) * 1e9 +
                                  (after.tv_nsec - s_prev.tv_nsec);
                 {
-                    /* A hitch is not a slow frame but a stalled one: a 2.3 s
-                     * freeze among 59 good frames leaves the 60-frame average
-                     * looking merely mediocre, and the average cannot say what
-                     * stalled. Diff the counters across this one frame. */
+                    /* A dip is one frame over the budget, and the 60-frame
+                     * average cannot say what it was doing: a 2.3 s freeze
+                     * among 59 good frames leaves the average merely
+                     * mediocre. Diff the counters across each frame, and
+                     * print every frame over MELEE_HITCH_MS (default 20: a
+                     * missed 60 Hz vsync; it was 100 before 2026-10-23) with
+                     * them -- as episodes, so a machine at 30 fps says so
+                     * once a second rather than sixty times. A run of slow
+                     * frames, gaps of fewer than HD_SETTLE good frames
+                     * allowed, is one line: the counters per frame over the
+                     * run and its worst frame named. A lone slow frame is a
+                     * line of its own. A run closes after those good frames
+                     * and a second since the last line, or at HD_MAX frames.
+                     * tools/wasm/lobby.js's [DIP] lines are the web's
+                     * equivalent, from the frame profile. */
                     extern u32 pc_diag_uploads, pc_diag_mipgens, pc_diag_hashes,
                                pc_diag_draws, pc_diag_efb_copies;
                     extern u64 pc_diag_hash_ns, pc_diag_efb_ns, pc_diag_efb_read_ns;
@@ -839,36 +866,84 @@ static void render_present_tail(int frame)
                     static u64 q_io; static u32 q_ioo;
                     extern unsigned int gm_GetFrameCount(void);
                     extern unsigned long long pc_diag_io_ns; extern unsigned pc_diag_io_opens;
-                    /* MELEE_HITCH_MS=n: frames over n ms get this line (default
-                     * 100; 30 catches a dropped frame at 60 Hz). */
+                    enum { HD_SETTLE = 6, HD_MAX = 300 };
+                    static struct {
+                        int n, good;
+                        unsigned first_gf, last_gf, worst_gf;
+                        double wall_ns, worst_ns;
+                        double io_ns, game_ns, hash_ns, read_ns, efb_ns, sec_ns[4], fence_ns;
+                        unsigned opens, draws, hashes, up, mip, efbc, fw, ft;
+                        struct timespec t0, t1;
+                    } ep;
+                    static struct timespec s_line;
                     static double s_hitch_ns = -1.0;
                     if (s_hitch_ns < 0.0) {
                         const char* e = getenv("MELEE_HITCH_MS");
-                        s_hitch_ns = (e != NULL && atof(e) > 0.0) ? atof(e) * 1e6 : 100e6;
+                        s_hitch_ns = (e != NULL && atof(e) > 0.0) ? atof(e) * 1e6 : 20e6;
                     }
                     if (s_prev.tv_sec != 0 && wall_ns > s_hitch_ns) {
+                        unsigned gf = gm_GetFrameCount();
+                        if (ep.n == 0) {
+                            memset(&ep, 0, sizeof ep);
+                            ep.first_gf = gf;
+                            ep.t0 = s_prev;
+                        }
+                        ep.n++; ep.good = 0; ep.last_gf = gf; ep.t1 = after;
+                        ep.wall_ns += wall_ns;
+                        if (wall_ns > ep.worst_ns) { ep.worst_ns = wall_ns; ep.worst_gf = gf; }
+                        ep.io_ns += (double) (pc_diag_io_ns - q_io);
+                        ep.opens += pc_diag_io_opens - q_ioo;
+                        ep.game_ns += (double) (pc_diag_game_ns - q_game);
+                        ep.draws += pc_diag_draws - q_draws;
+                        ep.hashes += pc_diag_hashes - q_hashes;
+                        ep.hash_ns += (double) (pc_diag_hash_ns - q_hash);
+                        ep.up += pc_diag_uploads - q_up;
+                        ep.mip += pc_diag_mipgens - q_mip;
+                        ep.efbc += pc_diag_efb_copies - q_efbc;
+                        ep.read_ns += (double) (pc_diag_efb_read_ns - q_read);
+                        ep.efb_ns += (double) (pc_diag_efb_ns - q_efb);
+                        ep.sec_ns[0] += (double) (pc_diag_sec_ns[0] - q_s0);
+                        ep.sec_ns[1] += (double) (pc_diag_sec_ns[1] - q_s1);
+                        ep.sec_ns[2] += (double) (pc_diag_sec_ns[2] - q_s2);
+                        ep.sec_ns[3] += (double) (pc_diag_sec_ns[3] - q_s3);
+                        ep.fence_ns += (double) (pc_diag_fence_ns - q_fence);
+                        ep.fw += pc_diag_fence_waits - q_fw;
+                        ep.ft += pc_diag_fence_timeouts - q_ft;
+                    } else if (ep.n > 0) {
+                        ep.good++;
+                    }
+                    if (ep.n > 0 &&
+                        (ep.n >= HD_MAX ||
+                         (ep.good >= HD_SETTLE &&
+                          (after.tv_sec - s_line.tv_sec) * 1e9 + (after.tv_nsec - s_line.tv_nsec) >= 1e9))) {
+                        double n = ep.n;
+                        if (ep.n == 1) {
+                            fprintf(stderr, "[HITCHDET] %.0f ms frame (gframe %u): ",
+                                    ep.worst_ns / 1e6, ep.worst_gf);
+                        } else {
+                            double span = (ep.t1.tv_sec - ep.t0.tv_sec) * 1e9 + (ep.t1.tv_nsec - ep.t0.tv_nsec);
+                            fprintf(stderr,
+                                    "[HITCHDET] %d frames over %.0f ms, gframes %u-%u (%.1f s): "
+                                    "avg %.1f ms, worst %.0f ms at gframe %u; per frame: ",
+                                    ep.n, s_hitch_ns / 1e6, ep.first_gf, ep.last_gf, span / 1e9,
+                                    ep.wall_ns / n / 1e6, ep.worst_ns / 1e6, ep.worst_gf);
+                        }
                         fprintf(stderr,
-                            "[HITCHDET] %.0f ms frame (gframe %u): io %.1f ms (%u opens) | outside present %.1f ms | "
-                            "draws %u hash %u (%.1f ms) upload %u mipgen %u "
-                            "efb %u (read %.1f pack %.1f) | vbo %.1f state %.1f "
+                            "io %.1f ms (%.0f opens) | outside present %.1f ms | "
+                            "draws %.0f hash %.0f (%.1f ms) upload %.0f mipgen %.0f "
+                            "efb %.0f (read %.1f pack %.1f) | vbo %.1f state %.1f "
                             "unif %.1f draw %.1f ms | fence %.1f ms "
-                            "(%u waits, %u timeouts)\n",
-                            wall_ns / 1e6, (unsigned) gm_GetFrameCount(),
-                            (double) (pc_diag_io_ns - q_io) / 1e6, pc_diag_io_opens - q_ioo,
-                            (double) (pc_diag_game_ns - q_game) / 1e6,
-                            pc_diag_draws - q_draws, pc_diag_hashes - q_hashes,
-                            (double) (pc_diag_hash_ns - q_hash) / 1e6,
-                            pc_diag_uploads - q_up, pc_diag_mipgens - q_mip,
-                            pc_diag_efb_copies - q_efbc,
-                            (double) (pc_diag_efb_read_ns - q_read) / 1e6,
-                            (double) (pc_diag_efb_ns - q_efb) / 1e6,
-                            (double) (pc_diag_sec_ns[0] - q_s0) / 1e6,
-                            (double) (pc_diag_sec_ns[1] - q_s1) / 1e6,
-                            (double) (pc_diag_sec_ns[2] - q_s2) / 1e6,
-                            (double) (pc_diag_sec_ns[3] - q_s3) / 1e6,
-                            (double) (pc_diag_fence_ns - q_fence) / 1e6,
-                            pc_diag_fence_waits - q_fw,
-                            pc_diag_fence_timeouts - q_ft);
+                            "(%.0f waits, %.0f timeouts)\n",
+                            ep.io_ns / n / 1e6, ep.opens / n,
+                            ep.game_ns / n / 1e6,
+                            ep.draws / n, ep.hashes / n, ep.hash_ns / n / 1e6,
+                            ep.up / n, ep.mip / n,
+                            ep.efbc / n, ep.read_ns / n / 1e6, ep.efb_ns / n / 1e6,
+                            ep.sec_ns[0] / n / 1e6, ep.sec_ns[1] / n / 1e6,
+                            ep.sec_ns[2] / n / 1e6, ep.sec_ns[3] / n / 1e6,
+                            ep.fence_ns / n / 1e6, ep.fw / n, ep.ft / n);
+                        s_line = after;
+                        ep.n = 0;
                     }
                     q_game = pc_diag_game_ns; q_hash = pc_diag_hash_ns;
                     q_efb = pc_diag_efb_ns; q_read = pc_diag_efb_read_ns;

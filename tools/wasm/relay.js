@@ -177,8 +177,13 @@ function chooseDelay(players) {
     // just covering the 90th-percentile path, a three-way on 2026-10-23
     // (Starlink at 170 ms among them) spent 7-13% of the match waiting on
     // 50-250 ms swings. And the cap leaves room for that margin.
-    const delay = Math.max(2, Math.min(12, Math.ceil(oneWay / FRAME_MS) + 2));
-    return { delay, why: `pings ${pings.join('/')} ms, slowest path ~${oneWay.toFixed(0)} ms` };
+    const want = Math.ceil(oneWay / FRAME_MS) + 2;
+    const delay = Math.max(2, Math.min(12, want));
+    // Past the cap the faster page stalls on the slower one's input about
+    // once a second (a Mac against a phone on LTE at 288 ms, 2026-10-23: 29
+    // stalls in 29 s). More delay would not play better; say so instead.
+    return { delay, why: `pings ${pings.join('/')} ms, slowest path ~${oneWay.toFixed(0)} ms` +
+             (want > 12 ? `; the path wants ${want} frames, capped at 12: expect stalls` : '') };
 }
 
 function startMatch() {
