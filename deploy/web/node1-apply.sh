@@ -36,7 +36,14 @@ say "gateway repo: $(git rev-parse --short HEAD) ($(git status --porcelain | wc 
 
 # 1. compose service
 [ -s "$COMPOSE_BLOCK" ] || { echo "missing $COMPOSE_BLOCK" >&2; exit 1; }
-say "compose: $(python3 /tmp/install-compose-block.py "$COMPOSE_BLOCK")"
+# The installer's exit code matters: inside a $(...) it was swallowed, and on
+# 2026-10-23 a refusal ("refusing to guess") printed to stderr, the service was
+# left as it was, and the apply carried on and recreated the container anyway.
+if ! compose_out=$(python3 /tmp/install-compose-block.py "$COMPOSE_BLOCK" 2>&1); then
+  echo "[apply] compose: the installer FAILED, nothing applied: $compose_out" >&2
+  exit 1
+fi
+say "compose: $compose_out"
 docker compose config -q
 say "compose: config valid"
 

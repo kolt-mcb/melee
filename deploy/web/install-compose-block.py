@@ -136,27 +136,46 @@ if cnet is None:
     sys.exit(1)
 inline = re.match(r"^(\s*)networks:\s*\[(.*)\]\s*$", lines[cnet])
 if inline:
+    # Inline list: networks: [a, b]
     items = [s.strip() for s in inline.group(2).split(",") if s.strip()]
     if NET not in items:
         lines[cnet] = f"{inline.group(1)}networks: [{', '.join(items + [NET])}]\n"
         did.append(f"caddy attached to {NET} (line {cnet + 1})")
 else:
-    # Block form: the list items follow, each "- name", until the indent drops.
+    # The children follow, deeper-indented, until the indent drops back. Two
+    # shapes: a list ("- name" per line) or a mapping ("name:" per line, with
+    # per-network settings under it -- node1's caddy is this one, lan-dhcp
+    # carrying a mac_address). Either way, append one more entry.
     base = len(re.match(r"^(\s*)", lines[cnet]).group(1))
     j = cnet + 1
-    have = False
+    children = []
     while j < cend and (lines[j].strip() == "" or len(lines[j]) - len(lines[j].lstrip()) > base):
-        if re.match(rf"^\s*-\s*{re.escape(NET)}\s*$", lines[j]):
-            have = True
+        if lines[j].strip() and not lines[j].lstrip().startswith("#"):
+            children.append(j)
         j += 1
+    if not children:
+        print("caddy's networks: has no entries to copy the shape from; refusing to guess", file=sys.stderr)
+        sys.exit(1)
+    first = children[0]
+    cindent = re.match(r"^(\s*)", lines[first]).group(1)
+    is_list = lines[first].lstrip().startswith("-")
+    # Only the direct children (at the first child's indent) are entries; a
+    # deeper line is a setting of the entry above it.
+    direct = [k for k in children if re.match(r"^(\s*)", lines[k]).group(1) == cindent]
+    if is_list:
+        have = any(re.match(rf"^\s*-\s*{re.escape(NET)}\s*$", lines[k]) for k in direct)
+        new = f"{cindent}- {NET}\n"
+    else:
+        have = any(re.match(rf"^\s*{re.escape(NET)}:\s*(\{{\s*\}})?\s*$", lines[k]) for k in direct)
+        new = f"{cindent}{NET}: {{}}\n"
     if not have:
-        last = next((k for k in range(j - 1, cnet, -1) if lines[k].strip().startswith("-")), None)
-        if last is None:
-            print("caddy's networks: list has no items to copy the indent from; refusing to guess", file=sys.stderr)
-            sys.exit(1)
-        indent = re.match(r"^(\s*)", lines[last]).group(1)
-        lines[last + 1:last + 1] = [f"{indent}- {NET}\n"]
-        did.append(f"caddy attached to {NET} (line {last + 2})")
+        # After the last direct entry and everything indented under it.
+        last = direct[-1]
+        after = last + 1
+        while after < j and (lines[after].strip() == "" or len(lines[after]) - len(lines[after].lstrip()) > len(cindent)):
+            after += 1
+        lines[after:after] = [new]
+        did.append(f"caddy attached to {NET} (line {after + 1})")
 
 if did:
     open(PATH, "w").write("".join(lines))
