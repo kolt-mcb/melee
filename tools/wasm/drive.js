@@ -25,7 +25,8 @@
  *
  * DRIVE_WINDOW=W,H sets the browser window (default 1280,800).
  * NAME is a DOM key code: Enter, KeyZ, KeyX, ArrowLeft, Space, ...
- * The console goes to <outdir>/console.txt.
+ * The console goes to <outdir>/console.txt, and as it happens (with the wall
+ * clock) to <outdir>/live.txt.
  */
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -100,6 +101,11 @@ function keyParams(code) {
         Promise.race([send(method, params), sleep(ms).then(() => null)]);
 
     const log = [];
+    /* The same lines as they happen, each with the wall clock, for a drive
+     * someone is watching from outside (console.txt is written at the end). */
+    const live = path.join(outdir, 'live.txt');
+    const push = log.push.bind(log);
+    log.push = (s) => { push(s); try { fs.appendFileSync(live, `${new Date().toISOString().slice(11, 23)} ${s}\n`); } catch (e) { /* */ } };
     let onPaused = null;
     let traceEvents = null, traceDone = null;
     await new Promise(r => ws.onopen = r);

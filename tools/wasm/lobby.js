@@ -692,6 +692,25 @@
    * and only then is the match lost. */
   const RESUME_MS = 25000;
   let resumeUntil = 0;
+  /* A link that died under the page closes nothing: the socket says open and
+   * nothing ever arrives. In a match something always does -- the other
+   * pages resend every frame, stalled or not, and the relay pings every few
+   * seconds -- so a long silence is the link, and closing the socket here
+   * is what starts the retry above, inside the relay's hold, instead of the
+   * engine's fifteen-minute wait. Not for a match on one page: no netplay. */
+  const QUIET_MS = 20000;
+  let lastRx = 0;
+  setInterval(() => {
+    if (!started || matchOver || !lastStart || !(lastStart.pages > 1)) return;
+    if (ws && ws.readyState === 1 && lastRx && performance.now() - lastRx > QUIET_MS) {
+      console.log(`[lobby] nothing from the relay for ${QUIET_MS / 1000} s; reconnecting`);
+      // If the link is in fact alive (this thread was the one stuck), the
+      // relay would read the Close frame as goodbye and give the seat up;
+      // `away` asks it to hold the seat as for a dropped link instead.
+      send({ t: 'away' });
+      ws.close();
+    }
+  }, 5000);
   function lostTheHost() {
     resumeUntil = 0;
     if (matchOver) return;
@@ -708,7 +727,7 @@
       if (started && lobby && lastStart) hello.resume = { id: lobby.you, seed: lastStart.seed, token: lobby.token };
       send(hello);
     };
-    ws.onmessage = (ev) => deliver(new Uint8Array(ev.data), received);
+    ws.onmessage = (ev) => { lastRx = performance.now(); deliver(new Uint8Array(ev.data), received); };
     ws.onclose = () => {
       dgramClose('the WebSocket closed');
       if (!started) { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); return; }
@@ -954,6 +973,10 @@
       return;
     }
     $('btn-quit').textContent = 'Leaving…';
+    // The relay first: the others are stalled on this page's input until it
+    // says it is out, and the report can take a while to upload.
+    matchOver = true;
+    send({ t: 'done' });
     await sendReportOnce('left');
     location.reload();
   };
@@ -1756,6 +1779,10 @@
       return;
     }
     if (started) {
+      // Out of the match: a dead engine must not hold it open for the others,
+      // and this page must not try to resume one it cannot play.
+      matchOver = true;
+      send({ t: 'done' });
       $('loading').classList.add('done');
       $('banner-text').textContent = 'The game crashed. Sending a report to the host…';
       $('banner').classList.add('show');

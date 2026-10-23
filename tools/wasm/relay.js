@@ -62,7 +62,23 @@ console.log(`[relay] datagram channel: ${rtc.describe()}`);
  * engine stalls on the missing input and resends what the peer has not
  * acknowledged, so a page that is back inside this window picks the match
  * up where it stopped; lobby.js retries for a little less than this. */
-const RESUME_MS = 30000;
+const RESUME_MS = +process.env.MELEE_RESUME_MS || 30000;
+/* A member that has sent nothing -- not even the pong its browser's network
+ * process answers a WebSocket ping with -- for this long is gone, whatever
+ * its socket says: a lid closed on a laptop, a phone off Wi-Fi, a NAT entry
+ * expired, none of them send a FIN. Found by the sweep (liveness) below; the
+ * socket is closed as unclean, so a page in a match keeps its RESUME_MS. A
+ * page in a 20 s shader compile still answers these, which the JSON ping
+ * (a round trip the page's own thread has to run) does not promise. */
+const LIVENESS_MS = +process.env.MELEE_LIVENESS_MS || 15000;
+const SWEEP_MS = +process.env.MELEE_SWEEP_MS || 5000;
+/* A player whose input has not moved for longer than the engine's own wait
+ * (lobby.js MELEE_NET_TIMEOUT, 15 min) while its socket answers pings is a
+ * page whose engine hung: every other page has by then given up waiting on
+ * it and played on, or finished. It is kicked out of the match so the match
+ * can end; the page sees a lost connection and the way back to the lobby. */
+const MATCH_STUCK_MS = +process.env.MELEE_MATCH_STUCK_MS || 16 * 60000;
+const WATCH_MS = +process.env.MELEE_WATCH_MS || 5000;
 
 const room = {
     members: [],         // in join order: { conn, id, name, ckind, color, guests, slots, lastFrame }
@@ -193,8 +209,8 @@ function startMatch() {
         m.loaded = false;
     }
     const { delay, why } = chooseDelay(players);
-    room.match = { players, seed, delay, watch: setInterval(watchMatch, 5000) };
-    players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.dgIn = 0; m.dgOut = 0; m.seenFrame = -1; m.stuckSince = 0; });
+    room.match = { players, seed, delay, watch: setInterval(watchMatch, WATCH_MS).unref() };
+    players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.dgIn = 0; m.dgOut = 0; m.seenFrame = -1; m.stuckSince = 0; m.done = false; m.bye = false; });
     for (const m of players) {
         // `pages`: with one, the match is local and needs no netplay at all,
         // however many players that page seats.
@@ -222,6 +238,13 @@ function watchMatch() {
         if (m.lastFrame !== m.seenFrame) { m.seenFrame = m.lastFrame; m.stuckSince = now; }
         else if (m.lastFrame >= 0 && now - m.stuckSince >= 4000 && room.members.includes(m) && !m.done) stuck = true;
         if ((m.conn.socket && m.conn.socket.writableLength) > 64 * 1024) stuck = true;
+        // stuckSince is 0 until the first input: a page still loading is
+        // waited on, not kicked (the engine's timeout starts the same way).
+        if (m.stuckSince && now - m.stuckSince >= MATCH_STUCK_MS && room.members.includes(m) && !m.done) {
+            console.log(`[relay] ${m.name}: no input for ${((now - m.stuckSince) / 60000).toFixed(0)} min; dropped from the match`);
+            m.done = true;
+            m.conn.close(false);   // -> onclose -> leave(): its BYE, and the match can end
+        }
     }
     if (!stuck && ++watchTick % 12 !== 0) return;
     console.log(`[relay] match ${stuck ? 'STUCK' : 'ok'}: ` + ps.map((m) =>
@@ -319,40 +342,54 @@ function padPackets(m, slot, from, to) {
     return out;
 }
 
+/* A page is out of the match: the other pages get its last frames and a
+ * MSG_BYE per slot, once. Whether its match ended or it abandoned one makes
+ * no difference here -- a BYE reaching a page whose own match is over is
+ * nothing (the engine only records the frame), and a page that left a stuck
+ * load is one the others are still waiting on. */
+function byeFor(m) {
+    if (m.bye || !room.match || !room.match.players.includes(m)) return;
+    m.bye = true;
+    // One per slot the page played, each with that slot's own last
+    // frame: the streams are separate packets and need not end together.
+    //
+    // The last frame is the newest the relay holds with nothing missing
+    // before it (on a WebSocket-only match, simply the newest), and
+    // before the BYE every page is sent that slot's frames leading up to
+    // it, on its WebSocket: datagrams may have lost some of them on the
+    // way to any one page. A page can be at most about two delays behind
+    // the leaver (each waits on the other's input), so twice the delay
+    // and two windows back is enough; the frames are ones it has
+    // received already, or needs.
+    const back = 2 * (room.match.delay || 10) + 2 * WINDOW;
+    for (const slot of m.slots) {
+        const last = m.solid[slot] != null ? m.solid[slot] : m.lastFrames[slot];
+        const bye = Buffer.alloc(HDR + 4);
+        bye.writeUInt32BE(MAGIC, 0);
+        bye[4] = MSG_BYE;
+        bye[5] = slot;
+        bye.writeUInt32BE(last >>> 0, HDR);
+        const tail = last >= 0 && m.pads[slot] ? padPackets(m, slot, Math.max(0, last - back + 1), last) : [];
+        for (const o of room.match.players) {
+            if (o === m || !room.members.includes(o)) continue;
+            for (const b of tail) o.conn.send(b);
+            o.conn.send(bye);
+        }
+    }
+    console.log(`[relay] ${m.name} left the match after frame ${m.slots.map((k) => m.solid[k]).join('/')}` +
+                ` (newest seen ${m.lastFrame})`);
+}
+
+/* The one way out of the room. A page that is done with its match leaves by
+ * this too: it is then neither seated in the next match nor the host, and it
+ * reloads to come back (lobby.js backToLobby). A page parked on the "Match
+ * over" banner used to stay a member, hold the host seat with a lobby it no
+ * longer painted, and get seated in a match its engine ignored. */
 function leave(m) {
     const i = room.members.indexOf(m);
     if (i < 0) return;
     room.members.splice(i, 1);
-    if (room.match && room.match.players.includes(m) && !m.done) {
-        // One per slot the page played, each with that slot's own last
-        // frame: the streams are separate packets and need not end together.
-        //
-        // The last frame is the newest the relay holds with nothing missing
-        // before it (on a WebSocket-only match, simply the newest), and
-        // before the BYE every page is sent that slot's frames leading up to
-        // it, on its WebSocket: datagrams may have lost some of them on the
-        // way to any one page. A page can be at most about two delays behind
-        // the leaver (each waits on the other's input), so twice the delay
-        // and two windows back is enough; the frames are ones it has
-        // received already, or needs.
-        const back = 2 * (room.match.delay || 10) + 2 * WINDOW;
-        for (const slot of m.slots) {
-            const last = m.solid[slot] != null ? m.solid[slot] : m.lastFrames[slot];
-            const bye = Buffer.alloc(HDR + 4);
-            bye.writeUInt32BE(MAGIC, 0);
-            bye[4] = MSG_BYE;
-            bye[5] = slot;
-            bye.writeUInt32BE(last >>> 0, HDR);
-            const tail = last >= 0 && m.pads[slot] ? padPackets(m, slot, Math.max(0, last - back + 1), last) : [];
-            for (const o of room.match.players) {
-                if (o === m || !room.members.includes(o)) continue;
-                for (const b of tail) o.conn.send(b);
-                o.conn.send(bye);
-            }
-        }
-        console.log(`[relay] ${m.name} left the match after frame ${m.slots.map((k) => m.solid[k]).join('/')}` +
-                    ` (newest seen ${m.lastFrame})`);
-    }
+    byeFor(m);
     endMatchIfEmpty();
     broadcastLobby();
 }
@@ -373,6 +410,25 @@ function parked(id, seed, token) {
     if (typeof token !== 'string' || !token) return null;
     return room.members.find((m) => m.id === id && m.away && m.token === token && room.match &&
                                     room.match.seed === seed && room.match.players.includes(m)) || null;
+}
+
+/* Liveness: ping every socket, and close the ones that have answered nothing
+ * for LIVENESS_MS. The browser answers in its network process, so the only
+ * page this drops is one that is really unreachable; that page is then the
+ * unclean-close case above (held, or gone). Off while the room is empty. */
+let sweeper = null;
+function sweep() {
+    if (!room.members.length) { clearInterval(sweeper); sweeper = null; return; }
+    const now = Date.now();
+    for (const m of [...room.members]) {
+        if (m.away) continue;   // its socket is already gone; the hold decides
+        if (now - m.conn.lastSeen > LIVENESS_MS) {
+            console.log(`[relay] ${m.name}: nothing heard for ${((now - m.conn.lastSeen) / 1000).toFixed(0)} s; dropping the socket`);
+            m.conn.close(false);
+            continue;
+        }
+        m.conn.ping();
+    }
 }
 
 exports.join = (conn, req) => {
@@ -400,6 +456,7 @@ exports.join = (conn, req) => {
                 lastOfferAt: 0, away: null };
     room.members.push(m);
     attach(m, conn);
+    if (!sweeper) sweeper = setInterval(sweep, SWEEP_MS).unref();
     broadcastLobby();
 };
 
@@ -407,21 +464,32 @@ exports.join = (conn, req) => {
  * dropped mid-match comes back on a new one. */
 function attach(m, conn) {
     m.conn = conn;
-    /* Lobby only: in a match the page's thread is busy and a reply would
-     * measure its frame time, not the network. */
+    m.wantsHold = false;
+    /* Measured in the lobby only: in a match the page's thread is busy and
+     * a reply would measure its frame time, not the network. */
     clearInterval(m.pinger);
+    let tick = 0;
     m.pinger = setInterval(() => {
-        if (room.match && room.match.players.includes(m)) return;
+        if (room.match && room.match.players.includes(m)) {
+            // Every few seconds, unmeasured: something for the page to hear
+            // while nobody is sending input (lobby.js watches for a relay
+            // gone quiet). pingAt stays 0, so the pong is not a sample.
+            if (++tick % 10 === 0) json(m.conn, { t: 'ping', s: m.pingSeq });
+            return;
+        }
         m.pingSeq++;
         m.pingAt = performance.now();
         json(m.conn, { t: 'ping', s: m.pingSeq });
-    }, PING_MS);
+    }, PING_MS).unref();
     conn.who = m.name;
-    conn.onclose = () => {
+    conn.onclose = (clean) => {
         clearInterval(m.pinger);
         rtc.close(conn);
-        if (room.match && room.match.players.includes(m) && !m.done) {
-            // Hold the seat: the page may be back before anyone notices.
+        if (room.match && room.match.players.includes(m) && !m.done && (!clean || m.wantsHold)) {
+            // The link died under the page: hold the seat, it may be back
+            // before anyone notices. A clean close is the page saying
+            // goodbye (a reload, a closed tab, Leave match) -- holding that
+            // seat only stalls the others for the whole hold.
             m.away = setTimeout(() => { m.away = null; leave(m); }, RESUME_MS);
             console.log(`[relay] ${m.name} dropped at frame ${m.lastFrame}; holding the seat ${RESUME_MS / 1000} s`);
             return;
@@ -515,9 +583,12 @@ function attach(m, conn) {
         case 'rtc-ice':
             rtc.candidate(conn, msg);
             break;
-        case 'done': // this page's match is over; it is going back to the lobby
+        case 'away': // the page is closing this socket to open another (a quiet link): hold the seat
+            m.wantsHold = true;
+            break;
+        case 'done': // this page is out of the match: it ended, or the page left it
             m.done = true;
-            endMatchIfEmpty();
+            leave(m);
             break;
         }
     };

@@ -336,7 +336,14 @@ function wsAccept(req, socket) {
     socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n' +
                  `Connection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     socket.setNoDelay(true);
-    const conn = { socket, onmessage: null, onclose: null, closed: false };
+    /* The kernel probes a quiet connection too: a peer that vanished without
+     * a FIN (a lid closed, a phone off Wi-Fi) is otherwise never found out
+     * until a write fails, which on an idle socket is never. */
+    socket.setKeepAlive(true, 10000);
+    /* lastSeen: when anything last arrived, including the pong a browser's
+     * network process sends for ping() -- so it moves even while the page's
+     * own thread is stuck in a 20 s shader compile. The relay reads it. */
+    const conn = { socket, onmessage: null, onclose: null, closed: false, lastSeen: Date.now() };
     let buf = Buffer.alloc(0);
     let frag = [];
     conn.send = (data) => {
@@ -347,13 +354,20 @@ function wsAccept(req, socket) {
             : (() => { const h = Buffer.alloc(10); h[0] = 0x82; h[1] = 127; h.writeBigUInt64BE(BigInt(n), 2); return h; })();
         socket.write(Buffer.concat([head, data]));
     };
-    const close = () => {
+    conn.ping = () => { if (!conn.closed) socket.write(Buffer.from([0x89, 0])); };
+    /* `clean`: the peer sent a Close frame (a browser does on reload, on a
+     * closed tab, on navigation). A link that died sends nothing, and the
+     * relay tells the two apart: a page that said goodbye is gone, a page
+     * that went quiet may be back. */
+    const close = (clean) => {
         if (conn.closed) return;
         conn.closed = true;
         socket.destroy();
-        if (conn.onclose) conn.onclose();
+        if (conn.onclose) conn.onclose(!!clean);
     };
+    conn.close = close;
     socket.on('data', (chunk) => {
+        conn.lastSeen = Date.now();
         buf = Buffer.concat([buf, chunk]);
         for (;;) {
             if (buf.length < 2) return;
@@ -370,7 +384,7 @@ function wsAccept(req, socket) {
             const payload = Buffer.from(buf.slice(off, off + len));
             buf = buf.slice(off + len);
             if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
-            if (op === 0x8) return close();
+            if (op === 0x8) return close(true);
             if (op === 0x9) { socket.write(Buffer.concat([Buffer.from([0x8a, payload.length]), payload])); continue; }
             if (op === 0xA) continue;
             frag.push(payload);
@@ -381,8 +395,8 @@ function wsAccept(req, socket) {
             }
         }
     });
-    socket.on('close', close);
-    socket.on('error', close);
+    socket.on('close', () => close(false));
+    socket.on('error', () => close(false));
     return conn;
 }
 
