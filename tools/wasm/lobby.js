@@ -512,6 +512,11 @@
     const free = Math.max(0, SLOTS - Math.min(SLOTS, ps.length));
     $('cpus').innerHTML = Array.from({ length: free + 1 }, (_, i) => `<option>${i}</option>`).join('');
     if (!host) { rules.cpus = lobby.rules.cpus | 0; rules.cpulevel = lobby.rules.cpulevel || 9; }
+    // The host's CPU count is this page's (kept across loads); the relay's is
+    // what goes into the match. A relay that has restarted knows none, so
+    // the page offered Start for one human and no CPU -- a match the game
+    // never boots (2026-10-23, "just says loading"). Push the page's.
+    else if (!lobby.inMatch && ((lobby.rules.cpus | 0) !== (rules.cpus | 0) || (lobby.rules.cpulevel || 9) !== rules.cpulevel)) sendRules();
     $('cpus').value = Math.min(rules.cpus, free);
     $('cpulevel').value = rules.cpulevel;
     // The game cannot boot a match with one slot filled. It loads the stage,
