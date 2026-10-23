@@ -181,6 +181,73 @@
     discReady.then(prefetchMatch, () => {});
   });
 
+  /* ---- shader warm-up ----
+   * The engine's base program is one large shader, and the first compile of
+   * it on a machine can take a long time: 21 s on a Radeon 740M under D3D11,
+   * 15-20 s on some Intel and NVIDIA laptops, with every other player of the
+   * match stalled at frame 1 meanwhile. The browser keeps each program it
+   * links, keyed by its source, and the same machine's next compile took
+   * 25 ms. So compile the same source here, while the player sits in the
+   * lobby, on a hidden canvas and in the background (KHR_parallel_shader_
+   * compile), and the engine's compile at boot is the cache hit.
+   * pc_web_base_shaders (gx_gl_bridge.c) builds the exact text the engine
+   * will hand WebGL; the [SHWARM] hashes in a report say whether it did. */
+  const warmShaders = () => {
+    let src;
+    try { Module._pc_web_base_shaders(); src = Module.meleeBaseShaders; } catch (e) { console.log('[SHWARM] no source:', e.message); return; }
+    if (!src) return;
+    const hex = src.hash.map((h) => h.toString(16).padStart(8, '0')).join('/');
+    // The engine's context, as its reports describe it.
+    const gl = document.createElement('canvas').getContext('webgl2', {
+      antialias: false, alpha: false, depth: true, stencil: true,
+      preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+    if (!gl) return;
+    // The extensions emscripten turns on in the engine's context
+    // (GL.initExtensions in melee.js). They are part of what a shader is
+    // compiled against, so they are part of the browser's cache key: with
+    // none enabled here the engine's compile missed the cache.
+    const EM_EXTS = ['ANGLE_instanced_arrays', 'EXT_blend_minmax', 'EXT_disjoint_timer_query', 'EXT_frag_depth',
+      'EXT_shader_texture_lod', 'EXT_sRGB', 'OES_element_index_uint', 'OES_fbo_render_mipmap',
+      'OES_standard_derivatives', 'OES_texture_float', 'OES_texture_half_float', 'OES_texture_half_float_linear',
+      'OES_vertex_array_object', 'WEBGL_color_buffer_float', 'WEBGL_depth_texture', 'WEBGL_draw_buffers',
+      'EXT_color_buffer_float', 'EXT_conservative_depth', 'EXT_disjoint_timer_query_webgl2', 'EXT_texture_norm16',
+      'NV_shader_noperspective_interpolation', 'WEBGL_clip_cull_distance', 'EXT_clip_control',
+      'EXT_color_buffer_half_float', 'EXT_depth_clamp', 'EXT_float_blend', 'EXT_polygon_offset_clamp',
+      'EXT_texture_compression_bptc', 'EXT_texture_compression_rgtc', 'EXT_texture_filter_anisotropic',
+      'KHR_parallel_shader_compile', 'OES_texture_float_linear', 'WEBGL_blend_func_extended',
+      'WEBGL_compressed_texture_astc', 'WEBGL_compressed_texture_etc', 'WEBGL_compressed_texture_etc1',
+      'WEBGL_compressed_texture_s3tc', 'WEBGL_compressed_texture_s3tc_srgb', 'WEBGL_multi_draw', 'WEBGL_polygon_mode',
+      'WEBGL_draw_instanced_base_vertex_base_instance', 'WEBGL_multi_draw_instanced_base_vertex_base_instance'];
+    for (const ext of gl.getSupportedExtensions() || []) if (EM_EXTS.includes(ext)) gl.getExtension(ext);
+    // Without it the link blocks this page for as long as it takes -- the
+    // lobby would freeze and drop off the relay. Leave it to the engine.
+    const par = gl.getExtension('KHR_parallel_shader_compile');
+    if (!par) { console.log(`[SHWARM] lobby base source ${hex}: no parallel compile, not warming`); return; }
+    const t0 = performance.now();
+    const shader = (type, text) => { const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s); return s; };
+    const vs = shader(gl.VERTEX_SHADER, src.vs);
+    const fs = shader(gl.FRAGMENT_SHADER, src.fs);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    // bridge_compile_shaders binds these; they are part of the program.
+    ['a_pos', 'a_nrm', 'a_col', 'a_uv0', 'a_uv1'].forEach((name, i) => gl.bindAttribLocation(prog, i, name));
+    gl.linkProgram(prog);
+    const poll = () => {
+      if (!gl.isContextLost() && !gl.getProgramParameter(prog, par.COMPLETION_STATUS_KHR)) { setTimeout(poll, 100); return; }
+      const ok = !gl.isContextLost() && gl.getProgramParameter(prog, gl.LINK_STATUS);
+      console.log(`[SHWARM] lobby base source ${hex}: ${ok ? 'linked' : 'not linked'} in ${Math.round(performance.now() - t0)} ms`);
+      gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs);
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+    };
+    setTimeout(poll, 100);
+  };
+  (function whenExports() {
+    if (typeof Module._pc_web_base_shaders === 'function') warmShaders();
+    else setTimeout(whenExports, 100);
+  })();
+
   /* ---- lobby state ---- */
   const me = { name: store.get('name', ''), ckind: store.get('ckind', 8), color: store.get('color', 0) };
   /* The other players at this computer, one per extra gamepad: local pad k

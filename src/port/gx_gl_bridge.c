@@ -2900,6 +2900,13 @@ static void pc_clear_depth(float z)
  * and a 3.0 compiler rejects "310"). The bodies use nothing past 3.00.
  * MELEE_GLSL_ES=300 forces the older header on a newer context to check
  * that on the desktop. */
+/* WebGL 2's header: a 3.0 context, so every browser compiles with it.
+ * pc_web_base_shaders builds the base program's source before there is a
+ * context to ask, and has to come out identical. */
+static const char g_es300_header[] = "#version 300 es\n"
+                                     "precision highp float;\n"
+                                     "precision highp int;\n"
+                                     "precision highp sampler2D;\n";
 static const char* pc_es_header(void)
 {
     static const char* hdr;
@@ -2910,10 +2917,7 @@ static const char* pc_es_header(void)
         glGetIntegerv(GL_MINOR_VERSION, &minor);
         if ((force != NULL && strcmp(force, "300") == 0) ||
             (major == 3 && minor == 0))
-            hdr = "#version 300 es\n"
-                  "precision highp float;\n"
-                  "precision highp int;\n"
-                  "precision highp sampler2D;\n";
+            hdr = g_es300_header;
         else
             hdr = "#version 310 es\n"
                   "precision highp float;\n"
@@ -2928,15 +2932,12 @@ static const char* pc_es_header(void)
 static int pc_gpu_dl_on(void);
 static int g_shader_nowait;
 
-static GLuint compile_shader(GLenum type, const char* src)
+/* A/B switches for the texgen path, spliced in after the version line:
+ * MELEE_TEXGEN_LEGACY=1 feeds the 3x4 texgens a zero vector (what the
+ * shader effectively did while it read v_world_pos before writing it),
+ * MELEE_NO_QDIV=1 skips the projective divide. */
+static const char* pc_shader_defs(void)
 {
-    GLuint s = glCreateShader(type);
-    const char* parts[3];
-    GLsizei nparts = 1;
-    /* A/B switches for the texgen path, spliced in after the version line:
-     * MELEE_TEXGEN_LEGACY=1 feeds the 3x4 texgens a zero vector (what the
-     * shader effectively did while it read v_world_pos before writing it),
-     * MELEE_NO_QDIV=1 skips the projective divide. */
     static char defs[128];
     static int defs_init = 0;
     if (!defs_init) {
@@ -2948,22 +2949,39 @@ static GLuint compile_shader(GLenum type, const char* src)
          * MELEE_GPU_DL=0 compiles the shader as it was before them. */
         if (pc_gpu_dl_on()) strcat(defs, "#define GPU_SKIN 1\n");
     }
+    return defs;
+}
+
+/* The pieces glShaderSource is given for `src`: the version line swapped
+ * for `es_hdr` (NULL keeps the desktop one), then the defines, then the
+ * rest. Shared with pc_web_base_shaders, which must hand the browser the
+ * same text. */
+static GLsizei pc_shader_parts(const char* src, const char* es_hdr, const char* parts[3])
+{
     parts[0] = src;
     if (strncmp(src, "#version ", 9) == 0) {
         const char* nl = strchr(src, '\n');
         static char verline[64];
-        if (window_gl_es()) {
-            parts[0] = pc_es_header();
+        if (es_hdr != NULL) {
+            parts[0] = es_hdr;
         } else {
             size_t n = nl ? (size_t) (nl + 1 - src) : strlen(src);
             if (n >= sizeof(verline)) n = sizeof(verline) - 1;
             memcpy(verline, src, n); verline[n] = '\0';
             parts[0] = verline;
         }
-        parts[1] = defs;
+        parts[1] = pc_shader_defs();
         parts[2] = nl ? nl + 1 : "";
-        nparts = 3;
+        return 3;
     }
+    return 1;
+}
+
+static GLuint compile_shader(GLenum type, const char* src)
+{
+    GLuint s = glCreateShader(type);
+    const char* parts[3];
+    GLsizei nparts = pc_shader_parts(src, window_gl_es() ? pc_es_header() : NULL, parts);
     glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
     /* A parallel compile (pc_web_prog_begin) must not ask: the status query
@@ -6023,6 +6041,76 @@ static void pc_shc_base_store(GLuint id)
     free(data);
 }
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+/* `src` as the driver receives it (pc_shader_parts, joined), malloc'd. */
+static char* pc_shader_text(const char* src, const char* es_hdr)
+{
+    const char* parts[3];
+    GLsizei n = pc_shader_parts(src, es_hdr, parts), k;
+    size_t len = 1;
+    char* out;
+    for (k = 0; k < n; k++) len += strlen(parts[k]);
+    out = (char*) malloc(len);
+    out[0] = '\0';
+    for (k = 0; k < n; k++) strcat(out, parts[k]);
+    return out;
+}
+
+static u32 pc_shader_hash(const char* t)
+{
+    u32 h = 2166136261u;
+    for (; *t; t++) h = (h ^ (u8) *t) * 16777619u;
+    return h;
+}
+
+/* The base program's two sources, for the lobby to compile before the match
+ * (tools/wasm/lobby.js, warmShaders). The browser keeps every program it has
+ * linked, keyed by its source, so a compile of the same text later is a
+ * cache hit: the engine's own compile at boot then takes milliseconds. Cold,
+ * on a Radeon 740M under D3D11, it took 21 s, every other player of the match
+ * stalled at frame 1 waiting for it, and it came back on every build that
+ * changed the shader.
+ *
+ * Called before main(), while the page sits in the lobby: there is no GL
+ * context yet, so it builds what bridge_compile_shaders would without asking
+ * GL anything -- WebGL 2 is always a 3.0 context, so the header is known --
+ * and leaves g_vert_src/g_frag_src as they are (pc_ubo_init rewrites them in
+ * place, once). The sources go to Module.meleeBaseShaders. */
+EM_JS(void, pc_web_put_base_shaders, (const char* vs, const char* fs, u32 hv, u32 hf), {
+    Module.meleeBaseShaders = { vs: UTF8ToString(vs), fs: UTF8ToString(fs), hash: [hv >>> 0, hf >>> 0] };
+});
+EMSCRIPTEN_KEEPALIVE void pc_web_base_shaders(void)
+{
+    const char* v = g_vert_src;
+    const char* f = g_frag_src;
+    char* uv = NULL;
+    char* uf = NULL;
+    char* base_f;
+    char* vt;
+    char* ft;
+    pc_vloc_init();
+    if (pc_ubo_wanted()) {
+        pc_ubo_layout();
+        if (g_ubo_n != 0 && g_ubo_size <= sizeof(g_ubo_img)) {
+            uv = pc_ubo_source(v);
+            uf = pc_ubo_source(f);
+            v = uv;
+            f = uf;
+        }
+    }
+    base_f = pc_unroll_tev_ex(strdup(f), 8, 1);
+    vt = pc_shader_text(v, g_es300_header);
+    ft = pc_shader_text(base_f, g_es300_header);
+    pc_web_put_base_shaders(vt, ft, pc_shader_hash(vt), pc_shader_hash(ft));
+    free(vt);
+    free(ft);
+    free(base_f);
+    free(uv);
+    free(uf);
+}
+#endif
+
 static void bridge_compile_shaders(void)
 {
     struct timespec t0, t1;
@@ -6043,6 +6131,18 @@ static void bridge_compile_shaders(void)
      * unrolled like the variants, guarded by the stage count uniform. */
     char* base_fsrc = pc_unroll_tev_ex(strdup(g_frag_src), 8, 1);
     GLuint fs = compile_shader(GL_FRAGMENT_SHADER, base_fsrc);
+#if defined(__EMSCRIPTEN__)
+    {
+        /* Against the lobby's [SHWARM] line: equal hashes are what make its
+         * warm-up a cache hit here. */
+        char* vt = pc_shader_text(g_vert_src, pc_es_header());
+        char* ft = pc_shader_text(base_fsrc, pc_es_header());
+        fprintf(stderr, "[SHWARM] engine base source %08x/%08x\n",
+                pc_shader_hash(vt), pc_shader_hash(ft));
+        free(vt);
+        free(ft);
+    }
+#endif
     free(base_fsrc);
     if (!vs || !fs) {
         PORT_LOG_ERROR("Failed to compile shaders");
