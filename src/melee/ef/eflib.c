@@ -1365,7 +1365,7 @@ void efLib_Cb_ParticleRender(HSD_Particle* particle)
     }
 }
 
-static void (*particleCallbacks[3])(HSD_Particle* particle) = {
+static HSD_PSUserFunc particleCallbacks = {
     efLib_Cb_ParticleRender,
     NULL,
     NULL,
@@ -1378,16 +1378,16 @@ static void (*particleCallbacks[3])(HSD_Particle* particle) = {
 void efLib_Cb_PtclAppSRTHook(HSD_Generator* gen)
 {
     if (gen->cmdList == ptclref_804D0E5C[0][0x96]->cmdList) {
-        hsd_8039D1E4(gen, particleCallbacks);
+        hsd_8039D1E4(gen, &particleCallbacks);
     }
     if (gen->cmdList == ptclref_804D0E5C[0][0x97]->cmdList) {
-        hsd_8039D1E4(gen, particleCallbacks);
+        hsd_8039D1E4(gen, &particleCallbacks);
     }
     if (gen->cmdList == ptclref_804D0E5C[0][0x98]->cmdList) {
-        hsd_8039D1E4(gen, particleCallbacks);
+        hsd_8039D1E4(gen, &particleCallbacks);
     }
     if (gen->cmdList == ptclref_804D0E5C[0][0x21B]->cmdList) {
-        hsd_8039D1E4(gen, particleCallbacks);
+        hsd_8039D1E4(gen, &particleCallbacks);
     }
 }
 

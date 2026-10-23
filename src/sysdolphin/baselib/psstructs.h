@@ -188,11 +188,14 @@ struct HSD_Particle {
 };
 
 /* size: 0xC */
+/* The particle code never reads a hook's return value, and the only table
+ * installed (efLib's) is built from void functions; the wasm build traps an
+ * indirect call whose return type disagrees with the callee's. */
 typedef struct _PSUserFunc {
-    int (*hookCreate)(HSD_Particle* part); /* 0x0 */
-    int (*hookDelete)(HSD_Particle* part); /* 0x4 */
-    int (*setUserData)(HSD_Particle* part, u8 unknown1,
-                       float unknown2); /* 0x8 */
+    void (*hookCreate)(HSD_Particle* part); /* 0x0 */
+    void (*hookDelete)(HSD_Particle* part); /* 0x4 */
+    void (*setUserData)(HSD_Particle* part, u8 unknown1,
+                        float unknown2); /* 0x8 */
 } HSD_PSUserFunc;
 
 typedef struct _auxDisc {
