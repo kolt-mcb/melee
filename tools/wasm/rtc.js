@@ -30,6 +30,14 @@
  *                   preference -- "192.168.1.10,203.0.113.7": players on the
  *                   LAN reach the first, players outside it the forwarded
  *                   public one, and neither needs the router's NAT reflection.
+ *                   An entry may be a HOSTNAME ("192.168.1.10,edge.example"):
+ *                   it is resolved at start and again every minute, so a
+ *                   dynamic WAN address kept current by DDNS stays right here
+ *                   too (a literal IP would go stale the day the ISP moves
+ *                   it, and every remote channel would fail with nothing in
+ *                   the log). Resolved through public resolvers (MELEE_RTC_DNS,
+ *                   default 1.1.1.1 and 8.8.8.8), not the LAN's, so a router
+ *                   host override cannot hand back a LAN address.
  *   MELEE_STUN      a STUN server (or comma list) the players' browsers use
  *                   to learn their own public address -- "stun:host:3478".
  *                   Handed to each page in the lobby state (lobby.js builds
@@ -58,6 +66,30 @@ const QUIET_MS = 1500;
 const PORT = parseInt(process.env.MELEE_RTC_PORT || '9400', 10);
 const HOSTS = (process.env.MELEE_RTC_HOST || '').split(',').map((h) => h.trim()).filter(Boolean);
 const HOST = HOSTS.join(',');
+/* Hostnames among HOSTS, resolved on a public resolver and refreshed every
+ * minute. hostAddrs() is what the candidates announce; a name not resolved
+ * yet is left out (and the page falls back to the WebSocket until it is). */
+const dns = require('dns');
+const isIp = (h) => /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
+const DNS_SERVERS = (process.env.MELEE_RTC_DNS || '1.1.1.1,8.8.8.8').split(',').map((s) => s.trim()).filter(Boolean);
+const resolved = new Map();
+const resolver = new dns.promises.Resolver();
+try { resolver.setServers(DNS_SERVERS); } catch (e) { /* bad MELEE_RTC_DNS: the system resolver, then */ }
+async function refreshHosts() {
+    for (const h of HOSTS) {
+        if (isIp(h)) continue;
+        try {
+            const addrs = await resolver.resolve4(h);
+            if (addrs.length && resolved.get(h) !== addrs[0]) {
+                console.log(`[rtc] ${h} is ${addrs[0]}${resolved.has(h) ? ` (was ${resolved.get(h)})` : ''}`);
+                resolved.set(h, addrs[0]);
+            }
+        } catch (e) {
+            if (!resolved.has(h)) console.log(`[rtc] cannot resolve ${h} yet: ${e.code || e.message}`);
+        }
+    }
+}
+const hostAddrs = () => HOSTS.map((h) => (isIp(h) ? h : resolved.get(h))).filter(Boolean);
 // Only stun: / stuns: URLs: a turn: server would need credentials this does
 // not carry, and the page must not be handed arbitrary URLs to dial.
 const STUN = (process.env.MELEE_STUN || '').split(',').map((u) => u.trim())
@@ -72,10 +104,15 @@ else {
 }
 if (ndc) {
     try { ndc.initLogger('Error'); } catch (e) { /* older versions */ }
+    if (HOSTS.some((h) => !isIp(h))) {
+        refreshHosts();
+        setInterval(refreshHosts, 60000).unref();
+    }
 }
 exports.available = !!ndc;
 exports.iceServers = STUN;   // what the pages build their RTCPeerConnection with
 exports.describe = () => (ndc ? `on, UDP ${PORT}${HOST ? ` announced as ${HOST}` : ''}` +
+                                `${HOSTS.some((h) => !isIp(h)) ? ` (names resolved via ${DNS_SERVERS.join(',')}, refreshed each minute)` : ''}` +
                                 `${STUN.length ? `, pages use STUN ${STUN.join(',')}` : ', no STUN (LAN or a forward only)'}` : why);
 
 const KEEPALIVE = Buffer.from([0]);
@@ -126,7 +163,9 @@ function offer(conn, msg, json) {
         const f = c.replace(/^a=/, '').split(' ');
         if (f.length < 8 || f[2].toLowerCase() !== 'udp' || +f[5] !== PORT || r.announced) return [];
         r.announced = true;
-        return HOSTS.map((h, i) => {
+        const addrs = hostAddrs();
+        if (addrs.length < HOSTS.length) console.log(`[rtc] announcing ${addrs.length} of ${HOSTS.length} hosts to ${conn.who || 'a page'} (a name is not resolved yet)`);
+        return addrs.map((h, i) => {
             const g = f.slice();
             g[0] = `candidate:${9400 + i}`;
             g[3] = String(2130706431 - i * 256);
