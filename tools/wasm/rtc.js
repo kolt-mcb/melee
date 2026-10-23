@@ -99,8 +99,20 @@ function offer(conn, msg, json) {
         json(conn, { t: 'rtc', type: 'none' });
         return;
     }
-    const r = { pc, dc: null, lastRx: 0, rx: 0, tx: 0, timer: null, closed: false, announced: false };
+    const r = { pc, dc: null, lastRx: 0, rx: 0, tx: 0, timer: null, closed: false, announced: false,
+                t0: performance.now(), cands: [], probe: null };
     conn.rtc = r;
+    /* What the page offered and what came of it, in the log: a channel that
+     * never opens is otherwise silent on this side, and the page's report
+     * says only "did not open". The page's candidates say where it is (a
+     * private host address, a srflx one from STUN = its router's mapping),
+     * and the outcome says whether the path through the routers worked. */
+    const who = () => conn.who || 'a page';
+    const offered = () => r.cands.length ? r.cands.map((c) => `${c.typ} ${c.addr}:${c.port}`).join(', ') : 'none yet';
+    r.probe = setTimeout(() => {
+        if (r.closed || (r.dc && r.dc.isOpen())) return;
+        console.log(`[rtc] no channel for ${who()} after 10 s; the page's candidates: ${offered()}`);
+    }, 10000);
     r.usable = () => !!(r.dc && !r.closed && r.dc.isOpen() && performance.now() - r.lastRx < QUIET_MS);
     r.send = (buf) => {
         try { if (r.dc.sendMessageBinary(buf)) { r.tx++; return true; } } catch (e) { /* closed under us */ }
@@ -130,6 +142,16 @@ function offer(conn, msg, json) {
         for (const c of candidates(cand)) json(conn, { t: 'rtc-ice', cand: c, mid });
     });
     pc.onStateChange((state) => {
+        const dt = ((performance.now() - r.t0) / 1000).toFixed(1);
+        if (state === 'connected') {
+            let pair = '';
+            try {
+                const p = pc.getSelectedCandidatePair();
+                if (p && p.remote) pair = ` via ${p.remote.type} ${p.remote.address}:${p.remote.port} (ours ${p.local ? p.local.address + ':' + p.local.port : '?'})`;
+            } catch (e) { /* older binding */ }
+            console.log(`[rtc] ICE connected for ${who()} in ${dt} s${pair}; the page offered: ${offered()}`);
+        }
+        if (state === 'failed') console.log(`[rtc] ICE failed for ${who()} after ${dt} s; the page offered: ${offered()}`);
         if (state === 'failed' || state === 'closed') close(conn);
     });
     pc.onDataChannel((dc) => {
@@ -163,6 +185,9 @@ function offer(conn, msg, json) {
 function candidate(conn, msg) {
     const r = conn.rtc;
     if (!r || r.closed || typeof msg.cand !== 'string' || !msg.cand) return;
+    // "candidate:<f> <comp> <proto> <prio> <addr> <port> typ <type> ..."
+    const f = msg.cand.replace(/^a=/, '').split(' ');
+    if (f.length >= 8 && f[6] === 'typ' && r.cands.length < 32) r.cands.push({ typ: f[7], addr: f[4], port: f[5] });
     try { r.pc.addRemoteCandidate(msg.cand, typeof msg.mid === 'string' ? msg.mid : '0'); }
     catch (e) { /* an mDNS name, or a candidate for a closed connection */ }
 }
@@ -172,6 +197,7 @@ function close(conn) {
     if (!r || r.closed) return;
     r.closed = true;
     clearInterval(r.timer);
+    clearTimeout(r.probe);
     try { if (r.dc) r.dc.close(); } catch (e) { /* */ }
     try { r.pc.close(); } catch (e) { /* */ }
 }
