@@ -30,5 +30,9 @@ EXPOSE 8000
 # must be published with the same number outside, and MELEE_RTC_HOST set to
 # the address players reach it on -- see compose-melee.block.
 EXPOSE 9400/udp
+# Off until the compose file turns it on (MELEE_RTC: "1") with the port
+# published and MELEE_RTC_HOST set: unreachable, every page would spend 8 s
+# offering a channel that never opens before keeping to the WebSocket.
+ENV MELEE_RTC=0
 USER node
 CMD ["node", "tools/wasm/serve.js", "--dir", "/web", "--iso", "/disc/disc.iso", "--http", "--port", "8000", "--reports", "/reports"]

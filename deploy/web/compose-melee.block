@@ -16,6 +16,8 @@
     ports:
       - "9400:9400/udp"
     environment:
+      # The image ships with it off; on once the port and the host are set.
+      MELEE_RTC: "${MELEE_RTC:-0}"
       MELEE_RTC_PORT: "9400"
       MELEE_RTC_HOST: "${MELEE_RTC_HOST:-}"
     volumes:
