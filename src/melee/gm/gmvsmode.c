@@ -433,6 +433,19 @@ void onEnterDebugVs(GameModeState* state)
                 start->rules.item_freq = (s8) (f < -1 ? -1 : f > 4 ? 4 : f);
             }
         }
+        /* No pausing in a netplay match. A pause stops the match frame, the
+         * players exchange input only per match frame, and the Start that
+         * would unpause is itself an input for a frame that never comes: on
+         * 2026-10-23 a three-way froze at frame 7087 on every page at once
+         * and stayed frozen until everyone left. Slippi turns it off too.
+         * Every page of a match boots with MELEE_NET, so all agree.
+         * MELEE_BOOT_NOPAUSE=1 does the same outside netplay, to test it. */
+        {
+            const char* net = getenv("MELEE_NET");
+            if ((net != NULL && *net != '\0') || getenv("MELEE_BOOT_NOPAUSE") != NULL) {
+                start->rules.disable_pausing = 1;
+            }
+        }
         /* rules.x6 is the 1P-mode flag (set only by gm_8016EBC0_OnEnter);
          * stage.c picks the 1P quick-play BGM when it is set. A VS match
          * plays the stage's own music. */
