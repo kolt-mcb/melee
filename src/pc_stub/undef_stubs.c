@@ -2811,10 +2811,29 @@ void pc_pad_publish(void)
          * controller. Every port used to read as connected, so the
          * character select showed four hands and four CPU slots where the
          * console shows two hands and N/A. A missing controller reports
-         * PAD_ERR_NO_CONTROLLER (-1) with no input, as the SI driver does. */
+         * PAD_ERR_NO_CONTROLLER (-1) with no input, as the SI driver does.
+         *
+         * A MELEE_BOOT_PLAYERS lineup plays as many ports as it lists: the
+         * web lobby boots three- to eight-way matches that way and never
+         * set MELEE_PADS, so every player past the second had their input
+         * wiped here and stood still. */
         { static int pads = -1;
-          if (pads < 0) { const char* e = getenv("MELEE_PADS"); pads = e ? atoi(e) : 2;
-                          if (pads < 1) pads = 1; if (pads > 4) pads = 4; }
+          if (pads < 0) {
+              const char* e = getenv("MELEE_PADS");
+              const char* bp = getenv("MELEE_BOOT_PLAYERS");
+              pads = 2;
+              if (e != NULL) {
+                  pads = atoi(e);
+              } else if (bp != NULL && *bp != '\0') {
+                  int n = 1;
+                  for (; *bp != '\0'; bp++) {
+                      n += (*bp == ',');
+                  }
+                  if (n > pads) pads = n;
+              }
+              if (pads < 1) pads = 1;
+              if (pads > PC_GAME_PADS) pads = PC_GAME_PADS;
+          }
           if ((int) i < pads) {
               d->err = 0;
           } else {
