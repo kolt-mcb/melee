@@ -14,9 +14,21 @@
 # progress -- 28 times in the six days to 2026-10-21.)
 FROM node:22-alpine
 WORKDIR /app
+# The one dependency: node-datachannel (libdatachannel), the relay's end of
+# each page's WebRTC datagram channel for game inputs (tools/wasm/rtc.js).
+# Installed here, outside the mounted tools/wasm, as /app/node_modules, which
+# require() finds from /app/tools/wasm. It ships a prebuilt linux-x64-musl
+# binary, so nothing compiles. Without it the relay runs as before, inputs on
+# the WebSocket only.
+RUN npm install --prefix /app --omit=dev --no-audit --no-fund --no-save node-datachannel@0.33.4 \
+ && node -e "require('/app/node_modules/node-datachannel')"
 # Players' crash and frame-rate reports land in /reports: mount a volume
 # there to keep them past a restart.
 RUN mkdir -p /reports /app/tools/wasm && chown node:node /reports
 EXPOSE 8000
+# The datagram channel's one UDP port (all pages share it: ICE UDP mux). It
+# must be published with the same number outside, and MELEE_RTC_HOST set to
+# the address players reach it on -- see compose-melee.block.
+EXPOSE 9400/udp
 USER node
 CMD ["node", "tools/wasm/serve.js", "--dir", "/web", "--iso", "/disc/disc.iso", "--http", "--port", "8000", "--reports", "/reports"]

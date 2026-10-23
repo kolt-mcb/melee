@@ -234,6 +234,12 @@ static void ring_put(InputRing* r, s32 f, const NetPad* p)
         return;
     }
     i = f & NET_RING_MASK;
+    /* A packet from long ago -- a datagram can arrive late, twice, or out
+     * of order -- must not take the place of a newer frame. A frame's pad
+     * never changes once announced, so an equal one is a duplicate. */
+    if (r->frame[i] > f) {
+        return;
+    }
     r->frame[i] = f;
     r->pad[i] = *p;
 }
@@ -368,18 +374,29 @@ static int net_is_remote(int slot)
 
 /* ---- the web build's transport (MELEE_NET=web) --------------------------
  *
- * A browser has no UDP. Every page holds one WebSocket to the relay on the
- * host (tools/wasm/relay.js), which assigned the slots and the seed before
+ * A browser has no UDP socket. Every page holds one WebSocket to the relay on
+ * the host (tools/wasm/relay.js), which assigned the slots and the seed before
  * the match booted and forwards each packet to every other player: a star
- * through the relay, ordered and reliable, so the packets are this port's
- * own and arrive in order. tools/wasm/net.js queues what arrives. There is
- * no handshake to do -- the lobby did it -- so the state starts at NET_RUN.
+ * through the relay. tools/wasm/lobby.js queues what arrives (Module.meleeNet).
+ * There is no handshake to do -- the lobby did it -- so the state starts at
+ * NET_RUN.
+ *
+ * MSG_INPUT may instead travel over a WebRTC data channel between the page
+ * and the relay, unordered and never retransmitted (tools/wasm/rtc.js), so
+ * input packets can be lost, duplicated and reordered exactly as over UDP.
+ * Nothing here depends on the order: every packet repeats the last
+ * NET_WINDOW frames, ring_put never lets an older frame displace a newer
+ * one, the barrier waits for each frame's own pad (remote_ready), and the
+ * resend reaches back to the frame the slowest peer is on
+ * (send_inputs_covering). Hashes and MSG_BYE stay on the WebSocket.
  *
  * A player who leaves is announced by the relay as MSG_BYE carrying the
- * last frame of that player's input it forwarded. Every remaining page has
- * received exactly those frames (one ordered stream each), so all of them
- * play that slot neutral from the same frame on and stay in step, instead
- * of each dropping to NET_SOLO on its own. */
+ * last frame of that player's input it holds with nothing missing before
+ * it. Before the BYE the relay resends, on the ordered WebSocket, that
+ * player's last frames, so every remaining page has all of them; a pad past
+ * that frame which did arrive by datagram is ignored (net_gone_after). All
+ * pages then play that slot neutral from the same frame on and stay in step,
+ * instead of each dropping to NET_SOLO on its own. */
 static int net_web;
 /* Set to "never" for every slot in net_config. A four-entry initialiser
  * left slots 4-7 at 0, so a fifth player counted as gone from the first
@@ -1381,6 +1398,48 @@ static void send_inputs(s32 upto)
     send_inputs_from(upto - (NET_WINDOW - 1), upto);
 }
 
+/* The newest window, and before it the window starting at the frame the
+ * slowest remote player is on, when that has slid out of the newest one.
+ *
+ * A peer announces its input net_delay frames ahead, so its newest input
+ * says which frame it is on, and that frame's input from us is what it waits
+ * for: its newest pad is as good as an ack. The resend in the wait used to
+ * end at our newest frame only: once the frame a peer needed had slid out of
+ * it, every resend missed it, and two pages stood a frame apart waiting on
+ * each other for good (the web, 2026-10-17: one at 93 waiting for 93, the
+ * other at 86 waiting for 86, after the packets carrying 86 never arrived).
+ *
+ * Sent every frame, not only from the wait: over datagrams a burst of loss
+ * longer than the window would otherwise be repaired only once this side
+ * had itself run out of the peer's input and stalled, net_delay frames
+ * later. A peer more than two windows behind gets the window at its frame
+ * only. */
+static s32 net_slowest_need(void)
+{
+    s32 need = net_last_sent - (NET_WINDOW - 1);
+    int k;
+    for (k = 0; k < net_players; k++) {
+        s32 nk, at;
+        if (!net_is_remote(k) || net_gone_after[k] != 0x7FFFFFFF) {
+            continue;
+        }
+        nk = ring_newest(&net_in[k]);
+        at = nk >= 0 ? nk - net_delay : 0;
+        if (at < 0) at = 0;
+        if (at < need) need = at;
+    }
+    return need;
+}
+static void send_inputs_covering(s32 upto)
+{
+    s32 need = net_slowest_need();
+    if (need < upto - (NET_WINDOW - 1)) {
+        s32 end = need + (NET_WINDOW - 1);
+        send_inputs_from(need, end < upto ? end : upto);
+    }
+    send_inputs(upto);
+}
+
 /* Slippi's eight bytes: the console's pad report, minus the four bytes it
  * does not transmit. The button word is sixteen bits there; the synthetic
  * stick-direction bits this port adds live above them and are re-derived on
@@ -1656,6 +1715,17 @@ static int remote_ready(int slot, s32 frame)
     }
     if (frame > net_gone_after[slot]) {
         return 1; /* left: neutral from here, on every page alike */
+    }
+    /* The port's own packets always start at frame 0 (send_slot_inputs_from
+     * fills the frames before the first announcement with neutral pads), so
+     * nothing is ever "before the first announcement" for them. Inferring it
+     * from the first packet that happens to arrive is only safe on an
+     * ordered, lossless stream: over datagrams the first to arrive can be a
+     * later one, and the frames before it would be played neutral here and
+     * with real input everywhere else. Slippi's stream really does start
+     * late, so it keeps the inference. */
+    if (!net_slippi_proto) {
+        return 0;
     }
     return net_first_seen[slot] >= 0 && frame < net_first_seen[slot];
 }
@@ -2962,7 +3032,7 @@ void pc_net_pads(GCPadStatus* pads)
         if (net_slippi_proto) {
             slp_send_inputs(net_last_sent);
         } else {
-            send_inputs(net_last_sent);
+            send_inputs_covering(net_last_sent);
         }
     }
 
@@ -3215,23 +3285,7 @@ void pc_net_pads(GCPadStatus* pads)
                      * waiting on each other for good (the web, 2026-10-17:
                      * one at 93 waiting for 93, the other at 86 waiting for
                      * 86, after the packets carrying 86 never arrived). */
-                    s32 need = net_last_sent - (NET_WINDOW - 1);
-                    int k;
-                    for (k = 0; k < net_players; k++) {
-                        s32 nk, at;
-                        if (!net_is_remote(k) || net_gone_after[k] != 0x7FFFFFFF) {
-                            continue;
-                        }
-                        nk = ring_newest(&net_in[k]);
-                        at = nk >= 0 ? nk - net_delay : 0;
-                        if (at < 0) at = 0;
-                        if (at < need) need = at;
-                    }
-                    if (need < net_last_sent - (NET_WINDOW - 1)) {
-                        s32 upto = need + (NET_WINDOW - 1);
-                        send_inputs_from(need, upto < net_last_sent ? upto : net_last_sent);
-                    }
-                    send_inputs(net_last_sent);
+                    send_inputs_covering(net_last_sent);
                 }
             }
             got = all_remote_ready(frame);
@@ -3324,7 +3378,11 @@ void pc_net_pads(GCPadStatus* pads)
             if (!net_is_remote(slot)) {
                 continue;
             }
-            if (ring_get(&net_in[slot], frame, &got_pad)) {
+            /* After a player's announced last frame, neutral even if a pad
+             * for it is here: over datagrams some pages can hold pads past
+             * the frame the relay's MSG_BYE names and others not. */
+            if (frame <= net_gone_after[slot] &&
+                ring_get(&net_in[slot], frame, &got_pad)) {
                 pad_to_gc(&pads[slot], &got_pad);
             } else {
                 /* Before that slot's first announcement: neutral, the same as

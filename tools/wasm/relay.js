@@ -20,6 +20,21 @@
  * at Start, right after the member's. The page sends one input stream per
  * slot, and every other page sees them as separate players.
  *
+ * Input packets can also travel as datagrams: each page may open a WebRTC
+ * data channel to the relay (tools/wasm/rtc.js), unordered and never
+ * retransmitted, and MSG_INPUT goes over it both ways while it is up. One
+ * lost TCP segment on a player's Wi-Fi used to freeze everybody for a
+ * retransmit; a lost datagram is covered by the next packet, which repeats
+ * the last twelve frames. Everything else -- the lobby, hashes, MSG_BYE --
+ * stays on the WebSocket, and so do the inputs of a page whose channel is
+ * not up, so pages on either path play one match.
+ *
+ * Over datagrams the pages may each hold a different set of a player's
+ * frames, so the relay keeps every slot's recent pads and, when a player
+ * leaves, sends each remaining page that player's last frames over its
+ * WebSocket before the MSG_BYE: every page then has exactly the frames up to
+ * the one the BYE names, the same guarantee one ordered stream gave.
+ *
  * The input delay comes from the players' measured round trips. The relay
  * pings every page twice a second while it is in the lobby, and at Start
  * picks the frames of delay that cover the slowest pair's path through it:
@@ -29,6 +44,7 @@
  */
 
 const crypto = require('crypto');
+const rtc = require('./rtc.js');
 
 const MAX_PLAYERS = 8; // the PC build's fighter slots
 const MAX_LOCAL = 4;   // players at one page: the four pads the engine reads
@@ -36,6 +52,9 @@ const PING_MS = 500, PING_KEEP = 20;
 const FRAME_MS = 1000 / 60;
 const FIXED_DELAY = process.env.MELEE_NET_DELAY ? parseInt(process.env.MELEE_NET_DELAY, 10) : 0;
 const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8;
+const PAD_BYTES = 10, WINDOW = 12;   // pc_netplay.c NET_PAD_BYTES, NET_WINDOW
+const KEEP_PADS = 256;               // each slot's newest pads, for the leaver's last frames
+console.log(`[relay] datagram channel: ${rtc.describe()}`);
 /* How long a seat is held for a page whose socket dropped mid-match. The
  * engine stalls on the missing input and resends what the peer has not
  * acknowledged, so a page that is back inside this window picks the match
@@ -99,6 +118,7 @@ function lobbyState(forId) {
         waiting: room.members.length - in_.length,
         rules: room.rules,
         inMatch: !!room.match,
+        rtc: rtc.available,
     };
 }
 
@@ -148,18 +168,22 @@ function startMatch() {
     for (const m of players) {
         m.slots = [];
         m.lastFrames = {};
+        m.pads = {};
+        m.solid = {};
         for (const p of seatsOf(m)) {
             m.slots.push(lineup.length);
             m.lastFrames[lineup.length] = -1;
+            m.pads[lineup.length] = new Map();
+            m.solid[lineup.length] = -1;
             lineup.push({ slot: lineup.length, name: p.name, ckind: p.ckind, color: p.color });
         }
         m.slot = m.slots[0];
         m.lastFrame = -1;
         m.loaded = false;
     }
-    room.match = { players, seed, watch: setInterval(watchMatch, 5000) };
-    players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.seenFrame = -1; m.stuckSince = 0; });
     const { delay, why } = chooseDelay(players);
+    room.match = { players, seed, delay, watch: setInterval(watchMatch, 5000) };
+    players.forEach((m) => { m.fwdIn = 0; m.fwdOut = 0; m.dgIn = 0; m.dgOut = 0; m.seenFrame = -1; m.stuckSince = 0; });
     for (const m of players) {
         // `pages`: with one, the match is local and needs no netplay at all,
         // however many players that page seats.
@@ -192,7 +216,7 @@ function watchMatch() {
     console.log(`[relay] match ${stuck ? 'STUCK' : 'ok'}: ` + ps.map((m) =>
         `${m.name}(slot ${m.slots.join('+')}) input to ${m.lastFrame}` +
         (now - m.stuckSince >= 4000 && m.lastFrame >= 0 ? ` [still ${((now - m.stuckSince) / 1000).toFixed(0)} s]` : '') +
-        `, in ${m.fwdIn} pkts, out ${m.fwdOut} pkts, unsent ${m.conn.socket ? m.conn.socket.writableLength : '?'} B` +
+        `, in ${m.fwdIn} pkts (${m.dgIn} dgram), out ${m.fwdOut} pkts (${m.dgOut} dgram), unsent ${m.conn.socket ? m.conn.socket.writableLength : '?'} B` +
         (room.members.includes(m) ? '' : ' (gone)')).join(' | '));
 }
 
@@ -205,18 +229,67 @@ function endMatchIfEmpty() {
     }
 }
 
-function forward(from, buf) {
+/* A slot's pads as they arrive, in any order and any number of times: the
+ * newest KEEP_PADS of them, and `solid`, the newest frame with every frame
+ * before it here. Only solid frames are ones every other page can be given. */
+function keepPads(from, slot, base, count, buf) {
+    const pads = from.pads[slot];
+    if (!pads) return;
+    for (let i = 0; i < count; i++) {
+        const f = base + i;
+        if (f <= from.solid[slot] - KEEP_PADS || pads.has(f)) continue;
+        pads.set(f, Buffer.from(buf.subarray(HDR + 5 + i * PAD_BYTES, HDR + 5 + (i + 1) * PAD_BYTES)));
+    }
+    while (pads.has(from.solid[slot] + 1)) from.solid[slot]++;
+    for (const f of pads.keys()) {
+        if (f > from.solid[slot] - KEEP_PADS) break;  // a Map iterates in insertion order: roughly oldest first
+        pads.delete(f);
+    }
+}
+
+/* A game packet from a page, by either path, to every other page in the
+ * match: inputs by datagram where that page's channel is up, the rest (and
+ * everything, where it is not) by WebSocket. */
+function forward(from, buf, viaDgram) {
     if (!room.match || !room.match.players.includes(from)) return;
-    if (buf.length >= HDR + 5 && buf.readUInt32BE(0) === MAGIC && buf[4] === MSG_INPUT) {
-        const last = buf.readUInt32BE(HDR) + buf[HDR + 4] - 1;
+    const input = buf.length >= HDR + 5 && buf.readUInt32BE(0) === MAGIC && buf[4] === MSG_INPUT;
+    if (input) {
+        const base = buf.readUInt32BE(HDR), count = buf[HDR + 4];
+        if (count > WINDOW || buf.length < HDR + 5 + count * PAD_BYTES) return;
+        const last = base + count - 1;
         if (last > from.lastFrame) from.lastFrame = last;
         const slot = buf[5];
         if (slot in from.lastFrames && last > from.lastFrames[slot]) from.lastFrames[slot] = last;
+        keepPads(from, slot, base, count, buf);
     }
     from.fwdIn = (from.fwdIn || 0) + 1;
+    if (viaDgram) from.dgIn = (from.dgIn || 0) + 1;
     for (const m of room.match.players) {
-        if (m !== from && room.members.includes(m)) { m.conn.send(buf); m.fwdOut = (m.fwdOut || 0) + 1; }
+        if (m === from || !room.members.includes(m)) continue;
+        m.fwdOut = (m.fwdOut || 0) + 1;
+        if (input && m.conn.rtc && m.conn.rtc.usable() && m.conn.rtc.send(buf)) { m.dgOut = (m.dgOut || 0) + 1; continue; }
+        m.conn.send(buf);
     }
+}
+
+/* A slot's pads [from, to] as MSG_INPUT packets of at most WINDOW frames. */
+function padPackets(m, slot, from, to) {
+    const out = [];
+    for (let base = from; base <= to; base += WINDOW) {
+        const n = Math.min(WINDOW, to - base + 1);
+        const b = Buffer.alloc(HDR + 5 + n * PAD_BYTES);
+        b.writeUInt32BE(MAGIC, 0);
+        b[4] = MSG_INPUT;
+        b[5] = slot;
+        b.writeUInt32BE(base >>> 0, HDR);
+        b[HDR + 4] = n;
+        for (let i = 0; i < n; i++) {
+            const p = m.pads[slot].get(base + i);
+            if (p) p.copy(b, HDR + 5 + i * PAD_BYTES);
+        }
+        out.push(b);
+    }
+    return out;
 }
 
 function leave(m) {
@@ -226,17 +299,32 @@ function leave(m) {
     if (room.match && room.match.players.includes(m) && !m.done) {
         // One per slot the page played, each with that slot's own last
         // frame: the streams are separate packets and need not end together.
+        //
+        // The last frame is the newest the relay holds with nothing missing
+        // before it (on a WebSocket-only match, simply the newest), and
+        // before the BYE every page is sent that slot's frames leading up to
+        // it, on its WebSocket: datagrams may have lost some of them on the
+        // way to any one page. A page can be at most about two delays behind
+        // the leaver (each waits on the other's input), so twice the delay
+        // and two windows back is enough; the frames are ones it has
+        // received already, or needs.
+        const back = 2 * (room.match.delay || 10) + 2 * WINDOW;
         for (const slot of m.slots) {
+            const last = m.solid[slot] != null ? m.solid[slot] : m.lastFrames[slot];
             const bye = Buffer.alloc(HDR + 4);
             bye.writeUInt32BE(MAGIC, 0);
             bye[4] = MSG_BYE;
             bye[5] = slot;
-            bye.writeUInt32BE(m.lastFrames[slot] >>> 0, HDR);
+            bye.writeUInt32BE(last >>> 0, HDR);
+            const tail = last >= 0 && m.pads[slot] ? padPackets(m, slot, Math.max(0, last - back + 1), last) : [];
             for (const o of room.match.players) {
-                if (o !== m && room.members.includes(o)) o.conn.send(bye);
+                if (o === m || !room.members.includes(o)) continue;
+                for (const b of tail) o.conn.send(b);
+                o.conn.send(bye);
             }
         }
-        console.log(`[relay] ${m.name} left the match after frame ${m.lastFrame}`);
+        console.log(`[relay] ${m.name} left the match after frame ${m.slots.map((k) => m.solid[k]).join('/')}` +
+                    ` (newest seen ${m.lastFrame})`);
     }
     endMatchIfEmpty();
     broadcastLobby();
@@ -258,7 +346,7 @@ function parked(id, seed) {
 
 exports.join = (conn) => {
     const m = { conn, id: nextId++, name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
-                slot: -1, slots: [], lastFrame: -1, lastFrames: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
+                slot: -1, slots: [], lastFrame: -1, lastFrames: {}, pads: {}, solid: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
                 away: null };
     room.members.push(m);
     attach(m, conn);
@@ -278,8 +366,10 @@ function attach(m, conn) {
         m.pingAt = performance.now();
         json(m.conn, { t: 'ping', s: m.pingSeq });
     }, PING_MS);
+    conn.who = m.name;
     conn.onclose = () => {
         clearInterval(m.pinger);
+        rtc.close(conn);
         if (room.match && room.match.players.includes(m) && !m.done) {
             // Hold the seat: the page may be back before anyone notices.
             m.away = setTimeout(() => { m.away = null; leave(m); }, RESUME_MS);
@@ -288,8 +378,9 @@ function attach(m, conn) {
         }
         leave(m);
     };
-    conn.onmessage = (buf) => {
-        if (buf[0] !== 0x7B /* '{' */) return forward(m, buf);
+    conn.onmessage = (buf, viaDgram) => {
+        if (buf[0] !== 0x7B /* '{' */) return forward(m, buf, viaDgram);
+        if (viaDgram) return;
         let msg;
         try { msg = JSON.parse(buf.toString('utf8')); } catch (e) { return; }
         const isHost = room.members[0] === m;
@@ -357,6 +448,12 @@ function attach(m, conn) {
             break;
         case 'loaded': // this page has drawn the match's first frame
             if (!m.loaded) { m.loaded = true; broadcastLobby(); }
+            break;
+        case 'rtc': // the page's offer of a datagram channel (rtc.js)
+            if (msg.type === 'offer') { conn.who = m.name; rtc.offer(conn, msg, json); }
+            break;
+        case 'rtc-ice':
+            rtc.candidate(conn, msg);
             break;
         case 'done': // this page's match is over; it is going back to the lobby
             m.done = true;

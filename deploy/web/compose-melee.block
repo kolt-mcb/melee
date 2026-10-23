@@ -7,6 +7,17 @@
     container_name: melee
     restart: unless-stopped
     networks: [gateway]
+    # The datagram channel for game inputs (tools/wasm/rtc.js): one UDP port,
+    # the same number inside and out, NOT through Caddy (it is not HTTP).
+    # MELEE_RTC_HOST is the address the players' browsers reach this host's
+    # port on -- grunt-node1's LAN address, not Caddy's macvlan one that
+    # melee.mcbridefarm.com resolves to. Unset or unreachable, every page
+    # simply keeps its inputs on the /net WebSocket, as before.
+    ports:
+      - "9400:9400/udp"
+    environment:
+      MELEE_RTC_PORT: "9400"
+      MELEE_RTC_HOST: "${MELEE_RTC_HOST:-}"
     volumes:
       - /home/grunt/melee-web/web:/web:ro
       - /home/grunt/melee-web/disc.iso:/disc/disc.iso:ro

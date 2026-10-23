@@ -27,7 +27,7 @@ MARK='melee.mcbridefarm.com {'
 DRAIN=${MELEE_DRAIN_SECS:-900}
 # The serve.js/relay.js the running process started with.
 STAMP=$REMOTE/.running-server.sha
-SERVER_FILES="tools/wasm/serve.js tools/wasm/relay.js"
+SERVER_FILES="tools/wasm/serve.js tools/wasm/relay.js tools/wasm/rtc.js"
 
 say() { echo "[apply] $*"; }
 

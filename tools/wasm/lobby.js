@@ -145,7 +145,13 @@
     meleeIsoReady: startReady,
     meleeNet: {
       inbox,
-      send(bytes) { if (ws && ws.readyState === 1) ws.send(bytes); },
+      // Inputs by datagram while that channel is up (see "the datagram
+      // channel" below), everything else -- and inputs otherwise -- by the
+      // WebSocket.
+      send(bytes) {
+        if (isInput(bytes) && dgramUsable() && dgramSend(bytes)) return;
+        if (ws && ws.readyState === 1) ws.send(bytes);
+      },
       onMatchEnd(desynced) {
         matchOver = true;
         // Tell the relay now, not when the player leaves the results: until
@@ -519,10 +525,12 @@
   /* ---- a worse network, on purpose: ?netlag=MS&netjitter=MS&netloss=PCT ----
    * Delays everything this page receives -- game packets, and the relay's
    * pings too, so the delay it picks sees the same network -- to see what a
-   * match feels like over the internet before playing one there. In order, as the
-   * WebSocket's TCP delivers them: a "lost" packet is TCP's retransmit, held
-   * ~200 ms (its minimum timeout) plus the lag, and everything behind it
-   * waits too. Applied on both pages, the round trip is twice the lag. */
+   * match feels like over the internet before playing one there. On the
+   * WebSocket, in order, as its TCP delivers them: a "lost" packet is TCP's
+   * retransmit, held ~200 ms (its minimum timeout) plus the lag, and
+   * everything behind it waits too. On the datagram channel each packet has
+   * its own delay (so they arrive out of order) and a lost one is gone.
+   * Applied on both pages, the round trip is twice the lag. */
   const impair = (() => {
     const q = new URLSearchParams(location.search);
     const n = (k) => Math.max(0, +q.get(k) || 0);
@@ -537,13 +545,115 @@
     setTimeout(() => handle(bytes), impairDue - performance.now());
   }
   if (impair.lag || impair.jitter || impair.loss) console.log('[lobby] network impairment', JSON.stringify(impair));
+  function deliverDgram(bytes, handle) {
+    if (!impair.lag && !impair.jitter && !impair.loss) { handle(bytes); return; }
+    if (Math.random() * 100 < impair.loss) { dgram.dropped++; return; }
+    setTimeout(() => handle(bytes), impair.lag + Math.random() * impair.jitter);
+  }
+
+  /* ---- the datagram channel ----
+   * A WebRTC data channel to the relay, unordered and never retransmitted
+   * (tools/wasm/rtc.js), for the game's input packets. Over the WebSocket a
+   * single lost TCP segment holds every later packet back until TCP resends
+   * it, 300 ms or more, and in lockstep the whole match waits with it: on
+   * 2026-10-23 one player's Wi-Fi froze a four-way for most of two minutes in
+   * nine. The engine repeats its last twelve frames in every packet, so a
+   * lost datagram is covered by the next one, a frame later.
+   *
+   * Only ever an addition: it is offered when the relay says it can answer
+   * (lobby.rtc), one per WebSocket, and the inputs go back to the WebSocket
+   * whenever it is not open or has delivered nothing (not even the relay's
+   * 250 ms keepalive) for 1.5 s. ?nortc=1 turns it off. */
+  const NO_RTC = /[?&]nortc=1\b/.test(location.search);
+  const DGRAM_QUIET_MS = 1500, DGRAM_OPEN_MS = 8000;
+  const dgram = { pc: null, dc: null, tried: null, early: [], lastRx: 0, rx: 0, tx: 0, dropped: 0, opened: 0, failed: 0, state: 'off' };
+  const isInput = (b) => b.length > 5 && b[0] === 0x4D && b[1] === 0x4E && b[2] === 0x50 && b[3] === 0x31 && b[4] === 4;
+  const dgramUsable = () => !!(dgram.dc && dgram.dc.readyState === 'open' && performance.now() - dgram.lastRx < DGRAM_QUIET_MS);
+  function dgramSend(bytes) {
+    try { dgram.dc.send(bytes); dgram.tx++; return true; } catch (e) { return false; }
+  }
+  function dgramClose(why) {
+    if (!dgram.pc) return;
+    try { dgram.pc.close(); } catch (e) { /* */ }
+    clearInterval(dgram.keep);
+    clearTimeout(dgram.openTimer);
+    if (why) console.log(`[lobby] datagram channel closed (${why}); inputs go by the WebSocket`);
+    dgram.pc = dgram.dc = null;
+    dgram.state = why || 'off';
+  }
+  async function dgramStart() {
+    if (NO_RTC || dgram.pc || dgram.tried === ws || !ws || ws.readyState !== 1 || typeof RTCPeerConnection !== 'function') return;
+    const mine = ws;
+    dgram.tried = mine;   // once per WebSocket: a new one (a resume) tries again
+    dgram.state = 'connecting';
+    dgram.early = [];
+    let pc;
+    try {
+      pc = new RTCPeerConnection({ iceServers: [] });
+      dgram.pc = pc;
+      const dc = pc.createDataChannel('melee-inputs', { ordered: false, maxRetransmits: 0 });
+      dc.binaryType = 'arraybuffer';
+      dgram.dc = dc;
+      dc.onopen = () => {
+        dgram.opened++;
+        dgram.state = 'open';
+        dgram.lastRx = performance.now();
+        clearTimeout(dgram.openTimer);
+        console.log('[lobby] datagram channel open: inputs go unordered and unretransmitted');
+      };
+      dc.onclose = () => { if (dgram.dc === dc) dgramClose('channel closed'); };
+      dc.onmessage = (ev) => {
+        const b = new Uint8Array(ev.data);
+        dgram.lastRx = performance.now();
+        if (b.length <= 1) return;               // the relay's keepalive
+        dgram.rx++;
+        deliverDgram(b, (x) => { if (x[0] !== 0x7B) inbox.push(x); });
+      };
+      dgram.keep = setInterval(() => {
+        if (dc.readyState === 'open') { try { dc.send(new Uint8Array(1)); } catch (e) { /* */ } }
+      }, 250);
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate && ev.candidate.candidate && mine.readyState === 1) {
+          send({ t: 'rtc-ice', cand: ev.candidate.candidate, mid: ev.candidate.sdpMid || '0' });
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' && dgram.pc === pc) { dgram.failed++; dgramClose('connection failed'); }
+      };
+      dgram.openTimer = setTimeout(() => {
+        if (dgram.pc === pc && (!dgram.dc || dgram.dc.readyState !== 'open')) { dgram.failed++; dgramClose('did not open'); }
+      }, DGRAM_OPEN_MS);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (dgram.pc === pc) send({ t: 'rtc', type: 'offer', sdp: pc.localDescription.sdp });
+    } catch (e) {
+      console.log(`[lobby] no datagram channel: ${e.message}`);
+      if (dgram.pc === pc) dgramClose('could not start');
+    }
+  }
+  async function dgramSignal(msg) {
+    const pc = dgram.pc;
+    if (!pc) return;
+    try {
+      if (msg.t === 'rtc' && msg.type === 'answer') {
+        await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+        // The relay's candidates can come before its answer: held until now.
+        for (const c of dgram.early.splice(0)) await pc.addIceCandidate(c);
+      } else if (msg.t === 'rtc' && msg.type === 'none') dgramClose('the relay has none');
+      else if (msg.t === 'rtc-ice' && msg.cand) {
+        const c = { candidate: msg.cand, sdpMid: msg.mid || '0' };
+        if (!pc.remoteDescription) dgram.early.push(c); else await pc.addIceCandidate(c);
+      }
+    } catch (e) { console.log(`[lobby] datagram signalling: ${e.message}`); }
+  }
 
   /* ---- the relay ---- */
   function received(bytes) {
     if (bytes[0] !== 0x7B) { inbox.push(bytes); return; }      // a game packet
     const msg = JSON.parse(new TextDecoder().decode(bytes));
     if (msg.t === 'ping') send({ t: 'pong', s: msg.s });        // the relay measuring the round trip
-    else if (msg.t === 'lobby') { lobby = msg; if (!started) { paintLobby(); prefetchMatch(); } }
+    else if (msg.t === 'lobby') { lobby = msg; if (msg.rtc) dgramStart(); if (!started) { paintLobby(); prefetchMatch(); } }
+    else if (msg.t === 'rtc' || msg.t === 'rtc-ice') dgramSignal(msg);
     else if (msg.t === 'start') { lastStart = msg; startMatch(msg); }
     else if (msg.t === 'stale' && !started) {
       // A deploy since this page loaded. The page is never cached, so a
@@ -591,6 +701,7 @@
     };
     ws.onmessage = (ev) => deliver(new Uint8Array(ev.data), received);
     ws.onclose = () => {
+      dgramClose('the WebSocket closed');
       if (!started) { setStatus('Lost the connection to the host; retrying…', true); setTimeout(connect, 1500); return; }
       if (matchOver) return;   // nothing left to carry on; the page is on its way back to the lobby
       if (!resumeUntil) resumeUntil = performance.now() + RESUME_MS;
@@ -1470,7 +1581,9 @@
       },
       match: lastStart && { slot: lastStart.slot, players: lastStart.players, seed: lastStart.seed,
                             rules: lastStart.rules, delay: lastStart.delay, why: lastStart.why },
-      net: { ping: myEntry().ping == null ? null : myEntry().ping, impair },
+      net: { ping: myEntry().ping == null ? null : myEntry().ping, impair,
+             dgram: { state: dgram.state, usable: dgramUsable(), rx: dgram.rx, tx: dgram.tx, dropped: dgram.dropped,
+                      opened: dgram.opened, failed: dgram.failed, off: NO_RTC } },
       hidden: { count: hidden.count, ms: Math.round(hidden.ms + (hidden.since ? performance.now() - hidden.since : 0)) },
       longTasks: { count: longTasks.count, ms: Math.round(longTasks.ms), worst: longTasks.worst },
       disc: { net: Module.meleeIsoNet || null, prefetch: Module.meleeIsoPrefetchState || null },
