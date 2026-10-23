@@ -479,6 +479,27 @@ elif WASM:
     # ASYNCIFY: no instrumentation of the whole module, but only browsers
     # that ship JSPI can run it.
     _suspend = "-sJSPI=1" if os.environ.get("WASM_JSPI") == "1" else "-sASYNCIFY=1"
+    # ASYNCIFY instruments every function that might be on the stack when
+    # the module suspends: whatever can reach a suspending import
+    # (web_wait_frame, web_iso_read, emscripten_sleep) -- and, since it
+    # cannot see through a call_indirect, whatever can reach one. musl's
+    # printf family writes through FILE->write, qsort calls its comparator,
+    # SDL_SetError its log hook: so every function with a diagnostic
+    # fprintf in it was instrumented, which was nearly all of the renderer.
+    # A state check and a spill after every call, on ~4,000 GX calls and
+    # ~40,000 replayed vertices a frame: the render walk ran 20-25% slower
+    # for it. tools/wasm/asyncify_remove.txt names the functions that never
+    # suspend although the analysis thinks they might -- the output side of
+    # stdio, the string scanners, qsort; two engine dispatchers whose every
+    # target is known (HSD_JObjSetupMatrixSub's make_mtx methods,
+    # HSD_StateInvalidate's table); and the bridge's functions whose only
+    # route to the disc is a diagnostic fopen for writing, which
+    # pc_web_iso.c passes to the real fopen. Listed functions are not
+    # instrumented, and calling one no longer makes the caller suspendable.
+    # Never list anything that can read the disc (fopen for reading, fread,
+    # fgetc, the DVD layer) or sleep. WASM_ASYNCIFY_ALL=1 leaves it out.
+    if _suspend == "-sASYNCIFY=1" and os.environ.get("WASM_ASYNCIFY_ALL") != "1":
+        _suspend += " -sASYNCIFY_REMOVE=@" + str(ROOT / "tools" / "wasm" / "asyncify_remove.txt")
     LDFLAGS = (_suspend + " -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=536870912"
                " -sSTACK_SIZE=16777216"
                " -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sEXIT_RUNTIME=0"
@@ -490,6 +511,11 @@ elif WASM:
                + (" -sASSERTIONS=1 -g" if os.environ.get("WASM_DEBUG") == "1"
                   else " -sASSERTIONS=0")
                + " -Wl,--error-limit=0"
+               # The getenv cache Android has (src/port/pc_getenv.c): musl's
+               # getenv is a scan of environ with a compare per entry, and
+               # the frame makes a few hundred calls for diagnostics that
+               # are off. The page's environment is fixed before main.
+               " -Wl,--wrap=getenv,--wrap=setenv,--wrap=unsetenv,--wrap=putenv"
                # Keep the wasm name section: without it a trap reports
                # "wasm-function[545]" and a render callback stored as a table
                # index cannot be named at all -- which is most of what

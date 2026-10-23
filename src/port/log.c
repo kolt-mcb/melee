@@ -90,7 +90,14 @@ static int g_guard_counts[GUARD_SITE_MAX];
 static void port_guard_backtrace(const char* site)
 {
     static int budget = -1;
-    const char* want = getenv("MELEE_GUARD_BT");
+    /* Read once: some guards fire every frame of a match (texp.c's, from
+     * HSD_TExpSetReg), and on wasm getenv scans the whole environment. */
+    static const char* want;
+    static int want_read;
+    if (!want_read) {
+        want = getenv("MELEE_GUARD_BT");
+        want_read = 1;
+    }
     if (want == NULL || strstr(site, want) == NULL) {
         return;
     }
