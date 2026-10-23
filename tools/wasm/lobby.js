@@ -148,6 +148,11 @@
       send(bytes) { if (ws && ws.readyState === 1) ws.send(bytes); },
       onMatchEnd(desynced) {
         matchOver = true;
+        // Tell the relay now, not when the player leaves the results: until
+        // every page says so the match is "running" -- nobody can start the
+        // next one, and a deploy waits on it. 2026-10-23 a finished four-way
+        // stayed open 3 minutes while two players sat on the banner.
+        send({ t: 'done' });
         sendReportOnce(desynced ? 'desync' : 'match');
         $('banner-text').textContent = desynced
           ? 'Match over -- but the players fell out of step (desync).' : 'Match over.';
