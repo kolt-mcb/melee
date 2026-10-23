@@ -23,8 +23,11 @@
  *                   inside and out (docker: "9400:9400/udp").
  *   MELEE_RTC_HOST  the address the players reach that port on, when it is
  *                   not one of this machine's own (in a container, the host's
- *                   LAN address). The relay then announces exactly that one
- *                   candidate.
+ *                   LAN address). The relay then announces exactly that
+ *                   candidate. A comma list announces each, in order of
+ *                   preference -- "192.168.1.10,203.0.113.7": players on the
+ *                   LAN reach the first, players outside it the forwarded
+ *                   public one, and neither needs the router's NAT reflection.
  *   MELEE_RTC=0     off.
  *
  * Liveness: each side sends a one-byte keepalive every 250 ms, and a channel
@@ -36,7 +39,8 @@
 const KEEPALIVE_MS = 250;
 const QUIET_MS = 1500;
 const PORT = parseInt(process.env.MELEE_RTC_PORT || '9400', 10);
-const HOST = (process.env.MELEE_RTC_HOST || '').trim();
+const HOSTS = (process.env.MELEE_RTC_HOST || '').split(',').map((h) => h.trim()).filter(Boolean);
+const HOST = HOSTS.join(',');
 
 let ndc = null;
 let why = '';
@@ -79,23 +83,28 @@ function offer(conn, msg, json) {
         try { if (r.dc.sendMessageBinary(buf)) { r.tx++; return true; } } catch (e) { /* closed under us */ }
         return false;
     };
-    const candidate = (c) => {
-        if (!HOST) return c;
+    const candidates = (c) => {
+        if (!HOSTS.length) return [c];
         // "candidate:<f> <comp> <proto> <prio> <addr> <port> typ host ..." -- the
-        // one address the players can reach, once, and only the UDP port we publish.
+        // addresses the players can reach, once, and only the UDP port we publish.
+        // Each its own foundation, and the earlier ones preferred.
         const f = c.replace(/^a=/, '').split(' ');
-        if (f.length < 8 || f[2].toLowerCase() !== 'udp' || +f[5] !== PORT || r.announced) return null;
+        if (f.length < 8 || f[2].toLowerCase() !== 'udp' || +f[5] !== PORT || r.announced) return [];
         r.announced = true;
-        f[4] = HOST;
-        return f.join(' ');
+        return HOSTS.map((h, i) => {
+            const g = f.slice();
+            g[0] = `candidate:${9400 + i}`;
+            g[3] = String(2130706431 - i * 256);
+            g[4] = h;
+            return g.join(' ');
+        });
     };
     pc.onLocalDescription((sdp, type) => {
         if (HOST) sdp = sdp.split(/\r?\n/).filter((l) => !/^a=candidate:/.test(l)).join('\r\n');
         json(conn, { t: 'rtc', type: String(type).toLowerCase(), sdp });
     });
     pc.onLocalCandidate((cand, mid) => {
-        const c = candidate(cand);
-        if (c) json(conn, { t: 'rtc-ice', cand: c, mid });
+        for (const c of candidates(cand)) json(conn, { t: 'rtc-ice', cand: c, mid });
     });
     pc.onStateChange((state) => {
         if (state === 'failed' || state === 'closed') close(conn);
