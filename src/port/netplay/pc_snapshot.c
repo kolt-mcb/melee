@@ -2676,6 +2676,15 @@ void pc_snapshot_prerun(void)
         return;
     }
     frame = pc_net_frame_now(); /* the netplay numbering, as the replay bounds */
+    {
+        /* MELEE_NET_ROLLBACK_TRACE=1: the counter each simulated frame starts
+         * with, beside the replay bounds -- the line that shows the counter is
+         * one ahead of the label its pads were read under. */
+        static int t = -1;
+        if (t < 0) t = getenv("MELEE_NET_ROLLBACK_TRACE") != NULL;
+        if (t) fprintf(stderr, "[RBT] prerun frame %d replaying %d until %d\n",
+                       (int) frame, snap_replaying, (int) snap_replay_until);
+    }
     if (frame <= 0) {
         return;
     }
@@ -2693,7 +2702,22 @@ void pc_snapshot_prerun(void)
      * replayed frame, and the self-check is not running. Left set, the mixer
      * stays muted for the rest of the match and every frame keeps being treated
      * as one that is being redone. */
-    if (snap_replaying && !snap_enabled() && frame >= snap_replay_until) {
+    /*
+     * Strictly greater, because of the offset the self-check found at the pad
+     * read: the counter advances between the read and here, so the iteration
+     * that consumes the inputs labelled L arrives here saying L+1. With `>=` the
+     * replay ended at the prerun of the second-to-last frame, and the last one
+     * -- the inputs labelled snap_replay_until -- found port_pads_for_next_frame
+     * no longer replaying and was simulated with the pads still lying in the
+     * array: the previous replayed frame's. CPU against CPU every pad is zero
+     * and the stale pad is the right one, so the pair rig never saw it. With a
+     * person on either controller the newest corrected frame of every rollback
+     * replayed with the input before it (found 2026-10-22: hum2-1..4 desynced at
+     * match frames 7, 15, 31 and 79 once the frame-1 neutral fix was in; the
+     * trace showed "rewind 1..6" replaying frames 1..5 and running 6 on frame
+     * 5's pad).
+     */
+    if (snap_replaying && !snap_enabled() && frame > snap_replay_until) {
         snap_replaying = 0;
     }
 

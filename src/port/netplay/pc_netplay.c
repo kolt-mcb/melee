@@ -1798,6 +1798,26 @@ static int rb_input_for(int slot, s32 frame, NetPad* out)
     if (ring_get(&net_in[slot], frame, out)) {
         return 1; /* real */
     }
+    /* A frame nobody will ever announce an input for is neutral, and that is
+     * not a guess: the first net_delay frames of a match (the local slot's
+     * own, and a remote slot's before its first announcement), and a remote
+     * slot's frames after it left. The barrier path plays exactly those
+     * neutral; this one used to repeat the slot's newest input instead.
+     *
+     * That was invisible for as long as the pair rig played CPU against CPU,
+     * where every pad is zero and "the newest" is zero too. With a person
+     * holding either controller it desynced every match at frame 2-4 (found
+     * 2026-10-22, the hum-1..4 runs: scripted pads on both sides, 4 of 4, and
+     * 1 of 1 with no loss or jitter at all). The newest input is a moving
+     * target -- the local side's frame-1 pad was its frame-4 input on the
+     * first pass and some later one on the replay -- and since all of
+     * these frames count as ready, no correction ever came back for them:
+     * each side had simulated its opening frames with whatever its own
+     * timing had put in the ring by then. */
+    if (!net_is_remote(slot) || remote_ready(slot, frame)) {
+        memset(out, 0, sizeof(*out));
+        return 1;
+    }
     newest = ring_newest(&net_in[slot]);
     if (newest >= 0 && ring_get(&net_in[slot], newest, out)) {
         return 0; /* guessed */
@@ -1822,8 +1842,16 @@ void pc_net_pads_replay(GCPadStatus* pads, int frame)
     }
     for (slot = 0; slot < net_players; slot++) {
         NetPad p;
-        (void) rb_input_for(slot, (s32) frame, &p);
+        int real = rb_input_for(slot, (s32) frame, &p);
         pad_to_gc(&pads[slot], &p);
+        /* Each slot's pad for every re-simulated frame, and below for every
+         * first run: with MELEE_NET_ROLLBACK_TRACE=1 the two sides' logs say
+         * which input each frame was simulated with, which is how the frame-1
+         * guess and the replay that stopped a frame early were found. */
+        if (rb_trace) {
+            fprintf(stderr, "[RBT] replay frame %d slot %d real %d btn %04x sx %d\n",
+                    frame, slot, real, (unsigned) pads[slot].button, pads[slot].stickX);
+        }
     }
     /* Compare the frames a correction rebuilt, too.
      *
@@ -3069,6 +3097,10 @@ void pc_net_pads(GCPadStatus* pads)
          * Hence the report below, and hence one number rather than two.
          */
         net_pump();
+        if (rb_trace) {
+            fprintf(stderr, "[RBT] live frame %d guessed %d played %d sent %d\n",
+                    (int) frame, (int) rb_guessed, (int) rb_played, (int) net_last_sent);
+        }
         /* Do not guess further ahead than there is state to rewind to. When the
          * window is full, wait for the input that settles the oldest guess --
          * the same wait the delay path does, but only when prediction has run
@@ -3109,6 +3141,14 @@ void pc_net_pads(GCPadStatus* pads)
                     began = t;
                 }
                 if (now_ms() - entered > NET_CONNECT_WAIT_MS) {
+                    /* Give the peer up, the way the frame-1 wait does. Left
+                     * in the playing state, every later frame came back into
+                     * this wait and sat out the whole bound again -- one
+                     * frame per two minutes -- so the side whose peer had
+                     * finished first wedged until the rig's timeout killed
+                     * it, and every pair run cost fifteen minutes instead of
+                     * three (found 2026-10-22, base-1..4 of the M3 rerun). */
+                    net_state = NET_SOLO;
                     net_quiet("peer stopped sending inside the rollback window",
                               frame);
                     return;
@@ -3176,8 +3216,12 @@ void pc_net_pads(GCPadStatus* pads)
             int slot;
             for (slot = 0; slot < net_players; slot++) {
                 NetPad p;
-                (void) rb_input_for(slot, frame, &p);
+                int real = rb_input_for(slot, frame, &p);
                 pad_to_gc(&pads[slot], &p);
+                if (rb_trace) {
+                    fprintf(stderr, "[RBT] first frame %d slot %d real %d btn %04x sx %d\n",
+                            (int) frame, slot, real, (unsigned) pads[slot].button, pads[slot].stickX);
+                }
             }
         }
         if (rb_guessed < 0) {

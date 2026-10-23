@@ -878,6 +878,98 @@ scene load, repeatedly reopening the stage's music, which blocks the next run
 until the timeout kills it; and `timeout`'s SIGTERM is not always enough to stop
 it (`timeout -k`).
 
+**Re-measured 2026-10-22, and the frame-553 desync is gone.** The section above
+was written while it was open; the `scalar_storage_order` change closed it, and
+the current tree says so. The rig exactly as recorded -- `--loss 5 --jitter 100
+--delay 3 --window 6 --frames 7200`, both sides `setarch -R`, offscreen and silent
+-- ran **eight full matches, every frame of every one identical offline**
+(6058-6141 match frames each, 723-988 rewinds per side). So did two each of
+Pikachu vs Peach, Fox vs Falco on Battlefield, Ice Climbers vs Peach on Final
+Destination, and 10% loss with 200 ms of jitter and an eight-frame window.
+
+**And then the rig turned out to be blind to the one thing rollback is for.**
+Every one of those matches is CPU against CPU, and a CPU's inputs never pass
+through the pads: every pad of every frame is zero on both sides. So the input a
+side predicts for its peer is always the input that arrives, and every
+"correction" re-simulates frames with exactly the inputs they already had. A
+rollback that mispredicts nothing can still be wrong about memory -- that is what
+M1-M3 found -- but it cannot be wrong about *inputs*, and the input path had never
+been exercised at all.
+
+`--pads SEED` makes both slots human and drives each side's controller from a
+scripted file (`tools/pc_rollback_pads.py`: the stick held for a few frames and
+moved, a button every couple of frames, no Start). Against master, under the same
+5% and 100 ms: **six runs out of six desynced, five of them at match frame 2.**
+Without any impairment at all, one rewind in the whole run, it still desynced at
+frame 2. Lockstep with the same pads compared every frame equal. Two bugs, one
+behind the other, and `MELEE_NET_ROLLBACK_TRACE=1` now prints the pad each slot
+was simulated with on every first run and every replay, which is what found both:
+
+- **The opening frames were guessed instead of neutral.** Nobody announces an
+  input for the first `net_delay` frames, and the barrier path plays them neutral.
+  `rb_input_for` instead fell back to the slot's *newest* input -- for the local
+  slot, its own frame-4 pad on the first pass and whatever it had sent by the time
+  of a replay on the second -- and since those frames count as ready, no
+  correction ever came back for them. Each side simulated its opening with what its
+  own timing had put in the ring. Frames nobody will ever announce (the local
+  slot's unannounced ones, a remote slot's before its first announcement or after
+  it left) are now neutral and real.
+- **A replay stopped one frame early.** The counter advances between the pad read
+  and the simulation, so the iteration that consumes the inputs labelled L reaches
+  `pc_snapshot_prerun` saying L+1 -- the offset the self-check found and handled
+  for itself in M1. The rollback path's end-of-replay test used `>=`, so it cleared
+  the replay at the prerun of the second-to-last frame, and the last one found
+  `port_pads_for_next_frame` no longer replaying and ran on the previous frame's
+  pad. The trace said it plainly: `rewind 1..6` replayed 1 to 5 and then simulated
+  6 with 5's input. With only the first fix in, four runs desynced at frames 7, 15,
+  31 and 79. With both:
+
+| | before (master) | after |
+| --- | --- | --- |
+| scripted pads, 5% / 100 ms | **6 of 6 desync** (frame 2, or 141) | **12 of 12 clean**, full matches |
+| CPU vs CPU, 5% / 100 ms | 8 of 8 clean | 8 of 8 clean |
+| scripted pads, other lineups, 3600 frames | -- | 6 of 6 clean (Pikachu/Peach, Fox/Falco, ICs/Peach) |
+| scripted pads, 10% / 200 ms, window 8 | -- | 2 of 2 clean |
+
+(each "clean" is the offline `MELEE_SIMHASHLOG` comparison, every frame, with only
+the last eight frames of the side that stopped first left out -- they can still be
+speculative when the peer exits.) Plain lockstep is untouched: neither function is
+on its path, and a CPU match's `MELEE_TRACE` is byte-identical to master's for 3000
+frames.
+
+> The general lesson is the same one as the synctest that compared nothing,
+> one level up: **a check whose inputs cannot be wrong cannot find the code that
+> handles wrong inputs.** CPU against CPU proved the snapshot and the replay
+> machinery; only a controller somebody presses proves the netcode. Both kinds
+> belong in the rig, and the rig now has both.
+
+The self-check was never going to see either bug, for the same reason from the
+other side: it replays with the pads each frame was first played with, and it
+ends its replays through its own comparison rather than through the rollback
+path's test.
+
+A smaller rig fix found on the way: a side whose peer finishes first used to
+time out of the full-window wait, return still "playing", and come straight back
+into the same two-minute wait on the next frame -- one frame per two minutes,
+until the rig's timeout. It now gives the peer up, as the frame-1 wait does, so
+`MELEE_NET_EXIT_ALONE` can stop it and a pair run costs three minutes rather than
+fifteen.
+
+*For the web build, when rollback goes there.* Both fixes are in the netplay layer
+and carry over as they are. What does not carry over is the snapshot's reach:
+wasm-ld takes no linker script, so every span is empty and a wasm snapshot holds
+no static storage at all -- the frame counter included, which is the M1 failure
+("sixteen clean rewinds having compared nothing") waiting to happen. The likely
+route is a named data section for the game's translation units (a section
+attribute or `#pragma clang section` through the prelude), since wasm-ld
+synthesises `__start_`/`__stop_` symbols for sections with C-identifier names;
+that is unverified here. Emscripten is Clang, so it gets the in-place script
+arrangement and the archives stay *in* the snapshot (holes off, about 8 MB more
+per store) -- and `MELEE_NET_SNAP_HOLES=1` on an in-place build is not a
+measurement knob any more: two of six such pair runs crashed calling through a
+null pointer around match frame 370. No soft-dirty tracking costs nothing, since
+it is off by default anyway.
+
 ### M4 -- Rollback across machines and architectures
 
 The same, desktop against tablet, x86-64 against arm64.

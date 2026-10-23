@@ -11,6 +11,16 @@
 #
 #   tools/pc_rollback_pair.sh [--loss PCT] [--jitter MS] [--delay N]
 #                             [--window N] [--frames N] [--tag NAME]
+#                             [--pads SEED] [--match C0,C1,STAGE]
+#
+# --pads SEED makes both slots human and drives each side's controller from a
+# scripted input file (tools/pc_rollback_pads.py, seeds SEED and SEED+1), so the
+# input a side predicts for its peer is wrong most of the time. CPU against CPU
+# it never is: a CPU's inputs never pass through the pads, every pad is zero on
+# both sides, and every correction re-simulates frames with the inputs they
+# already had. Two rollback bugs hid there for the whole of M3 and both desynced
+# every human match within a few frames (docs/netcode-plan.md). Run both kinds.
+# --match replaces the Samus-vs-Donkey-Kong-on-Onett lineup.
 #
 # --loss and --jitter impair the link on arrival (pc_netplay.c), which is how a
 # real network failure gets tried without needing one. The sender's own
@@ -18,7 +28,7 @@
 set -u
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 OUT=${MELEE_RB_OUT:-${TMPDIR:-/tmp}}
-LOSS=0 JITTER=0 DELAY=3 WINDOW=4 FRAMES=1200 TAG=pair PORT=7855
+LOSS=0 JITTER=0 DELAY=3 WINDOW=4 FRAMES=1200 TAG=pair PORT=7855 PADS= MATCH=16,1,9
 while [ $# -gt 0 ]; do
     case "$1" in
         --loss)   LOSS=$2;   shift 2;;
@@ -28,6 +38,8 @@ while [ $# -gt 0 ]; do
         --frames) FRAMES=$2; shift 2;;
         --tag)    TAG=$2;    shift 2;;
         --port)   PORT=$2;   shift 2;;
+        --pads)   PADS=$2;   shift 2;;
+        --match)  MATCH=$2;  shift 2;;
         *) echo "unknown argument: $1" >&2; exit 2;;
     esac
 done
@@ -74,8 +86,7 @@ COMMON="MELEE_NET_EXIT_ALONE=1
         MELEE_NET_ROLLBACK=1 MELEE_NET_DELAY=$DELAY
         MELEE_NET_ROLLBACK_WINDOW=$WINDOW
         MELEE_NET_LOSS=$LOSS MELEE_NET_JITTER=$JITTER
-        MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=16,1,9 MELEE_BOOT_STOCKS=5
-        MELEE_BOOT_CPU=9,9 MELEE_FORCE_CPU=9,9
+        MELEE_BOOT_MODE=14 MELEE_BOOT_MATCH=$MATCH MELEE_BOOT_STOCKS=5
         MELEE_MAX_FRAMES=$FRAMES MELEE_NOVSYNC=1 MELEE_WATCHDOG=300
         MELEE_NET_HASH_EVERY=${MELEE_RB_HASH_EVERY:-1}"
 
@@ -97,13 +108,26 @@ if [ -n "${MELEE_RB_CHUNKDUMP:-}" ]; then
     CDG="MELEE_CHUNKDUMP=$MELEE_RB_CHUNKDUMP MELEE_CHUNKDUMP_FILE=$OUT/$TAG-g.chunks"
 fi
 
+# Who plays. Both CPUs by default; with --pads both slots are human, and each
+# side's own controller (local pad 0, whichever slot it plays) reads a file.
+PADH= PADG=
+if [ -n "$PADS" ]; then
+    python3 "$ROOT/tools/pc_rollback_pads.py" "$PADS" "$OUT/$TAG-h.pads" || exit 2
+    python3 "$ROOT/tools/pc_rollback_pads.py" "$((PADS + 1))" "$OUT/$TAG-g.pads" || exit 2
+    COMMON="$COMMON MELEE_BOOT_CPU=0,0"
+    PADH="MELEE_PAD_INPUTS=$OUT/$TAG-h.pads:0"
+    PADG="MELEE_PAD_INPUTS=$OUT/$TAG-g.pads:0"
+else
+    COMMON="$COMMON MELEE_BOOT_CPU=9,9 MELEE_FORCE_CPU=9,9"
+fi
+
 SIMH= SIMG=
 if [ -n "${MELEE_RB_SIMHASH:-}" ]; then
     SIMH="MELEE_SIMHASHLOG=$OUT/$TAG-h.simhash"
     SIMG="MELEE_SIMHASHLOG=$OUT/$TAG-g.simhash"
 fi
 
-echo "rollback pair: delay=$DELAY window=$WINDOW loss=${LOSS}% jitter=${JITTER}ms frames=$FRAMES"
+echo "rollback pair: delay=$DELAY window=$WINDOW loss=${LOSS}% jitter=${JITTER}ms frames=$FRAMES match=$MATCH pads=${PADS:-cpu}"
 # MELEE_RB_GUEST_BIN puts a *different* binary on the guest side. What that is
 # for: the two sides of a real match are not the same build -- desktop against
 # tablet is GCC against Clang, and therefore the attribute arrangement against the
@@ -114,10 +138,10 @@ GUEST_BIN=${MELEE_RB_GUEST_BIN:-$HOST_BIN}
 echo "  host  $HOST_BIN"
 echo "  guest $GUEST_BIN"
 
-$RUN env $COMMON $SIMH $CDH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
+$RUN env $COMMON $PADH $SIMH $CDH MELEE_NET=host MELEE_NET_PORT=$PORT MELEE_NET_SLOT=0 \
     timeout -k 5 ${MELEE_RB_TIMEOUT:-500} "$HOST_BIN" > "$OUT/$TAG-h.log" 2>&1 &
 sleep 3
-$RUN env $COMMON $SIMG $CDG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
+$RUN env $COMMON $PADG $SIMG $CDG MELEE_NET=127.0.0.1:$PORT MELEE_NET_SLOT=1 \
     timeout -k 5 ${MELEE_RB_TIMEOUT:-500} "$GUEST_BIN" > "$OUT/$TAG-g.log" 2>&1 &
 wait
 
