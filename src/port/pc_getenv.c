@@ -1,4 +1,4 @@
-/* PC port (Android): getenv with a cache in front of it.
+/* PC port (Android, web): getenv with a cache in front of it.
  *
  * Every MELEE_* knob is a getenv(), and about 400 of them sit in code that
  * runs every frame -- the TEV setup, the material and channel setup, the
@@ -19,7 +19,9 @@
  * Entries are immutable once published; a stale or missing one is replaced
  * under a mutex, and the replaced entry is leaked (a few dozen bytes, once
  * per name per generation). Lookups take no lock. */
-#ifdef __ANDROID__
+/* The web build links the same way (configure_pc.py): emscripten's musl
+ * getenv is the same linear scan, run from the same per-frame call sites. */
+#if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>

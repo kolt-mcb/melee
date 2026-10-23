@@ -230,7 +230,9 @@ void HSD_SetupChannelMode(u32 arg0)
 #endif
         HSD_State_80405A38_60.light_mask = HSD_LObjGetLightMaskDiffuse();
 #if BUILD_TARGET_PC
-        if (getenv("MELEE_LIGHTMASK") != NULL) {
+        static int lm_on = -1; /* read once: this runs for every material */
+        if (lm_on < 0) lm_on = getenv("MELEE_LIGHTMASK") != NULL;
+        if (lm_on) {
             static int n = 0;
             if (++n % 401 == 0) {
                 fprintf(stderr, "[LMASK] chan0 setup mask=0x%x\n",

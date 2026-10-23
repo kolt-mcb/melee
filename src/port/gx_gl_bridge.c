@@ -2121,6 +2121,19 @@ static unsigned char* g_web_ring;
 static int g_web_pending;   /* bytes written since the last commit */
 static GLuint g_web_ibo;    /* g_vao's element buffer: a batch's indices */
 static int g_web_committed; /* a commit since the last write: start a unit */
+/* What GL_COPY_WRITE_BUFFER holds, as far as this file knows (0 unknown).
+ * The commit below ran bind, data, unbind for every draw: two of the three
+ * calls were the binding, ~700 WebGL calls a frame. Nothing else in the
+ * port binds the copy target but dl_gpu_upload, which says so here; a new
+ * context or a new g_vbo (bridge_create_gl) forgets it. MELEE_WEB_REBIND=1
+ * binds and unbinds around every commit as before. */
+static GLuint g_web_copy_bound;
+static int pc_web_rebind(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_WEB_REBIND") != NULL;
+    return on;
+}
 static void pc_web_unit_begin(void)
 {
     if (g_web_committed) {
@@ -2135,9 +2148,15 @@ static void pc_web_vbo_commit(void)
     /* The copy target: binding g_vbo there disturbs neither the array
      * binding the state shadow tracks nor any VAO, and WebGL allows it
      * for a buffer that also holds indices. */
-    glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
+    if (g_web_copy_bound != g_vbo || pc_web_rebind()) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
+        g_web_copy_bound = g_vbo;
+    }
     glBufferData(GL_COPY_WRITE_BUFFER, g_vbo_off, g_web_ring, GL_STREAM_DRAW);
-    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+    if (pc_web_rebind()) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        g_web_copy_bound = 0;
+    }
     g_web_pending = 0;
     g_web_committed = 1;
 }
@@ -2537,6 +2556,42 @@ static void pc_vbo_ring_reserve(GLintptr bytes)
     }
 }
 #ifdef __EMSCRIPTEN__
+static GLint pc_vbo_stream(const Vertex* src, unsigned count);
+/* A batch's vertices to the GPU, straight from the staging array.
+ *
+ * On the web the ring is only ever a CPU copy of what the next commit sends
+ * (pc_web_vbo_commit), and with nothing else written to it since the last
+ * commit, a batch went stage -> ring (a memcpy of every vertex, ~40,000 a
+ * frame at 56 bytes) -> glBufferData. The ring adds nothing there: the
+ * stage is sent as the commit itself, a fresh store from offset 0 exactly as
+ * the ring's would have been, and the draw's base is 0 as it was. Anything
+ * already pending in the ring (a primitive streamed outside a batch) takes
+ * the ring as before. MELEE_WEB_RINGCOPY=1 always does. */
+static GLint pc_web_commit_stage(const Vertex* src, unsigned count)
+{
+    static int ring = -1;
+    if (ring < 0) ring = getenv("MELEE_WEB_RINGCOPY") != NULL;
+    pc_web_unit_begin();
+    if (ring || g_web_pending || g_vbo_off != 0 || count == 0 || g_web_ring == NULL ||
+        (GLsizeiptr) (sizeof(Vertex) * (size_t) count) > g_vbo_ring_bytes)
+    {
+        return pc_vbo_stream(src, count);
+    }
+    if (g_web_copy_bound != g_vbo || pc_web_rebind()) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, g_vbo);
+        g_web_copy_bound = g_vbo;
+    }
+    glBufferData(GL_COPY_WRITE_BUFFER, (GLsizeiptr) (sizeof(Vertex) * (size_t) count), src,
+                 GL_STREAM_DRAW);
+    if (pc_web_rebind()) {
+        glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        g_web_copy_bound = 0;
+    }
+    /* As pc_web_vbo_commit leaves it: the next write starts a new unit. */
+    g_web_pending = 0;
+    g_web_committed = 1;
+    return 0;
+}
 static int pc_web_multidraw(void);
 /* emscripten's WEBGL_multi_draw entry point (library_webgl.js); its header,
  * webgl/webgl1_ext.h, clashes with the GLES3 ones this file includes. */
@@ -2564,7 +2619,11 @@ static void pc_batch_flush(void)
                         (GLintptr) sizeof(Vertex) * (GLintptr) (g_stage_n + 1) +
                         8 + (GLintptr) g_stage_n * 3 * (GLintptr) sizeof(u16));
     pc_ubo_commit();
+#if defined(__EMSCRIPTEN__)
+    base = pc_web_commit_stage(g_stage, g_stage_n);
+#else
     base = pc_vbo_stream(g_stage, g_stage_n);
+#endif
     g_batch_flushing = 0;
     /* GLES has no glMultiDrawArrays: a batch of N primitives was N draw
      * calls, ~1650 a frame in a match. Expanded to triangle indices the
@@ -4207,7 +4266,11 @@ static void pc_ubo_commit(void)
         return;
     }
     if (!g_ubo_pending) return;
-    glBindBuffer(GL_UNIFORM_BUFFER, g_web_ubo);
+    /* glBindBufferBase above left g_web_ubo on the generic binding too, and
+     * nothing in the game's frame binds another uniform buffer (only the
+     * MELEE_SHTEST harness does, outside it): binding it again was a WebGL
+     * call per update, ~200 a frame. MELEE_WEB_REBIND=1 binds every time. */
+    if (pc_web_rebind()) glBindBuffer(GL_UNIFORM_BUFFER, g_web_ubo);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, (GLsizeiptr) g_ubo_size, g_ubo_img);
     g_ubo_pending = 0;
     pc_diag_ubo_binds++;
@@ -6371,6 +6434,9 @@ static void bridge_create_gl(void)
     if (g_web_ibo) glDeleteBuffers(1, &g_web_ibo);
     glGenBuffers(1, &g_web_ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_web_ibo);
+    /* A new g_vbo, maybe under the old one's name: bind the copy target
+     * again at the next commit. */
+    g_web_copy_bound = 0;
 #endif
 
     gls_bind_vbo(0);
@@ -12138,6 +12204,7 @@ static void dl_gpu_upload(GLuint buf, unsigned char* map, GLsizeiptr off, const 
         glBindBuffer(GL_COPY_WRITE_BUFFER, buf);
         glBufferSubData(GL_COPY_WRITE_BUFFER, off, bytes, src);
         glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+        g_web_copy_bound = 0;
 #endif
     } else {
         gls_bind_vbo(buf);
