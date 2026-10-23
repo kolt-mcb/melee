@@ -909,9 +909,12 @@ static void render_present_tail(int frame)
                     static u64 s_game_prev;
                     double outside = (double) (pc_diag_game_ns - s_game_prev) / s_n / 1e6;
                     extern int pc_shc_deferred(void);
-                    fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)  base-shader variants %d\n",
-                            outside, wall / s_n / 1e6 - outside, pc_shc_deferred());
+                    extern u32 pc_diag_dl_culled, pc_diag_dl_culled_prims;
+                    fprintf(stderr, "[SPLIT] outside present %.2f ms/frame (sim + GX capture)  inside %.2f ms/frame (submission + present)  base-shader variants %d  off-screen lists %u (%u primitives)\n",
+                            outside, wall / s_n / 1e6 - outside, pc_shc_deferred(),
+                            pc_diag_dl_culled / s_n, pc_diag_dl_culled_prims / s_n);
                     s_game_prev = pc_diag_game_ns;
+                    pc_diag_dl_culled = pc_diag_dl_culled_prims = 0;
                 }
                 fprintf(stderr, "[FRAME] render %.2f  frame-end %.2f  fps-block+pacer %.2f  swap %.2f ms/frame\n",
                         s_ph_ns[0] / s_n / 1e6, s_ph_ns[1] / s_n / 1e6, s_ph_ns[2] / s_n / 1e6, s_ph_ns[3] / s_n / 1e6);
