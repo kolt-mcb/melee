@@ -6077,12 +6077,16 @@ static void pc_vloc_init(void)
 /* The base program is compiled from source at every start: 136 s of a
  * 2.5-minute boot on a PowerVR GE8320, which compiles the eight unrolled
  * stages slowly. It goes in the binary cache beside the variants, under
- * the same driver-and-template hash; the file is base.bin. */
+ * the same driver-and-template hash, which names the file: base-<hash>.bin.
+ * One base.bin for every template meant a run under a switch that reshapes
+ * the shaders (MELEE_NO_UBO, MELEE_GPU_DL=0) replaced the ordinary build's
+ * binary with its own, and the next ordinary run compiled the base program
+ * again -- 7 s on the Chromecast, and a match that missed its shader seed. */
 #define PC_SHC_BASE_MAGIC 0x3142534du
 static int pc_shc_base_path(char* out, size_t n)
 {
     if (!pc_shc_enabled()) return 0;
-    snprintf(out, n, "%s/base.bin", g_shc_dir);
+    snprintf(out, n, "%s/base-%08x.bin", g_shc_dir, (unsigned) g_shc_drv);
     return 1;
 }
 static GLuint pc_shc_base_load(void)
