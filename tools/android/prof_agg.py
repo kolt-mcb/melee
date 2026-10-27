@@ -12,7 +12,8 @@ stripped. A "via" sample landed outside libmain and was charged to its
 caller (the link register), so a libmain function reached "via" is time spent
 in something it called -- reported separately as "<fn> (callee)".
 
---report picks which report in the file (default: the last). Run the game
+--report picks which report in the file (default: the last). --abi names the
+device's ABI (armeabi-v7a for the Chromecast), which picks the library. Run the game
 with MELEE_PROFILE_RESET=1 so each report covers only its own 1500 frames.
 """
 import argparse
@@ -23,7 +24,13 @@ import re
 import subprocess
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LIB = os.path.join(REPO, "build", "android", "arm64-v8a", "libmain.so")
+
+
+def lib_path(abi):
+    """The unstripped libmain.so the device's build came from (configure_pc.py
+    puts a non-arm64 ABI in build/android-<abi>/<abi>)."""
+    out = "android" if abi == "arm64-v8a" else "android-" + abi
+    return os.path.join(REPO, "build", out, abi, "libmain.so")
 
 
 def symbolizer():
@@ -38,6 +45,8 @@ def main():
     ap.add_argument("log")
     ap.add_argument("--report", type=int, default=-1)
     ap.add_argument("--top", type=int, default=40)
+    ap.add_argument("--abi", default="arm64-v8a",
+                    help="the device's ABI: armeabi-v7a for the Chromecast")
     a = ap.parse_args()
     reports, cur = [], None
     line_re = re.compile(r"\[PROFILE\]\s+([\d.]+)% \((\d+)\)( via)? (\S+?)\+0x([0-9a-f]+)")
@@ -55,7 +64,7 @@ def main():
     offs = sorted({off for _, _, mod, off in rep["rows"] if mod == "libmain.so"})
     names = {}
     if offs:
-        out = subprocess.run([symbolizer(), "--obj=" + LIB, "--functions=short", "--no-inlines"],
+        out = subprocess.run([symbolizer(), "--obj=" + lib_path(a.abi), "--functions=short", "--no-inlines"],
                              input="".join("0x%x\n" % o for o in offs), capture_output=True,
                              text=True).stdout.split("\n\n")
         for o, blk in zip(offs, out):

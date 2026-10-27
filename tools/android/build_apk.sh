@@ -20,8 +20,10 @@ DEPS=${ANDROID_DEPS:-$ROOT/tools/android/deps}
 VARIANT=${1:-debug}
 STRIP="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
 
-# arm64-v8a always; x86_64 (the SDK emulator) when its deps were built.
+# arm64-v8a always; armeabi-v7a (32-bit devices, e.g. Chromecast) and x86_64
+# (the SDK emulator) when their deps were built.
 ABIS="arm64-v8a"
+[ -f "$DEPS/sdl2-build-armeabi-v7a/libSDL2.so" ] && ABIS="$ABIS armeabi-v7a"
 [ -f "$DEPS/sdl2-build-x86_64/libSDL2.so" ] && ABIS="$ABIS x86_64"
 for ABI in $ABIS; do
     SUFFIX=""; [ "$ABI" != arm64-v8a ] && SUFFIX="-$ABI"

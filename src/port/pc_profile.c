@@ -87,6 +87,14 @@ static void prof_tick(int sig, siginfo_t* si, void* uc)
         pc = (void*) ((ucontext_t*) uc)->uc_mcontext.regs[30];
         by_caller = (void*) 1;
     }
+#elif defined(__arm__)
+    /* armeabi-v7a (the Chromecast). LR carries the Thumb bit; the 64-byte
+     * bucket below clears it. */
+    pc = (void*) ((ucontext_t*) uc)->uc_mcontext.arm_pc;
+    if (prof_hi != 0 && ((unsigned long) pc < prof_lo || (unsigned long) pc >= prof_hi)) {
+        pc = (void*) ((ucontext_t*) uc)->uc_mcontext.arm_lr;
+        by_caller = (void*) 1;
+    }
 #elif defined(__x86_64__)
     pc = (void*) ((ucontext_t*) uc)->uc_mcontext.gregs[REG_RIP];
 #else

@@ -3,6 +3,7 @@
      com.gamemaker.game
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:versionCode="1"
     android:versionName="1.0"
     android:installLocation="auto">
@@ -56,6 +57,16 @@
          the game simply plays alone. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- AdbWifiReceiver: turns wireless debugging back on after a reboot.
+         WRITE_SECURE_SETTINGS is never granted at install; it takes a one-time
+         `adb shell pm grant com.melee.pcport
+         android.permission.WRITE_SECURE_SETTINGS`, and without it the
+         receiver does nothing. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- if you want to capture audio, uncomment this. -->
     <!-- <uses-permission android:name="android.permission.RECORD_AUDIO" /> -->
 
@@ -72,8 +83,9 @@
         android:allowBackup="true"
         android:theme="@style/AppTheme"
         android:hardwareAccelerated="true"
-        android:memtagMode="sync"
-        android:gwpAsanMode="always" >
+        android:debuggable="true"
+        android:memtagMode="off"
+        android:gwpAsanMode="never">
 
         <!-- SDL hints, applied by SDLActivity as environment variables
              before the native library starts. window.c sets both as well
@@ -114,6 +126,12 @@
             </intent-filter>
             -->
         </activity>
+        <receiver android:name="AdbWifiReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

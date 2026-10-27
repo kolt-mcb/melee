@@ -304,6 +304,7 @@ ANDROID_DEPS = Path(os.environ.get("ANDROID_DEPS", str(ROOT / "tools" / "android
 # and so do the ninja file and the output tree.
 ANDROID_ABI = os.environ.get("ANDROID_ABI", "arm64-v8a")
 _ABI_TRIPLE = {"arm64-v8a": "aarch64-linux-android31-clang",
+               "armeabi-v7a": "armv7a-linux-androideabi31-clang",
                "x86_64": "x86_64-linux-android31-clang"}
 _ABI_SUFFIX = "" if ANDROID_ABI == "arm64-v8a" else "-" + ANDROID_ABI
 
@@ -381,6 +382,17 @@ if ANDROID:
     # PC_ANDROID_TUNE= (empty) builds untuned, for comparison.
     if ANDROID_ABI == "arm64-v8a":
         ARCH_FLAGS += " " + os.environ.get("PC_ANDROID_TUNE", "-mtune=cortex-a55")
+    elif ANDROID_ABI == "armeabi-v7a":
+        # The Chromecast 3 (sabrina) is four in-order Cortex-A53s with
+        # VFPv4 + NEON. The NDK's bare armv7a default compiles the
+        # per-vertex skinning loop at ~8x the cycle cost of the aarch64
+        # build on the tablet's A53; explicit VFPv4/NEON plus the A53
+        # in-order scheduler is what the aarch64 branch already does.
+        ARCH_FLAGS += (" -march=armv7-a -mfpu=neon-vfpv4"
+                       " " + os.environ.get("PC_ANDROID_TUNE", "-mtune=cortex-a53"))
+    # PC_ANDROID_OPT: extra code-generation flags for an A/B (-O3, -marm,
+    # -flto); -flto reaches the link line too.
+    ARCH_FLAGS += " " + os.environ.get("PC_ANDROID_OPT", "")
 elif WASM:
     OUT_DIR = BUILD / "wasm"
     CC = str(Path(EMSDK) / "upstream" / "emscripten" / "emcc")
@@ -461,7 +473,8 @@ if ANDROID:
     # libmain.so: SDL's Java shell dlopens it and calls SDL_main.
     # The getenv cache (src/port/pc_getenv.c) stands in front of libc's.
     LDFLAGS = ("-shared -Wl,--no-undefined -Wl,-z,max-page-size=16384"
-               " -Wl,--wrap=getenv,--wrap=setenv,--wrap=unsetenv,--wrap=putenv")
+               " -Wl,--wrap=getenv,--wrap=setenv,--wrap=unsetenv,--wrap=putenv"
+               + (" -flto" if "-flto" in os.environ.get("PC_ANDROID_OPT", "") else ""))
     LIBS = ("-L" + str(_sdl_build) + " -lSDL2"
             " -L" + str(_jpeg_build) + " -ljpeg"
             " -lGLESv3 -lEGL -llog -landroid -lm -ldl")

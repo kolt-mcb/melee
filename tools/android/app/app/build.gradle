@@ -18,8 +18,9 @@ android {
         versionCode 1
         versionName "0.1"
         ndk {
-            // arm64-v8a for devices; x86_64 for the SDK emulator (KVM).
-            abiFilters 'arm64-v8a', 'x86_64'
+            // arm64-v8a for devices; armeabi-v7a for 32-bit devices
+            // (Chromecast); x86_64 for the SDK emulator (KVM).
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
         }
     }
     buildTypes {
