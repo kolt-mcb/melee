@@ -1309,9 +1309,9 @@ static const char* g_vert_src =
 static const char* g_frag_src =
 "#version 330 core\n"
 "in vec4 v_col;\n"
-"in vec3 v_uv[4];\n"
+"in highp vec3 v_uv[4];\n"
 "in vec3 v_nrm;\n"
-"in vec3 v_world_pos;\n"
+"in highp vec3 v_world_pos;\n"
 "in vec4 v_lit_color;             // Per-vertex lit color (ambient + diffuse)\n"
 "in vec4 v_lit_color1;            // Per-vertex channel-1 lit color (specular)\n"
 "uniform int u_tev_ras_chan[8];   // GXSetTevOrder channel per stage\n"
@@ -3030,6 +3030,43 @@ static const char* pc_es_header(void)
     return hdr;
 }
 
+/* The fragment stage's default float precision: mediump on a Mali, where
+ * it runs at about twice the rate of highp and TEV colour math is 8-bit
+ * anyway -- on the Chromecast's G31, Pokemon Stadium 1v1 at 840 lines went
+ * from 40.5 to 45.3 fps, the frames differing by one or two levels. The
+ * texture coordinates and the world position are declared highp by name.
+ * MELEE_FRAG_PRECISION=mediump|highp decides elsewhere, or overrides; the
+ * choice is in the shader-cache key (pc_shc_enabled). */
+static int pc_frag_mediump(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* e = getenv("MELEE_FRAG_PRECISION");
+        const char* r = (const char*) glGetString(GL_RENDERER);
+        if (e != NULL) on = strcmp(e, "mediump") == 0;
+        else on = r != NULL && strstr(r, "Mali") != NULL;
+    }
+    return on;
+}
+static const char* pc_es_header_frag(void)
+{
+    static const char* hdr;
+    if (hdr == NULL) {
+        const char* base = pc_es_header();
+        if (pc_frag_mediump()) {
+            static char buf[160];
+            const char* p = strstr(base, "precision highp float;");
+            if (p != NULL) {
+                snprintf(buf, sizeof(buf), "%.*sprecision mediump float;%s", (int) (p - base), base,
+                         p + strlen("precision highp float;"));
+                fprintf(stderr, "[GLINFO] fragment stage at mediump\n");
+                hdr = buf;
+            }
+        }
+        if (hdr == NULL) hdr = base;
+    }
+    return hdr;
+}
 static int pc_gpu_dl_on(void);
 static int g_shader_nowait;
 
@@ -3082,7 +3119,7 @@ static GLuint compile_shader(GLenum type, const char* src)
 {
     GLuint s = glCreateShader(type);
     const char* parts[3];
-    GLsizei nparts = pc_shader_parts(src, window_gl_es() ? pc_es_header() : NULL, parts);
+    GLsizei nparts = pc_shader_parts(src, window_gl_es() ? (type == GL_FRAGMENT_SHADER ? pc_es_header_frag() : pc_es_header()) : NULL, parts);
     glShaderSource(s, nparts, parts, NULL);
     glCompileShader(s);
     /* A parallel compile (pc_web_prog_begin) must not ask: the status query
@@ -4806,6 +4843,7 @@ static int pc_shc_enabled(void)
         /* The block moved the uniforms out of the programs: binaries
          * from before it, or from the other setting, do not apply. */
         g_shc_drv = pc_shc_fnv(pc_ubo_wanted() ? "ubo1" : "glu0", 4, g_shc_drv);
+        g_shc_drv = pc_shc_fnv(pc_frag_mediump() ? "fragmp" : "fraghp", 6, g_shc_drv);
         /* The key names a specialisation, not a program: the same key over
          * different templates (an edit to the GLSL, or one of the switches
          * that reshape it -- MELEE_UBO_EXCLUDE moves members out of the
@@ -6341,7 +6379,7 @@ static void bridge_compile_shaders(void)
         /* Against the lobby's [SHWARM] line: equal hashes are what make its
          * warm-up a cache hit here. */
         char* vt = pc_shader_text(g_vert_src, pc_es_header());
-        char* ft = pc_shader_text(base_fsrc, pc_es_header());
+        char* ft = pc_shader_text(base_fsrc, pc_es_header_frag());
         fprintf(stderr, "[SHWARM] engine base source %08x/%08x\n",
                 pc_shader_hash(vt), pc_shader_hash(ft));
         free(vt);
