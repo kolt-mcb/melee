@@ -4468,6 +4468,27 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
         }
         g_last_meta[vloc] = (n & ~0x7F) ? 0xFFFFFFFFu : meta;
     }
+    /* A slot that lives in the uniform block has no glUniform location in
+     * any program: the block image is all it needs. Keeping it off the set
+     * list and the stage serial keeps pc_prog_flush's walk to the slots it
+     * can upload -- with the block on, none: on the Chromecast that walk ran
+     * over every slot ever set, per draw, to upload nothing. */
+    if (g_ubo_ok && g_ubo_off[vloc] >= 0 && (n <= 1 || vloc + n <= VLOC_MAX)) {
+        int e, all = 1;
+        for (e = 1; e < n; e++) {
+            if (g_ubo_off[vloc + e] < 0) { all = 0; break; }
+        }
+        if (all) {
+            memcpy(g_last[vloc], data, bytes);
+            g_last_len[vloc] = (u16) bytes;
+            g_last_kind[vloc] = (u8) kind;
+            g_last_n[vloc] = (u16) n;
+            g_last_tr[vloc] = (u8) transpose;
+            g_last_gen[vloc]++;
+            pc_ubo_write(vloc, kind, n, transpose, data);
+            return;
+        }
+    }
     if (g_last_gen[vloc] == 0) {
         g_set_list[g_set_n++] = (u16) vloc;
     }
@@ -6920,6 +6941,7 @@ void gx_frame_begin(void)
 static void apply_model_uniform(void);
 static void bridge_upload_and_draw(void);
 static void apply_texgen_uniforms(void);
+static void apply_texgen_mtx(u32 c);
 /* Uniform staging is gated on these: every state-changing GX entry point
  * comes through gx_flush_pending() and bumps both, the matrix loaders bump
  * only the first, and the draw block re-stages a group only when its
@@ -6928,6 +6950,14 @@ static void apply_texgen_uniforms(void);
  * nothing in staging; a matrix-only change re-stages the matrices and
  * leaves the TEV, fog and texture uniforms alone. */
 static u32 g_gen_mtx, g_gen_uni;
+/* Texture and post-transform matrix loads (GXLoadTexMtxImm), and a position
+ * matrix written past the PN rows: what the texture-coordinate block of the
+ * staging reads besides the texgen settings (g_gen_uni) and, for a texgen
+ * through a PN row, the position matrices (g_gen_mtx). */
+static u32 g_gen_tcmtx;
+/* The texgen settings: GXSetTexCoordGen2 is their only writer. */
+static u32 g_gen_tg;
+static u32 g_desc_sig_gen;
 u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
 /* MELEE_DRAWSEC attribution: which entry point last moved the uniform
  * generation before a full staging. */
@@ -8016,6 +8046,44 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
         UP2FV(g_uv_scale_loc, 1, uv_scale);
     }
     
+    /* The texture-coordinate block -- texture matrices, post-transform
+     * matrices, texgen settings -- is in the matrix group because a texgen
+     * can go through a PN row, but the matrix group re-stages on every
+     * position-matrix load, nearly every draw. ~40 stagings a draw that
+     * almost never change: a third of all staging calls in a four-player
+     * match on the Chromecast. Re-stage it when what it reads moved: the
+     * texgen settings (g_gen_tg), a texture matrix (g_gen_tcmtx), or --
+     * only while some texgen reads a PN row -- the position matrices and
+     * whether the batch is pretransformed. The compare-only STAGECHECK pass
+     * and MELEE_NO_STAGEGATE take it every time. */
+    static u32 s_tc_uni = (u32) -1, s_tc_tcmtx = (u32) -1, s_tc_mtx = (u32) -1;
+    static int s_tc_pn, s_tc_pre = -1;
+    extern u32 pc_diag_tc_why[4];
+    int tc_full = g_stage_check || ENV_FLAG("MELEE_NO_STAGEGATE") ||
+                  s_tc_uni != g_gen_tg || s_tc_tcmtx != g_gen_tcmtx;
+    if (!tc_full && s_tc_pn && (s_tc_mtx != g_gen_mtx || s_tc_pre != g_batch_pretransformed)) {
+        /* Only the position matrices (or the pretransform) moved: of the
+         * whole block, just the texgen matrices of coords through a PN row
+         * can have changed. */
+        u32 c;
+        for (c = 0; c < PC_TEXN; c++) {
+            if (g_state.tex_gen_enabled[c] && g_state.tex_gen_mat_id[c] < 30) apply_texgen_mtx(c);
+        }
+        s_tc_mtx = g_gen_mtx;
+        s_tc_pre = g_batch_pretransformed;
+        pc_diag_tc_why[2]++;
+    }
+    if (tc_full) {
+    if (!g_stage_check) {
+        u32 c;
+        pc_diag_tc_why[s_tc_uni != g_gen_tg ? 0 : s_tc_tcmtx != g_gen_tcmtx ? 1 : 3]++;
+        s_tc_uni = g_gen_tg; s_tc_tcmtx = g_gen_tcmtx; s_tc_mtx = g_gen_mtx;
+        s_tc_pre = g_batch_pretransformed;
+        s_tc_pn = 0;
+        for (c = 0; c < PC_TEXN; c++) {
+            if (g_state.tex_gen_enabled[c] && g_state.tex_gen_mat_id[c] < 30) s_tc_pn = 1;
+        }
+    }
     /* Upload texture matrix transforms */
     /* GX_TEXMTX0..9 live at matrix-memory rows 30..57 in steps of 3;
      * GX_IDENTITY is 60 and means "leave the coords alone". A slot that was
@@ -8060,6 +8128,7 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
     }
 
     apply_texgen_uniforms();
+    } /* texture-coordinate block */
     apply_model_uniform();
     } /* stage_a */
     pc_sec_end(1);
@@ -10178,6 +10247,7 @@ void GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     }
     
     memcpy(g_state.mtx_array[id], mtx, sizeof(g_state.mtx_array[0]));
+    if (id >= 30) g_gen_tcmtx++; /* a texture matrix row */
 
     /* PC diag: pair P0/P1 loads and dump the logo's matrices. */
     {
@@ -13198,6 +13268,29 @@ static void apply_model_uniform(void)
         UPMTX4(g_model_loc, 1, GL_FALSE, mm);
     }
 }
+/* One coord's texgen matrix. */
+static void apply_texgen_mtx(u32 c)
+{
+    static int oldmtx = -1;
+    u32 mtx_id = g_state.tex_gen_mat_id[c];
+    if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
+    if (g_texgen_mtx_loc >= 0 && mtx_id < 68) {
+        GLfloat m[16] = {0};
+        /* The shader applies this to the object-space attribute, as
+         * the hardware does. A pretransformed batch already carries
+         * its position matrix in the vertices, so a PN row (id < 30)
+         * is identity there; GX_IDENTITY (60) is identity everywhere. */
+        if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
+            m[0] = m[5] = m[10] = 1.0f;
+        } else {
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 4; j++)
+                    m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
+        }
+        m[3*4 + 3] = 1.0f;
+        UPMTX4(g_texgen_mtx_loc + (GLint) c, 1, GL_TRUE, m);
+    }
+}
 static void apply_texgen_uniforms(void)
 {
     /* Upload texture coordinate generation state */
@@ -13214,25 +13307,7 @@ static void apply_texgen_uniforms(void)
             if (g_texgen_mode_loc >= 0) UP1I(g_texgen_mode_loc + (GLint) c, en ? (int) g_state.tex_gen_mode[c] : -1);
             if (g_texgen_src_loc >= 0) UP1I(g_texgen_src_loc + (GLint) c, (int) g_state.tex_gen_src[c]);
             if (g_texgen_nrm_loc >= 0) UP1I(g_texgen_nrm_loc + (GLint) c, (int) g_state.tex_gen_normalize[c]);
-            if (g_texgen_mtx_loc >= 0 && en) {
-                u32 mtx_id = g_state.tex_gen_mat_id[c];
-                if (mtx_id < 68) {
-                    GLfloat m[16] = {0};
-                    /* The shader applies this to the object-space attribute, as
-                     * the hardware does. A pretransformed batch already carries
-                     * its position matrix in the vertices, so a PN row (id < 30)
-                     * is identity there; GX_IDENTITY (60) is identity everywhere. */
-                    if (!oldmtx && (mtx_id == 60 || (g_batch_pretransformed && mtx_id < 30))) {
-                        m[0] = m[5] = m[10] = 1.0f;
-                    } else {
-                        for (int i = 0; i < 3; i++)
-                            for (int j = 0; j < 4; j++)
-                                m[i*4 + j] = g_state.mtx_array[mtx_id][i][j];
-                    }
-                    m[3*4 + 3] = 1.0f;
-                    UPMTX4(g_texgen_mtx_loc + (GLint) c, 1, GL_TRUE, m);
-                }
-            }
+            if (en) apply_texgen_mtx(c);
         }
     }
 }
@@ -14408,6 +14483,7 @@ void GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 p
         g_state.tex_gen_src[tex] == mat && g_state.tex_gen_mat_id[tex] == mtx &&
         g_state.tex_gen_pt_id[tex] == pt_texmtx && g_state.tex_gen_normalize[tex] == normalize) return;
     gx_flush_pending();
+    g_gen_tg++;
     GX_TRACE("GXSetTexCoordGen2(%u, %u, %u, %u, %u, %u)", tex, type, mat, mtx, normalize, pt_texmtx);
     if (tex < 8) {
         /* type is GXTexGenType, and GX_TG_MTX3x4 -- by far the most common --
@@ -14877,6 +14953,7 @@ void GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
         if (same) return;
     }
     gx_flush_pending_gl();
+    g_gen_tcmtx++;
     GX_TRACE("GXLoadTexMtxImm(p, %u, %u)", id, type);
     if (id < 68) g_state.tex_mtx_loaded[id] = TRUE;
     if (id >= 64 && id <= 124 && ((id - 64) % 3) == 0) {
