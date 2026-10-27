@@ -8308,6 +8308,26 @@ static int pc_draw_fills_frame(void)
     return x0 <= -0.97f && x0 >= -1.03f && x1 >= 0.97f && x1 <= 1.03f;
 }
 
+/* GX_QUADS as a triangle list: each (a,b,c,d) as (a,b,c),(a,c,d). Returns
+ * the number of quads; a ragged tail is dropped (the caller warns). */
+static u32 pc_quads_to_tris(const Vertex* v, u32 count, Vertex* out)
+{
+    u32 q, nq = count / 4;
+    for (q = 0; q < nq; q++) {
+        const Vertex* a = &v[q * 4];
+        out[q * 6 + 0] = a[0]; out[q * 6 + 1] = a[1]; out[q * 6 + 2] = a[2];
+        out[q * 6 + 3] = a[0]; out[q * 6 + 4] = a[2]; out[q * 6 + 5] = a[3];
+    }
+    return nq;
+}
+/* Quads join an open batch like any other primitive (as triangles).
+ * MELEE_QUAD_JOIN=0 keeps every quad run a batch of its own, as before. */
+static int pc_quad_join_on(void)
+{
+    static int on = -1;
+    if (on < 0) { const char* e = getenv("MELEE_QUAD_JOIN"); on = !(e && e[0] == '0'); }
+    return on;
+}
 static void bridge_upload_and_draw(void)
 {
     if (!pc_gx_discard) {
@@ -8499,24 +8519,47 @@ static void bridge_upload_and_draw(void)
      * stream above uploaded the unconverted ones.
      *
      * This is the difference between applying the state 4718 times a frame on
-     * Venom and applying it 629 times, once per list. */
+     * Venom and applying it 629 times, once per list.
+     *
+     * Quads join as the triangle list the path below would make of them
+     * (pc_quads_to_tris). Excluded, every quad of a run -- particles, HUD
+     * glyphs, effect sprites -- was a batch and a draw call of its own with
+     * nothing changed in between: ~190 draws a frame in a four-player match,
+     * each ~25 us of Mali driver on the Chromecast. */
+    int join_quads = g_state.prim_type == GX_QUADS;
+    GLenum join_mode = join_quads ? GL_TRIANGLES : pc_gl_prim_of(g_state.prim_type);
     if (g_gpu_entry == NULL &&
         (g_batch_dl_depth > 0 || pc_xdl_on()) && g_batch_n > 0 &&
-        g_state.prim_type != GX_QUADS &&
+        (!join_quads || (pc_quad_join_on() && count >= 4)) &&
         g_batch_pretransformed == g_batch_pre_state &&
-        (pc_gl_prim_of(g_state.prim_type) == g_batch_mode ||
-         (pc_indexed_on() && pc_tri_class(pc_gl_prim_of(g_state.prim_type)) && pc_tri_class(g_batch_mode))) &&
+        (join_mode == g_batch_mode ||
+         (pc_indexed_on() && pc_tri_class(join_mode) && pc_tri_class(g_batch_mode))) &&
         g_batch_gen_uni == g_gen_uni &&
         (g_batch_gen_mtx == g_gen_mtx || (g_batch_pre_state && g_batch_pretransformed)))
     {
+        GLsizei n_join = (GLsizei) count;
+        /* MELEE_STAGECHECK: a joining primitive is drawn with the batch's
+         * staging; check that its own would be the same. */
+        if (pc_stagecheck_on()) {
+            f32 chk[4][4];
+            g_stage_check = 1;
+            pc_stage_uniforms(1, 1, chk);
+            g_stage_check = 0;
+        }
         pc_sec_begin();
-        g_vbo_first = pc_batch_stage(g_state.verts, count);
+        if (join_quads) {
+            static Vertex quad_tri[MAX_VERTS * 3 / 2];
+            n_join = (GLsizei) (pc_quads_to_tris(g_state.verts, count, quad_tri) * 6);
+            g_vbo_first = pc_batch_stage(quad_tri, (unsigned) n_join);
+        } else {
+            g_vbo_first = pc_batch_stage(g_state.verts, count);
+        }
         pc_sec_end(0);
         if (g_vbo_first >= 0) {
-            pc_batch_add(pc_gl_prim_of(g_state.prim_type), g_vbo_first, (GLsizei) count);
+            pc_batch_add(join_mode, g_vbo_first, n_join);
             pc_diag_draws++;
             pc_stat_draws++;
-            pc_stat_verts += (unsigned) count;
+            pc_stat_verts += (unsigned) n_join;
             g_state.vert_count = 0;
             g_batch_pretransformed = 0;
             return;
@@ -9087,14 +9130,7 @@ static void bridge_upload_and_draw(void)
                     PORT_LOG_WARN("GX_QUADS ragged-batch warnings suppressed from here on");
                 }
             }
-            for (u32 q = 0; q < nq; q++) {
-                const Vertex *a = &g_state.verts[q*4+0];
-                const Vertex *b = &g_state.verts[q*4+1];
-                const Vertex *c = &g_state.verts[q*4+2];
-                const Vertex *d = &g_state.verts[q*4+3];
-                quad_tri[q*6+0] = *a; quad_tri[q*6+1] = *b; quad_tri[q*6+2] = *c;
-                quad_tri[q*6+3] = *a; quad_tri[q*6+4] = *c; quad_tri[q*6+5] = *d;
-            }
+            pc_quads_to_tris(g_state.verts, (u32) count, quad_tri);
             gls_bind_vbo(g_vbo);
             g_vbo_first = pc_vbo_first_for(quad_tri, (unsigned) (nq * 6));
             pc_prog_flush();
@@ -11244,12 +11280,57 @@ void GXSetTevOp(u32 stage, u32 mode)
     }
     tev_track_stage(stage);
 }
+/* Whether any active TEV stage names register `idx` (1-3: TEVREG0-2) as a
+ * colour or alpha input or output. PREV (0) is always read: it is the
+ * stage chain's result. */
+static int pc_tevreg_read(u32 idx)
+{
+    u32 st, k, n = g_state.num_tev_stages;
+    if (idx == 0) return 1;
+    if (n > 8) n = 8;
+    for (st = 0; st < n; st++) {
+        const TevStage* t = &g_state.tev_stages[st];
+        if (g_tev_color_out_reg[st] == idx || g_tev_alpha_out_reg[st] == idx) return 1;
+        for (k = 0; k < 4; k++) {
+            /* GX_CC_C0=2, A0=3 ... C2=6, A2=7: register (in >> 1); GX_CA_A0=1 ... A2=3. */
+            if (t->color_inputs[k] < 8 && (t->color_inputs[k] >> 1) == idx) return 1;
+            if (t->alpha_inputs[k] < 4 && t->alpha_inputs[k] == idx) return 1;
+        }
+    }
+    return 0;
+}
 void GXSetTevColor(u32 reg, GXColor color)
 {
     {
         u32 i0 = reg & 3;
         if (g_state.tev_regs[i0].r == color.r && g_state.tev_regs[i0].g == color.g &&
             g_state.tev_regs[i0].b == color.b && g_state.tev_regs[i0].a == color.a) return;
+        /* A register no active stage reads: the open batch draws the same
+         * with either value, so keep it open and stage the new value in
+         * place. Any TEV change that starts reading it flushes and
+         * re-stages as usual. HSD sets a material's registers whether its
+         * stages use them or not; on the Chromecast this closed ~100
+         * one-primitive batches a frame in a four-player match, each a
+         * draw call. MELEE_TEVREG_FLUSH=1 always flushes. */
+        if (!pc_tevreg_read(i0) && !ENV_FLAG("MELEE_TEVREG_FLUSH")) {
+            g_state.tev_regs[i0].r = color.r;
+            g_state.tev_regs[i0].g = color.g;
+            g_state.tev_regs[i0].b = color.b;
+            g_state.tev_regs[i0].a = color.a;
+            /* The whole array, as apply_tev_uniforms stages it. */
+            if (g_tevreg_loc >= 0) {
+                GLfloat tr[4][4];
+                int i;
+                for (i = 0; i < 4; i++) {
+                    tr[i][0] = (f32) g_state.tev_regs[i].r / 255.0f;
+                    tr[i][1] = (f32) g_state.tev_regs[i].g / 255.0f;
+                    tr[i][2] = (f32) g_state.tev_regs[i].b / 255.0f;
+                    tr[i][3] = (f32) g_state.tev_regs[i].a / 255.0f;
+                }
+                UP4FV(g_tevreg_loc, 4, &tr[0][0]);
+            }
+            return;
+        }
     }
     gx_flush_pending();
     GX_TRACE("GXSetTevColor(%u, {%u,%u,%u,%u})", reg, (u32)color.r, (u32)color.g, (u32)color.b, (u32)color.a);
