@@ -196,6 +196,7 @@ unsigned long g_tx_init, g_tx_distinct;
 int pc_in_fighter_draw;
 
 static void pc_apply_cull_state(void);
+void pc_fb_apply(void); /* the scene framebuffer's deferred bind-back */
 static int pc_texmtx_active(u32 coord);
 static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z);
 static void pc_apply_blend_state(void);
@@ -2233,6 +2234,7 @@ void glInvalidateFramebuffer_pc(GLenum target, GLsizei n, const GLenum* att)
     buf[1] = (GLenum) n;
     for (i = 0; i < n; i++) buf[2 + i] = att[i];
     if (pc_glq_active) {
+        pc_fb_apply();
         memcpy(pc_glq_push(pc_invalfb_exec, sizeof(buf)), buf, sizeof(buf));
         pc_glq_commit();
     } else {
@@ -2260,6 +2262,7 @@ void pc_fb_discard_depth(void)
      * from SDL_GL_GetProcAddress, so no macro sees it, and on the game
      * thread there is no context while the render thread owns it. */
     if (pc_glq_active) {
+        pc_fb_apply();
         *(int*) pc_glq_push(pc_fb_discard_depth_exec, sizeof(int)) = 0;
         pc_glq_commit();
         return;
@@ -2609,6 +2612,7 @@ static void pc_batch_flush(void)
         g_stage_n = 0;
         return;
     }
+    pc_fb_apply();
     g_batch_flushing = 1;
     /* The flush runs from gx_flush_pending, which any of the 53
      * state-changing GX entry points may call, so it cannot assume the draw
@@ -8469,6 +8473,7 @@ static void bridge_upload_and_draw(void)
      * is handed to dl_gpu_emit. */
     u16 count = g_gpu_entry != NULL ? 1 : g_state.vert_count;
     if (count == 0) return;
+    pc_fb_apply();
     { static int _n=0; if(ENV_FLAG("MELEE_ZTRACE") && _n<30){_n++;
         fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
 
@@ -9405,6 +9410,7 @@ static int pc_web_swizzle(GLuint src, GLuint dst, u32 w, u32 h, const int sel[4]
     scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
     stencil_was = glIsEnabled(GL_STENCIL_TEST); /* not in the gls mirror */
 
+    pc_fb_apply();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sw_fbo);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, dst, 0);
@@ -9447,6 +9453,29 @@ void pc_web_gpu_seg(int seg); /* render.c: the page's GPU timer, by pass */
 #else
 #define PC_GPU_SEG(k) ((void) 0)
 #endif
+/* The scene framebuffer's bind-back, deferred. Leaving an off-screen
+ * target bound the scene again at once, and on a tile-based GPU every
+ * framebuffer switch ends a render pass: a four-player match on the
+ * Chromecast rendered its five shadow targets back to back with no scene
+ * draw between them, and each switch was ~140 us of Mali driver time --
+ * ten of the frame's 22 switches for nothing. The bind is made when
+ * something next needs the scene: a draw, a clear, a copy, a read, the
+ * present (pc_fb_apply), and not at all when the next off-screen target
+ * begins first. MELEE_FB_LAZY=0 binds back at once as before. */
+static GLint g_fb_pending = -1;
+static int pc_fb_lazy_on(void)
+{
+    static int on = -1;
+    if (on < 0) { const char* e = getenv("MELEE_FB_LAZY"); on = !(e && e[0] == '0'); }
+    return on;
+}
+void pc_fb_apply(void)
+{
+    if (g_fb_pending >= 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_fb_pending);
+        g_fb_pending = -1;
+    }
+}
 /* Returns nonzero when the following draws will go to the off-screen target.
  * The caller must reach GXCopyTex; pc_gx_offscreen_cancel() undoes it. */
 int pc_gx_offscreen_begin(int w, int h)
@@ -9466,7 +9495,17 @@ int pc_gx_offscreen_begin(int w, int h)
             return 0;
         }
     }
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &g_off_prev_fbo);
+    int still_bound = 0;
+    if (g_fb_pending >= 0) {
+        /* The scene's bind-back is still owed: this target takes its place,
+         * and the scene is what to return to afterwards. The target is in
+         * fact still bound from the last time. */
+        g_off_prev_fbo = g_fb_pending;
+        g_fb_pending = -1;
+        still_bound = 1;
+    } else {
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &g_off_prev_fbo);
+    }
     /* The viewport and scissor are GL state, not framebuffer state: leaving
      * the target's 256x256 rectangle behind clips whatever the game draws
      * next into a corner, until its own GXSetViewport happens to come
@@ -9515,7 +9554,7 @@ int pc_gx_offscreen_begin(int w, int h)
         g_off_w = w;
         g_off_h = h;
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, g_off_fbo);
+    if (!still_bound) glBindFramebuffer(GL_FRAMEBUFFER, g_off_fbo);
     g_off_active = 1;
     { static int n=0; if (n<4 && getenv("MELEE_EFBLOG")) { n++;
         fprintf(stderr, "[OFF] begin %dx%d tex=%u fbo=%u prev=%d\n",
@@ -9534,7 +9573,8 @@ void pc_gx_offscreen_cancel(void)
     gx_flush_pending();
     g_off_active = 0;
     PC_GPU_SEG(0);
-    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_off_prev_fbo);
+    if (pc_fb_lazy_on()) g_fb_pending = g_off_prev_fbo;
+    else glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) g_off_prev_fbo);
     gls_viewport(g_off_prev_vp[0], g_off_prev_vp[1],
                (GLsizei) g_off_prev_vp[2], (GLsizei) g_off_prev_vp[3]);
     gls_scissor(g_off_prev_sc[0], g_off_prev_sc[1],
@@ -9664,13 +9704,18 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, sa);
 #endif
 
+    pc_fb_apply();
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
     scissor_was = gls_is_enabled(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, g_cp_fbo);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                            g_cp_tex[slot], 0);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_draw);
+    /* The read side is the scene already whenever the scene was bound as
+     * GL_FRAMEBUFFER (both sides), which is every copy in a match: binding
+     * it again, and restoring it below, are framebuffer switches to the
+     * driver (~115 us each on the Chromecast) for no change. */
+    if (prev_read != prev_draw) glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_draw);
     /* An RGBA8 texture attached as the only colour attachment is complete or
      * it is not, for as long as the image stays; asking on every copy was a
      * round trip to the render thread each time (pc_glq.c) -- 4 ms a frame
@@ -9690,7 +9735,7 @@ static int pc_efb_copy_gpu(void* dest, const GLint r[4], u32 dw, u32 dh, u32 fmt
                       0, 0, (GLint) dw, (GLint) dh, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     if (scissor_was) gls_enable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint) prev_draw);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
+    if (prev_read != prev_draw) glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint) prev_read);
 
     o->img = dest;
     o->tex = g_cp_tex[slot];
@@ -9768,6 +9813,7 @@ static void pc_efb_offscreen_publish(void* img)
             GLint pr = 0; char path[512]; FILE* f;
             unsigned long sum = 0; int i2;
             glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pr);
+            pc_fb_apply();
             glBindFramebuffer(GL_READ_FRAMEBUFFER, g_off_fbo);
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(0, 0, nx, ny, GL_RED, GL_UNSIGNED_BYTE, px);
@@ -9897,6 +9943,7 @@ static void pc_ires_ensure(void)
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     pc_glq_default_fb = 0;
+    pc_fb_apply();
     glBindFramebuffer(GL_FRAMEBUFFER, pc_ires_fbo);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, g_ires_color);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_ires_depth);
@@ -9930,6 +9977,7 @@ void pc_ires_present(void)
     gls_disable(GL_SCISSOR_TEST);
     gls_color_mask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     pc_glq_default_fb = 0;
+    pc_fb_apply();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); /* the window */
     glBindFramebuffer(GL_READ_FRAMEBUFFER, pc_ires_fbo);
     gls_viewport(0, 0, ww, wh); /* through the mirror, which others read */
@@ -10147,6 +10195,7 @@ static void pc_gl_clear(f32 r, f32 g, f32 b, f32 a, f32 z)
     }
     glClearColor(r, g, b, a);
     pc_clear_depth((float) z);
+    pc_fb_apply();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (scissor_was) gls_enable(GL_SCISSOR_TEST);
     /* The per-draw state block reasserts colour/depth masks, so leaving them
@@ -14289,6 +14338,7 @@ static void pc_efb_copy(void* dest)
         int red_only = (g_copy_dst_fmt == 0x20 || g_copy_dst_fmt == 0x28);
         clock_gettime(CLOCK_MONOTONIC, &e0);
         /* Rows come back bottom-up; EFB row 0 is the top. */
+        pc_fb_apply();
         if (red_only) {
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(r[0], r[1], r[2], r[3], GL_RED, GL_UNSIGNED_BYTE,
@@ -14399,6 +14449,7 @@ static void pc_efb_clear_src(void)
     glClearColor(g_state.copy_clear_r, g_state.copy_clear_g,
                  g_state.copy_clear_b, g_state.copy_clear_a);
     glClearDepth(g_state.copy_clear_z);
+    pc_fb_apply();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     gls_color_mask(g_state.color_update ? GL_TRUE : GL_FALSE,
                 g_state.color_update ? GL_TRUE : GL_FALSE,

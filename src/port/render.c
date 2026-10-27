@@ -110,6 +110,7 @@ static double s_web_entry_ms, s_web_end_ms, s_web_wait_ms, s_web_late_ms;
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+extern void pc_fb_apply(void); /* gx_gl_bridge.c: the scene framebuffer's deferred bind-back */
 
 int pc_render_frame_now = 0;
 /* Time spent outside render_present -- the game's simulation and the
@@ -473,7 +474,8 @@ static void render_present_tail(int frame)
                 int nonblack = 0, i;
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glFinish();
-                glReadBuffer(GL_BACK);
+                pc_fb_apply();
+    glReadBuffer(GL_BACK);
                 if (window_gl_es()) {
                     /* ES guarantees only RGBA/UNSIGNED_BYTE readback;
                      * GL_RGB is GL_INVALID_OPERATION and reads nothing. */
