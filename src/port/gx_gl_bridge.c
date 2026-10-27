@@ -2598,6 +2598,9 @@ static int pc_web_multidraw(void);
 void glMultiDrawArraysWEBGL(GLenum mode, const GLint* firsts,
                             const GLsizei* counts, GLsizei drawcount);
 #endif
+/* The GX call that last moved a generation (MELEE_DRAWSEC's attribution,
+ * and MELEE_DRAWSEP's label for a draw that followed no state change). */
+static const char* g_last_bump = "";
 static void pc_batch_flush(void)
 {
     int i;
@@ -2713,6 +2716,8 @@ static void pc_batch_flush(void)
     }
     PC_VBO_COMMIT();
     if (g_batch_n == 1) {
+        extern const char* volatile pc_ds_bump;
+        pc_ds_bump = g_last_bump;
         pc_gl_crumb_draw();
         glDrawArrays(g_batch_mode, g_batch_first[0], g_batch_count[0]);
         pc_gl_crumb_after();
@@ -3795,6 +3800,7 @@ static UniEntry g_uni_tab[] = {
     { &g_texgen_mtx_loc, "u_texgen_mtx", PC_TEXN, 0, -1 },
 };
 #define UNI_TAB_N ((int) (sizeof(g_uni_tab) / sizeof(g_uni_tab[0])))
+#define UNI_TAB_N_MAX 256
 
 static int g_vloc_total;
 static u8 g_vloc_spec[VLOC_MAX];
@@ -4353,11 +4359,76 @@ static void pc_stage_check(GLint vloc, int n, const void* data, unsigned bytes)
         }
     }
 }
+/* PC diag: MELEE_STAGESTAT=1 counts pc_stage_uniform calls per uniform,
+ * and how many of them staged the value already there, reported every 600
+ * frames: which groups are re-staged per draw for nothing. */
+static int g_stagestat = -1;
+/* Why the texture-coordinate block re-staged: texgen, texture matrix, PN
+ * matrix (its PN coords' matrices only), other (the gate forced open). */
+u32 pc_diag_tc_why[4];
+static u32 g_ss_calls[VLOC_MAX], g_ss_same[VLOC_MAX];
+static void pc_stagestat_report(void)
+{
+    static u32 s_from;
+    u32 frames = pc_frame_number - s_from;
+    int e, k, order[UNI_TAB_N_MAX], n = 0;
+    u32 tot[UNI_TAB_N_MAX], same[UNI_TAB_N_MAX], all = 0, allsame = 0;
+    if (frames == 0) return;
+    for (e = 0; e < UNI_TAB_N && n < UNI_TAB_N_MAX; e++) {
+        const UniEntry* ent = &g_uni_tab[e];
+        tot[n] = same[n] = 0;
+        if (ent->base < 0) continue;
+        for (k = 0; k < ent->count; k++) {
+            tot[n] += g_ss_calls[ent->base + k];
+            same[n] += g_ss_same[ent->base + k];
+        }
+        if (tot[n] == 0) continue;
+        all += tot[n]; allsame += same[n];
+        order[n] = e;
+        n++;
+    }
+    /* Largest first, a dozen of them. */
+    for (k = 0; k < n && k < 14; k++) {
+        int b = k, j;
+        for (j = k + 1; j < n; j++) if (tot[j] > tot[b]) b = j;
+        if (b != k) {
+            u32 t = tot[k]; tot[k] = tot[b]; tot[b] = t;
+            t = same[k]; same[k] = same[b]; same[b] = t;
+            j = order[k]; order[k] = order[b]; order[b] = j;
+        }
+    }
+    fprintf(stderr, "[STAGESTAT] %u frames: %.0f calls/frame, %.0f%% unchanged; per frame (unchanged):",
+            frames, (double) all / frames, all ? 100.0 * allsame / all : 0.0);
+    for (k = 0; k < n && k < 14; k++) {
+        fprintf(stderr, " %s %.0f (%.0f)", g_uni_tab[order[k]].name,
+                (double) tot[k] / frames, (double) same[k] / frames);
+    }
+    fprintf(stderr, "; texcoord block re-staged per frame: texgen %.0f texmtx %.0f pnmtx %.0f other %.0f\n",
+            (double) pc_diag_tc_why[0] / frames, (double) pc_diag_tc_why[1] / frames,
+            (double) pc_diag_tc_why[2] / frames, (double) pc_diag_tc_why[3] / frames);
+    memset(pc_diag_tc_why, 0, sizeof pc_diag_tc_why);
+    memset(g_ss_calls, 0, sizeof g_ss_calls);
+    memset(g_ss_same, 0, sizeof g_ss_same);
+    s_from = pc_frame_number;
+}
 static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
                              const void* data, unsigned bytes)
 {
     if (vloc < 0 || vloc >= g_vloc_total || bytes > VLOC_BYTES) {
         return;
+    }
+    if (g_stagestat) {
+        if (g_stagestat < 0) g_stagestat = getenv("MELEE_STAGESTAT") != NULL;
+        if (g_stagestat) {
+            static u32 s_last;
+            if (pc_frame_number - s_last >= 600) { s_last = pc_frame_number; pc_stagestat_report(); }
+            g_ss_calls[vloc]++;
+            if (g_vloc_spec[vloc] ? g_spec_vals[vloc] == *(const GLint*) data
+                                  : (g_last_gen[vloc] != 0 && g_last_len[vloc] == bytes &&
+                                     memcmp(g_last[vloc], data, bytes) == 0)) {
+                g_ss_same[vloc]++;
+            }
+        }
     }
     if (g_stage_check) { pc_stage_check(vloc, n, data, bytes); return; }
     if (g_vloc_spec[vloc]) {
@@ -6860,7 +6931,7 @@ static u32 g_gen_mtx, g_gen_uni;
 u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
 /* MELEE_DRAWSEC attribution: which entry point last moved the uniform
  * generation before a full staging. */
-static const char* g_last_bump = "";
+/* g_last_bump: declared with pc_batch_flush. */
 static const char* g_bump_names[64];
 static u32 g_bump_counts[64];
 static void gx_bump_credit(void)
@@ -6930,6 +7001,7 @@ static void gx_flush_pending_unused(void)
  * fog and texture uniforms alone. */
 static void gx_flush_pending_gl(void)
 {
+    g_last_bump = "(gl state)";
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
@@ -6955,6 +7027,7 @@ static void gx_flush_pending_desc(void)
 }
 static void gx_flush_pending_mtx(void)
 {
+    g_last_bump = "(matrix)";
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
@@ -8386,6 +8459,18 @@ static void bridge_upload_and_draw(void)
      * state. This is what the menu caught -- a run of GX_QUADS primitives,
      * which the append path above declines, each applied its own state on top
      * of the previous one's pending draw. */
+    {
+        static int ds = -1;
+        if (ds < 0) ds = getenv("MELEE_DRAWSEP") != NULL;
+        if (ds && g_batch_n > 0) {
+            g_last_bump = g_gpu_entry != NULL ? "join:gpu-list"
+                        : g_state.prim_type == GX_QUADS ? "join:quads"
+                        : g_batch_pretransformed != g_batch_pre_state ? "join:pretransform"
+                        : g_batch_gen_uni != g_gen_uni ? "join:uniform-gen"
+                        : !(g_batch_gen_mtx == g_gen_mtx || (g_batch_pre_state && g_batch_pretransformed)) ? "join:matrix-gen"
+                        : "join:mode";
+        }
+    }
     pc_batch_flush();
     g_batch_pre_state = g_batch_pretransformed;
     g_batch_gen_mtx = g_gen_mtx;

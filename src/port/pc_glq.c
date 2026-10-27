@@ -66,7 +66,138 @@ volatile unsigned pc_gl_crumb_prog, pc_gl_crumb_fbo;
 volatile long pc_gl_crumb_tex[4], pc_gl_crumb_texp[4];
 
 void* pc_gllog_fp;
-void pc_gllog(const char* fn, int line) { fprintf((FILE*) pc_gllog_fp, "%s %d\n", fn, line); }
+/* PC diag: MELEE_DRAWSEP=1 -- what separates one draw from the next. Every
+ * GL call the bridge records is classed; at a draw, the set of classes seen
+ * since the previous draw is counted, and every 600 frames the commonest
+ * sets are reported. A draw preceded only by a uniform-block bind is one a
+ * merge could take; one preceded by a texture or program change is not.
+ * It rides the MELEE_GLLOG hook, so it costs nothing when off. */
+static int pc_drawsep_on;
+enum { DS_PROG, DS_TEX, DS_UBO, DS_VAO, DS_VBO, DS_CAP, DS_BLEND, DS_DEPTH, DS_VPSC, DS_FBO, DS_OTHER, DS_N };
+static const char* const ds_names[DS_N] = { "prog", "tex", "ubo", "vao", "vbo", "cap", "blend", "depth", "vp/sc", "fbo", "other" };
+static unsigned ds_mask, ds_draws, ds_frames, ds_nodraw;
+static unsigned ds_hist[1u << DS_N];
+/* Draws by call-site line (of whichever file issued them): all, and those
+ * with nothing changed since the previous draw. */
+static struct { int line; unsigned all, same, ubo_only; } ds_site[32];
+/* Set by the bridge before a draw (gx_gl_bridge.c): the GX call that last
+ * moved a generation, so an unchanged-state draw can say what closed it. */
+const char* volatile pc_ds_bump;
+static struct { const char* bump; unsigned n; } ds_bump[32];
+/* Framebuffer traffic by call site: on a tile-based GPU every framebuffer
+ * switch ends the render pass, and on the Chromecast each cost ~140 us of
+ * driver time. */
+static struct { const char* fn; int line; unsigned n; } ds_fbo[32];
+/* One frame's render-pass structure: the framebuffer events in order, with
+ * the draws between them. */
+static char ds_seq[2048];
+static unsigned ds_seq_len, ds_seq_draws, ds_seq_frame_on;
+static void ds_seq_add(const char* fn, int line)
+{
+    int n;
+    if (!ds_seq_frame_on || ds_seq_len > sizeof(ds_seq) - 40) return;
+    n = snprintf(ds_seq + ds_seq_len, sizeof(ds_seq) - ds_seq_len, " [%u] %s:%d", ds_seq_draws, fn + 2, line);
+    if (n > 0) ds_seq_len += (unsigned) n;
+    ds_seq_draws = 0;
+}
+static void ds_note(const char* fn, int line)
+{
+    if (!strcmp(fn, "glBindFramebuffer") || !strcmp(fn, "glBlitFramebuffer") || !strcmp(fn, "glClear") ||
+        !strcmp(fn, "glInvalidateFramebuffer") || !strcmp(fn, "glCopyTexSubImage2D") || !strcmp(fn, "glReadPixels") ||
+        !strcmp(fn, "glFlush") || !strcmp(fn, "glFinish")) {
+        int k;
+        for (k = 0; k < 32 && ds_fbo[k].fn != NULL && !(ds_fbo[k].line == line && !strcmp(ds_fbo[k].fn, fn)); k++) {}
+        if (k < 32) { ds_fbo[k].fn = fn; ds_fbo[k].line = line; ds_fbo[k].n++; }
+        ds_seq_add(fn, line);
+    }
+    if (strncmp(fn, "glDraw", 6) == 0) ds_seq_draws++;
+    if (strncmp(fn, "glDraw", 6) == 0) {
+        int k;
+        for (k = 0; k < 32 && ds_site[k].line != 0 && ds_site[k].line != line; k++) {}
+        if (k < 32) {
+            ds_site[k].line = line; ds_site[k].all++;
+            if (ds_mask == 0) ds_site[k].same++;
+            /* Only the uniform block, and the buffers of the draw's own
+             * vertices: a draw that differs from the previous one in its
+             * matrices alone. */
+            if ((ds_mask & ~((1u << DS_UBO) | (1u << DS_VAO) | (1u << DS_VBO))) == 0 && (ds_mask & (1u << DS_UBO))) ds_site[k].ubo_only++;
+        }
+        if (ds_mask == 0) {
+            for (k = 0; k < 32 && ds_bump[k].bump != NULL && ds_bump[k].bump != pc_ds_bump; k++) {}
+            if (k < 32) { ds_bump[k].bump = pc_ds_bump; ds_bump[k].n++; }
+        }
+        ds_hist[ds_mask]++;
+        ds_draws++;
+        ds_mask = 0;
+        return;
+    }
+    if (!strcmp(fn, "glUseProgram")) ds_mask |= 1u << DS_PROG;
+    else if (!strcmp(fn, "glBindTexture") || !strcmp(fn, "glActiveTexture") || !strncmp(fn, "glTexParam", 10) ||
+             !strcmp(fn, "glBindSampler")) ds_mask |= 1u << DS_TEX;
+    else if (!strcmp(fn, "glBindBufferRange") || !strcmp(fn, "glBindBufferBase")) ds_mask |= 1u << DS_UBO;
+    else if (!strcmp(fn, "glBindVertexArray")) ds_mask |= 1u << DS_VAO;
+    else if (!strcmp(fn, "glBindBuffer") || !strncmp(fn, "glVertexAttrib", 14) ||
+             !strncmp(fn, "glEnableVertexAttrib", 20) || !strncmp(fn, "glDisableVertexAttrib", 21)) ds_mask |= 1u << DS_VBO;
+    else if (!strcmp(fn, "glEnable") || !strcmp(fn, "glDisable")) ds_mask |= 1u << DS_CAP;
+    else if (!strncmp(fn, "glBlend", 7) || !strcmp(fn, "glColorMask")) ds_mask |= 1u << DS_BLEND;
+    else if (!strncmp(fn, "glDepth", 7) || !strcmp(fn, "glCullFace") || !strcmp(fn, "glFrontFace") ||
+             !strncmp(fn, "glPolygonOffset", 15)) ds_mask |= 1u << DS_DEPTH;
+    else if (!strcmp(fn, "glViewport") || !strcmp(fn, "glScissor")) ds_mask |= 1u << DS_VPSC;
+    else if (!strcmp(fn, "glBindFramebuffer") || !strcmp(fn, "glClear") || !strcmp(fn, "glBlitFramebuffer"))
+        ds_mask |= 1u << DS_FBO;
+    else if (!strncmp(fn, "glUniform", 9)) ds_mask |= 1u << DS_OTHER;
+    else ds_mask |= 1u << DS_OTHER;
+}
+static void ds_frame(void)
+{
+    unsigned i, k, top[12], ntop = 0;
+    if (!pc_drawsep_on) return;
+    if (ds_frames == 598) { ds_seq_frame_on = 1; ds_seq_len = 0; ds_seq_draws = 0; }
+    if (ds_frames == 599) { ds_seq_frame_on = 0; fprintf(stderr, "[DRAWSEP] one frame's passes (draws before each event):%s [%u]\n", ds_seq, ds_seq_draws); }
+    if (++ds_frames < 600) return;
+    for (k = 0; k < 12; k++) {
+        unsigned best = 0, bi = 0, j;
+        for (i = 0; i < (1u << DS_N); i++) {
+            for (j = 0; j < ntop && top[j] != i; j++) {}
+            if (j == ntop && ds_hist[i] > best) { best = ds_hist[i]; bi = i; }
+        }
+        if (best == 0) break;
+        top[ntop++] = bi;
+    }
+    fprintf(stderr, "[DRAWSEP] %u frames, %.0f draws/frame; changed since the previous draw:", ds_frames,
+            (double) ds_draws / ds_frames);
+    for (k = 0; k < ntop; k++) {
+        fprintf(stderr, " |");
+        if (top[k] == 0) fprintf(stderr, " nothing");
+        for (i = 0; i < DS_N; i++) if (top[k] & (1u << i)) fprintf(stderr, " %s", ds_names[i]);
+        fprintf(stderr, " %.0f", (double) ds_hist[top[k]] / ds_frames);
+    }
+    fprintf(stderr, "\n[DRAWSEP] by site, per frame (after an unchanged state / after matrices only):");
+    for (k = 0; k < 32 && ds_site[k].line != 0; k++) {
+        fprintf(stderr, " line %d: %.0f (%.0f / %.0f)", ds_site[k].line, (double) ds_site[k].all / ds_frames,
+                (double) ds_site[k].same / ds_frames, (double) ds_site[k].ubo_only / ds_frames);
+    }
+    fprintf(stderr, "\n[DRAWSEP] framebuffer traffic per frame:");
+    for (k = 0; k < 32 && ds_fbo[k].fn != NULL; k++) {
+        fprintf(stderr, " %s:%d %.1f", ds_fbo[k].fn, ds_fbo[k].line, (double) ds_fbo[k].n / ds_frames);
+    }
+    memset(ds_fbo, 0, sizeof ds_fbo);
+    fprintf(stderr, "\n[DRAWSEP] unchanged-state draws by last bump, per frame:");
+    for (k = 0; k < 32 && ds_bump[k].bump != NULL; k++) {
+        fprintf(stderr, " %s %.0f", ds_bump[k].bump, (double) ds_bump[k].n / ds_frames);
+    }
+    fprintf(stderr, "\n");
+    memset(ds_bump, 0, sizeof ds_bump);
+    memset(ds_site, 0, sizeof ds_site);
+    memset(ds_hist, 0, sizeof ds_hist);
+    ds_draws = ds_frames = 0;
+    (void) ds_nodraw;
+}
+void pc_gllog(const char* fn, int line)
+{
+    if (pc_drawsep_on) { ds_note(fn, line); return; }
+    fprintf((FILE*) pc_gllog_fp, "%s %d\n", fn, line);
+}
 __attribute__((constructor)) static void pc_gllog_init(void)
 {
     const char* p = getenv("MELEE_GLLOG");
@@ -663,6 +794,7 @@ int pc_glq_want_resume(void) { return atomic_load(&q_want_resume); }
 void pc_glq_resume_from_game(void) { pc_glq_resume(); }
 void pc_glq_swap(void* win)
 {
+    ds_frame();
     extern int pc_gxq_active;
     /* With the GX queue on this runs on the bridge thread, which never held
      * the context; the game thread resumes instead. */
@@ -937,6 +1069,11 @@ static int q_event_watch(void* user, SDL_Event* e)
 static int q_owned(void* p) { (void) p; return atomic_load(&q_owns); }
 void pc_glq_maybe_start(void* win, void* ctx)
 {
+    /* After the platform's environment is in (Android reads melee.env late). */
+    if (!pc_drawsep_on && pc_gllog_fp == NULL && getenv("MELEE_DRAWSEP") != NULL) {
+        pc_drawsep_on = 1;
+        pc_gllog_fp = (void*) 1;
+    }
     static int tried;
     const char* e;
     if (tried) return;
