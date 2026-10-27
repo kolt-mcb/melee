@@ -2669,6 +2669,17 @@ static void pc_batch_flush(void)
             }
         }
         if (ok && n > 0) {
+            /* The expansion above is a triangle list whatever the primitives
+             * were, so it is drawn as one. g_batch_mode is the last
+             * primitive's mode: drawn as GL_TRIANGLE_STRIP, a list's
+             * indices read as a strip add triangles bridging its separate
+             * primitives -- Onett's utility pole came out split, with a
+             * wedge of a house's texture beside it, once quads joined a
+             * batch a strip had started (golden match_move 315). A batch of
+             * nothing but strips drew its triangles plus degenerate and
+             * duplicate ones, which is why it passed for so long. Points
+             * and lines keep their own mode: their batches never mix. */
+            const GLenum dmode = pc_tri_class(g_batch_mode) ? GL_TRIANGLES : g_batch_mode;
 #if defined(__EMSCRIPTEN__)
             /* One draw for the batch where WEBGL_multi_draw was one call but
              * a draw per primitive behind it: ANGLE's D3D11 and Metal
@@ -2681,12 +2692,12 @@ static void pc_batch_flush(void)
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr) (n * sizeof(u16)), g_istage,
                          GL_STREAM_DRAW);
             pc_gl_crumb_draw();
-            glDrawElements(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT, (const void*) 0);
+            glDrawElements(dmode, (GLsizei) n, GL_UNSIGNED_SHORT, (const void*) 0);
 #else
             GLintptr ioff = pc_vbo_stream_raw(g_istage, (GLsizeiptr) (n * sizeof(u16)));
             pc_gl_crumb_draw();
             PC_VBO_COMMIT();
-            glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei) n, GL_UNSIGNED_SHORT,
+            glDrawElementsBaseVertex(dmode, (GLsizei) n, GL_UNSIGNED_SHORT,
                                      (const void*) ioff, base);
 #endif
             pc_gl_crumb_after();
