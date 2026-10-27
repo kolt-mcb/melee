@@ -9886,11 +9886,101 @@ static GLuint g_ires_color, g_ires_depth;
  * hardware scales a smaller surface for free -- window.c), that is used and
  * the scene framebuffer below stays off: no extra target, clear or blit. */
 f32 pc_ires_want(void);
+static int pc_gpu_is_mali_g31(void)
+{
+    static int is = -1;
+    if (is < 0) {
+        const char* r = (const char*) glGetString(GL_RENDERER);
+        if (r == NULL) return 0;
+        is = strstr(r, "Mali-G31") != NULL;
+    }
+    return is;
+}
+/* Whether the internal resolution goes through the scene framebuffer below
+ * even where window.c could scale the window surface instead. The Chromecast's
+ * display plane cannot scale: a smaller surface is composited by SurfaceFlinger
+ * on the GPU (CLIENT composition), which cost more than our own blit -- 840
+ * lines ran at 40 fps scaled by the display, 60 through the framebuffer.
+ * MELEE_IRES_FBO=1 forces it anywhere. */
+int pc_ires_offscreen(void)
+{
+    return getenv("MELEE_IRES_FBO") != NULL || pc_gpu_is_mali_g31();
+}
+/* Adaptive internal resolution on the Mali-G31: the 1.75x default (840
+ * lines) while the frame holds 60, 1.5x (720) while it does not. The G31
+ * is fill-bound at 840 lines on the busier scenes -- Pokemon Stadium with
+ * items ran at 40 fps with every CPU thread half idle, a four-player match
+ * at 39 -- and holds 60 on the lighter ones (Battlefield 1v1), so neither
+ * size is right everywhere. Judged on the present interval: a window of
+ * 120 presents averaging over 17.5 ms (under ~57 fps), twice in a row,
+ * drops to 1.5x; after
+ * 15 s there, 1.75x is tried again, and a drop within its first window
+ * doubles the wait (2 minutes at most). An interval over 100 ms is a load
+ * or a hitch: left out of the average, and taken as a scene change that
+ * resets the wait. (A count of frames over 18 ms was tried first and
+ * dropped Battlefield at 59 fps: a quarter of its frames doubled on the
+ * vsync.) pc_ires_ensure, at the end of every present, resizes the scene
+ * framebuffer when this moves. Off when MELEE_INTERNAL_RES was set by
+ * hand, or MELEE_IRES_ADAPT=0. */
+static int g_ires_set_by_env;
+static f32 pc_ires_adapt(f32 k)
+{
+    enum { WIN = 120 };
+    const double SLOW_NS = 17.5e6, HITCH_NS = 100e6;
+    static int on = -1, low, n, trial, slow_wins;
+    static double sum_ns, retry_s = 15.0;
+    static struct timespec last, since;
+    struct timespec t;
+    double dt, held;
+    if (on < 0) { const char* e = getenv("MELEE_IRES_ADAPT"); on = !(e && e[0] == '0'); }
+    if (!on || g_ires_set_by_env || k <= 1.5f || !pc_gpu_is_mali_g31()) return k;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    if (since.tv_sec == 0) since = t;
+    if (last.tv_sec != 0) {
+        dt = (t.tv_sec - last.tv_sec) * 1e9 + (t.tv_nsec - last.tv_nsec);
+        if (dt < HITCH_NS) {
+            n++;
+            sum_ns += dt;
+        } else {
+            retry_s = 15.0;
+            trial = 0;
+            if (low) since = t;
+            n = 0; sum_ns = 0.0;
+        }
+    }
+    last = t;
+    if (n >= WIN) {
+        double mean = sum_ns / n;
+        /* Two slow windows in a row: one is jitter (Battlefield at 59 fps
+         * had isolated 17.6 ms windows). A trial is a probe: one is enough. */
+        if (!low && mean > SLOW_NS && (trial || slow_wins > 0)) {
+            low = 1;
+            since = t;
+            if (trial) retry_s = retry_s < 120.0 ? retry_s * 2.0 : 120.0;
+            fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx: 1.50x; retry in %.0f s\n",
+                    mean / 1e6, (double) k, retry_s);
+        } else if (!low && trial) {
+            trial = 0;
+            retry_s = 15.0; /* the trial held */
+        }
+        slow_wins = (!low && mean > SLOW_NS) ? slow_wins + 1 : 0;
+        n = 0; sum_ns = 0.0;
+    }
+    held = (t.tv_sec - since.tv_sec) * 1e9 + (t.tv_nsec - since.tv_nsec);
+    if (low && held > retry_s * 1e9) {
+        low = 0;
+        trial = 1;
+        since = t;
+        n = 0; sum_ns = 0.0;
+        fprintf(stderr, "[IRES] trying %.2fx again\n", (double) k);
+    }
+    return low ? 1.5f : k;
+}
 static f32 pc_ires_scale(void)
 {
     extern int window_surface_scaled(void);
     if (window_surface_scaled()) return 0.0f;
-    return pc_ires_want();
+    return pc_ires_adapt(pc_ires_want());
 }
 f32 pc_ires_want(void)
 {
@@ -9899,11 +9989,14 @@ f32 pc_ires_want(void)
         const char* e = getenv("MELEE_INTERNAL_RES");
         if (e != NULL) {
             k = (f32) atof(e);
+            g_ires_set_by_env = 1;
         } else {
             /* Default: native resolution everywhere but on a GPU measured to be
-             * fill-bound at it. */
+             * fill-bound at it. The Mali-G31 (Chromecast with Google TV) takes
+             * ~24 ms a frame at 1080p; 1.75x (840 lines) holds 60, 2x does not. */
             const char* r = (const char*) glGetString(GL_RENDERER);
-            k = (r != NULL && strstr(r, "PowerVR Rogue GE8") != NULL) ? 1.5f : 0.0f;
+            k = (r != NULL && strstr(r, "PowerVR Rogue GE8") != NULL) ? 1.5f
+              : pc_gpu_is_mali_g31() ? 1.75f : 0.0f;
         }
         if (k < 0.0f || k > 8.0f) k = 0.0f;
         if (k > 0.0f) fprintf(stderr, "[IRES] internal resolution %.2fx the GameCube framebuffer\n", (double) k);

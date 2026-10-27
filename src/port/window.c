@@ -550,7 +550,8 @@ void window_poll_events(void)
  * frame on the MT6765 tablet). The buffers keep the panel's aspect, at the
  * internal height (720 for 1.5x 640x480). SDL sets the geometry back to the
  * native size whenever it creates the EGL surface -- at start and on resume
- * -- so it is applied after each. MELEE_IRES_FBO=1 keeps the offscreen path. */
+ * -- so it is applied after each. pc_ires_offscreen() keeps the offscreen
+ * path (MELEE_IRES_FBO=1, or a display plane that cannot scale). */
 static int g_surf_w, g_surf_h;
 int window_surface_scaled(void) { return g_surf_w > 0; }
 #if defined(__ANDROID__)
@@ -601,7 +602,8 @@ void window_apply_surface_scale(void)
     SDL_SysWMinfo info;
     int w = 0, h = 0, th;
     float k;
-    if (getenv("MELEE_IRES_FBO") != NULL || g_sdl_window == NULL) return;
+    extern int pc_ires_offscreen(void);
+    if (g_sdl_window == NULL || pc_ires_offscreen()) return;
     /* Watch from the first call: the window can start small (below the
      * cap) and only grow to the panel once the app goes fullscreen. */
     if (!watching) {
