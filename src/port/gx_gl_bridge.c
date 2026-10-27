@@ -856,6 +856,29 @@ static int g_dbg_vert_count = 0;
  * their per-vertex PNMTX (skinning); upload then uses identity as the
  * position matrix. */
 static int g_batch_pretransformed = 0;
+/* The pending vertices were pretransformed under the current position
+ * matrix rather than per-vertex matrix indices (bridge_add_vertex,
+ * dl_replay_bulk); cleared with g_batch_pretransformed. A rigid primitive
+ * so transformed joins the open batch across the game's matrix loads, as
+ * a skinned one does: ~70 draws a frame in a four-player match on the
+ * Chromecast followed the previous draw with only the matrices changed.
+ * MELEE_PRETRANS=0 turns it off. */
+static int g_batch_pretrans_rigid = 0;
+/* Bit 1: immediate-mode primitives (bridge_add_vertex); bit 2: replayed
+ * lists (dl_replay_bulk). MELEE_PRETRANS=0|imm|bulk|all narrows it for an
+ * A/B. (A pretransformed fade lost its widescreen exemption at first --
+ * pc_draw_fills_frame.) */
+static int pc_pretrans_mode(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char* e = getenv("MELEE_PRETRANS");
+        on = e == NULL ? 3 : e[0] == '0' ? 0 : !strcmp(e, "imm") ? 1 : !strcmp(e, "bulk") ? 2 : 3;
+    }
+    return on;
+}
+static int pc_pretrans_on(void) { return pc_pretrans_mode() != 0; }
+static int pc_pretrans_texgen_ok(void);
 /* The position matrix the last 3D draw was transformed with (identity for
  * a batch already transformed on the CPU). Lighting must use this same
  * matrix: using g_state.model_matrix for a pretransformed batch applied the
@@ -6917,7 +6940,7 @@ void gx_frame_begin(void)
       if(_dd && g_state.frame_count<=23) s_pc_draws=0; }
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
-    g_batch_pretransformed = 0;
+    g_batch_pretransformed = 0; g_batch_pretrans_rigid = 0;
     g_state.num_tev_stages = 0;  /* Reset — TEV stage count is tracked automatically */
     g_active_tex_count = 0;
     memset(g_active_tex_slots, 0, sizeof(g_active_tex_slots));
@@ -6992,6 +7015,28 @@ static void apply_texgen_mtx(u32 c);
  * nothing in staging; a matrix-only change re-stages the matrices and
  * leaves the TEV, fog and texture uniforms alone. */
 static u32 g_gen_mtx, g_gen_uni;
+/* Whether the current texgen state lets a rigid primitive be pretransformed:
+ * a coordinate generated from the position or normal through a texture
+ * matrix (a projection, a screen-space effect) expects them in model space,
+ * and a view-space vertex fed to it samples the wrong place -- Pokemon
+ * Stadium's screen-wide effect at frame 3500 vanished that way. Through a
+ * PN row the staging substitutes identity, which is exact. Cached on the
+ * uniform generation: the texgen setters all move it. */
+static int pc_pretrans_texgen_ok(void)
+{
+    static u32 s_gen = (u32) -1;
+    static int ok = 1;
+    if (s_gen != g_gen_uni) {
+        u32 c;
+        s_gen = g_gen_uni;
+        ok = 1;
+        for (c = 0; c < 8; c++) {
+            u32 id = g_state.tex_gen_mat_id[c];
+            if (g_state.tex_gen_enabled[c] && g_state.tex_gen_src[c] <= 3 && id >= 30 && id != 60) ok = 0;
+        }
+    }
+    return ok;
+}
 /* Texture and post-transform matrix loads (GXLoadTexMtxImm), and a position
  * matrix written past the PN rows: what the texture-coordinate block of the
  * staging reads besides the texgen settings (g_gen_uni) and, for a texgen
@@ -8318,12 +8363,18 @@ static int pc_draw_fills_frame(void)
     int persp = g_proj_type == 0; /* GX_PERSPECTIVE */
     u32 i;
     if (g_gpu_entry != NULL) return dl_gpu_fills_frame();
-    if (g_vp_squeeze == 1.0f || g_state.vert_count < 3 ||
-        g_state.vert_count > 16 || g_batch_pretransformed)
+    /* Pretransformed vertices are in view space already: the position matrix
+     * is identity for them, as the staging has it. Returning 0 for them was
+     * right while only skinned meshes were pretransformed; a rigid fade
+     * pretransformed under PNMTX0 (g_batch_pretrans_rigid) then lost its
+     * exemption and was squeezed to the 4:3 frame. */
+    static f32 ident[3][4] = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } };
+    if (g_vp_squeeze == 1.0f || g_state.vert_count < 3 || g_state.vert_count > 16)
     {
         return 0;
     }
-    m = g_state.mtx3d_active
+    m = g_batch_pretransformed ? ident
+      : g_state.mtx3d_active
             ? g_state.mtx_array[g_state.current_mtx_id < 28 ? g_state.current_mtx_id : 0]
             : g_state.mv_matrix;
     for (i = 0; i < g_state.vert_count; i++) {
@@ -8512,6 +8563,32 @@ static void bridge_upload_and_draw(void)
     u16 count = g_gpu_entry != NULL ? 1 : g_state.vert_count;
     if (count == 0) return;
     pc_fb_apply();
+    /* PC diag: MELEE_PT_LOG=<frame> -- every draw of that frame, with its
+     * clip-space extents under the matrices the staging will use, so a run
+     * with and without the pretransform can be compared draw by draw. */
+    {
+        static int from = -2;
+        if (from == -2) { const char* e = getenv("MELEE_PT_LOG"); from = e ? atoi(e) : -1; }
+        if (from >= 0 && g_gpu_entry == NULL && (int) g_state.frame_count == from) {
+            f32 mn[4] = { 1e30f, 1e30f, 1e30f, 1e30f }, mx[4] = { -1e30f, -1e30f, -1e30f, -1e30f };
+            u32 i; int r, c, k;
+            f32 m[4][4];
+            for (r = 0; r < 4; r++) for (c = 0; c < 4; c++) m[r][c] = (r == c) ? 1.0f : 0.0f;
+            if (g_state.mtx3d_active && !g_batch_pretransformed && g_state.current_mtx_id < 28)
+                for (r = 0; r < 3; r++) for (c = 0; c < 4; c++) m[r][c] = g_state.mtx_array[g_state.current_mtx_id][r][c];
+            for (i = 0; i < count; i++) {
+                f32 v[4], p[4];
+                for (r = 0; r < 3; r++) v[r] = m[r][0]*g_state.verts[i].pos[0] + m[r][1]*g_state.verts[i].pos[1] + m[r][2]*g_state.verts[i].pos[2] + m[r][3];
+                v[3] = 1.0f;
+                for (r = 0; r < 4; r++) { p[r] = 0; for (k = 0; k < 4; k++) p[r] += g_state.proj_matrix[r][k] * v[k]; }
+                for (r = 0; r < 4; r++) { if (p[r] < mn[r]) mn[r] = p[r]; if (p[r] > mx[r]) mx[r] = p[r]; }
+            }
+            fprintf(stderr, "[PTLOG] prim 0x%x n %u mtx %u 3d %d pre %d clip x[%.2f,%.2f] y[%.2f,%.2f] z[%.2f,%.2f] w[%.2f,%.2f] a=%.2f blend %d tev %u texen %d\n",
+                    g_state.prim_type, (unsigned) count, g_state.current_mtx_id, (int) g_state.mtx3d_active, g_batch_pretransformed,
+                    mn[0], mx[0], mn[1], mx[1], mn[2], mx[2], mn[3], mx[3], (double) g_state.verts[0].col[3],
+                    (int) g_state.blend_enabled, g_state.num_tev_stages, (int) g_state.tex0_enabled);
+        }
+    }
     { static int _n=0; if(ENV_FLAG("MELEE_ZTRACE") && _n<30){_n++;
         fprintf(stderr,"[FLUSH] count=%u ztex_op=%d frame=%u prim=0x%X\n",(unsigned)count,(int)g_state.ztex_op,(unsigned)g_state.frame_count,(unsigned)g_state.prim_type); } }
 
@@ -8604,7 +8681,7 @@ static void bridge_upload_and_draw(void)
             pc_stat_draws++;
             pc_stat_verts += (unsigned) n_join;
             g_state.vert_count = 0;
-            g_batch_pretransformed = 0;
+            g_batch_pretransformed = 0; g_batch_pretrans_rigid = 0;
             return;
         }
         /* Staging is full: fall through, which flushes and starts again. */
@@ -8776,7 +8853,7 @@ static void bridge_upload_and_draw(void)
          * already on the GPU. */
         dl_gpu_emit();
         g_state.vert_count = 0;
-        g_batch_pretransformed = 0;
+        g_batch_pretransformed = 0; g_batch_pretrans_rigid = 0;
         return;
     }
     /* Determine GL primitive type */
@@ -9229,7 +9306,7 @@ static void bridge_upload_and_draw(void)
     
     g_state.in_primitive = FALSE;
     g_state.vert_count = 0;
-    g_batch_pretransformed = 0;
+    g_batch_pretransformed = 0; g_batch_pretrans_rigid = 0;
 }
 
 /* ============================================================
@@ -10932,6 +11009,17 @@ static void bridge_add_vertex(void)
                 }
             }
             g_batch_pretransformed = 1;
+        } else if (g_state.mtx3d_active && g_state.current_mtx_id < 28 && (pc_pretrans_mode() & 1) && pc_pretrans_texgen_ok()) {
+            /* A rigid vertex under the current position matrix, transformed
+             * here as a skinned one is (see g_batch_pretrans_rigid). The
+             * normal follows in GXNormal3f32, through the normal matrix. */
+            const f32 (*m)[4] = (const f32 (*)[4]) g_state.mtx_array[g_state.current_mtx_id];
+            f32 X = v->pos[0], Y = v->pos[1], Z = v->pos[2];
+            v->pos[0] = m[0][0]*X + m[0][1]*Y + m[0][2]*Z + m[0][3];
+            v->pos[1] = m[1][0]*X + m[1][1]*Y + m[1][2]*Z + m[1][3];
+            v->pos[2] = m[2][0]*X + m[2][1]*Y + m[2][2]*Z + m[2][3];
+            g_batch_pretransformed = 1;
+            g_batch_pretrans_rigid = 1;
         }
 
         /* PC port: Filter extreme vertex positions from garbage joint transforms.
@@ -11138,6 +11226,16 @@ void GXNormal3f32(f32 x, f32 y, f32 z)
         if (g_state.va_mode[0] != 0 && g_state.mtx3d_active && g_state.pos_enabled &&
             !pc_skin_rawnrm()) {
             pc_skin_nrm(g_state.last_mtx_idx, g_state.last_nrm, o);
+        } else if (g_batch_pretrans_rigid && g_state.mtx3d_active && g_state.pos_enabled) {
+            /* Pretransformed under the current matrix (bridge_add_vertex):
+             * the normal through its normal matrix, or the position matrix
+             * where none was loaded, as the shader would have. */
+            u32 mid = g_state.current_mtx_id;
+            const f32 (*nm)[4] = g_nrm_mtx_valid[mid] ? (const f32 (*)[4]) g_nrm_mtx_array[mid]
+                                                      : (const f32 (*)[4]) g_state.mtx_array[mid];
+            o[0] = nm[0][0]*x + nm[0][1]*y + nm[0][2]*z;
+            o[1] = nm[1][0]*x + nm[1][1]*y + nm[1][2]*z;
+            o[2] = nm[2][0]*x + nm[2][1]*y + nm[2][2]*z;
         }
     }
 }
@@ -12080,6 +12178,13 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     u32 n = dp->nverts, i;
     const int skin = g_state.va_mode[0] != 0 && g_state.mtx3d_active;
     const int rawnrm = pc_skin_rawnrm();
+    /* A rigid list under the current position matrix: transformed here as a
+     * skinned one is (g_batch_pretrans_rigid), normals through the normal
+     * matrix. */
+    const int rigid = !skin && g_state.mtx3d_active && g_state.current_mtx_id < 28 && (pc_pretrans_mode() & 2) && pc_pretrans_texgen_ok();
+    const f32 (*rm)[4] = (const f32 (*)[4]) g_state.mtx_array[rigid ? g_state.current_mtx_id : 0];
+    const f32 (*rnm)[4] = rigid && g_nrm_mtx_valid[g_state.current_mtx_id]
+                              ? (const f32 (*)[4]) g_nrm_mtx_array[g_state.current_mtx_id] : rm;
     const int mid_track = g_state.va_mode[0] != 0;
     const int pos_en = g_state.pos_enabled != 0, nrm_en = g_state.nrm_enabled != 0;
     const int clr_en = g_state.clr_enabled != 0, t0_en = g_state.tex0_enabled != 0;
@@ -12093,6 +12198,7 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
     int mid_min = g_state.batch_mid_min, mid_max = g_state.batch_mid_max;
     u32 skinned = g_state.batch_skinned;
     int pretrans = g_batch_pretransformed, bvalid = g_state.bounds_valid;
+    int rigid_any = g_batch_pretrans_rigid;
     Vertex* verts = g_state.verts;
     struct timespec r0, r1;
     int timed = pc_drawsec_on();
@@ -12134,6 +12240,7 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
         g_state.last_mtx_idx = lmid; g_state.bounds_count = bcount; g_state.bounds_valid = bvalid; \
         g_state.vert_count = vc; g_state.batch_mid_min = mid_min; g_state.batch_mid_max = mid_max; \
         g_state.batch_skinned = skinned; g_batch_pretransformed = pretrans; \
+        g_batch_pretrans_rigid = rigid_any; \
     } while (0)
     for (i = 0; i < n; i++) {
         const DlVert* s = &dv[i];
@@ -12145,6 +12252,7 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
             vc = g_state.vert_count;
             mid_min = g_state.batch_mid_min; mid_max = g_state.batch_mid_max;
             skinned = g_state.batch_skinned; pretrans = g_batch_pretransformed;
+            rigid_any = g_batch_pretrans_rigid;
             bcount = g_state.bounds_count; bvalid = g_state.bounds_valid;
             memcpy(bmin, g_state.bounds_min, sizeof(bmin));
             memcpy(bmax, g_state.bounds_max, sizeof(bmax));
@@ -12183,6 +12291,18 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
                     lnrm[2] = nm[2][0]*NX + nm[2][1]*NY + nm[2][2]*NZ;
                 }
                 pretrans = 1;
+            } else if (rigid) {
+                px = rm[0][0]*s->pos[0] + rm[0][1]*s->pos[1] + rm[0][2]*s->pos[2] + rm[0][3];
+                py = rm[1][0]*s->pos[0] + rm[1][1]*s->pos[1] + rm[1][2]*s->pos[2] + rm[1][3];
+                pz = rm[2][0]*s->pos[0] + rm[2][1]*s->pos[1] + rm[2][2]*s->pos[2] + rm[2][3];
+                if (nrm_en && !(s->flags & DLV_NRM)) {
+                    f32 NX = lnrm[0], NY = lnrm[1], NZ = lnrm[2];
+                    lnrm[0] = rnm[0][0]*NX + rnm[0][1]*NY + rnm[0][2]*NZ;
+                    lnrm[1] = rnm[1][0]*NX + rnm[1][1]*NY + rnm[1][2]*NZ;
+                    lnrm[2] = rnm[2][0]*NX + rnm[2][1]*NY + rnm[2][2]*NZ;
+                }
+                pretrans = 1;
+                rigid_any = 1;
             }
             mag = px*px + py*py + pz*pz;
             if (mag > 1e12f) {
@@ -12250,6 +12370,11 @@ static void dl_replay_bulk(const DlPrim* dp, const DlVert* dv)
         if (s->flags & DLV_NRM) {
             lnrm[0] = s->nrm[0]; lnrm[1] = s->nrm[1]; lnrm[2] = s->nrm[2];
             if (skin && pos_en && !rawnrm) pc_skin_nrm(s->mid, s->nrm, v->nrm);
+            else if (rigid && pos_en) {
+                v->nrm[0] = rnm[0][0]*s->nrm[0] + rnm[0][1]*s->nrm[1] + rnm[0][2]*s->nrm[2];
+                v->nrm[1] = rnm[1][0]*s->nrm[0] + rnm[1][1]*s->nrm[1] + rnm[1][2]*s->nrm[2];
+                v->nrm[2] = rnm[2][0]*s->nrm[0] + rnm[2][1]*s->nrm[1] + rnm[2][2]*s->nrm[2];
+            }
             else { v->nrm[0] = s->nrm[0]; v->nrm[1] = s->nrm[1]; v->nrm[2] = s->nrm[2]; }
         }
         if (s->flags & DLV_T0) {
