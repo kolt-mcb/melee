@@ -10044,15 +10044,20 @@ int pc_ires_offscreen(void)
 static int g_ires_set_by_env;
 static f32 pc_ires_adapt(f32 k)
 {
-    enum { WIN = 120 };
+    /* The rungs below the default: 1.5x (720 lines), then 1.25x (600). The
+     * second is for the scenes 720 still cannot hold -- a four-player match
+     * on Pokemon Stadium ran at 51 fps there with the GPU the limit. */
+    static const f32 rung[2] = { 1.5f, 1.25f };
+    enum { WIN = 120, NRUNG = 2 };
     const double SLOW_NS = 17.5e6, HITCH_NS = 100e6;
-    static int on = -1, low, n, trial, slow_wins;
-    static double sum_ns, retry_s = 15.0;
+    static int on = -1, low, n, trial, slow_wins, probe;
+    static double sum_ns, retry_s = 15.0, before_ns;
+    static struct timespec hold; /* no step down before this, after a step back up */
     static struct timespec last, since;
     struct timespec t;
     double dt, held;
     if (on < 0) { const char* e = getenv("MELEE_IRES_ADAPT"); on = !(e && e[0] == '0'); }
-    if (!on || g_ires_set_by_env || k <= 1.5f || !pc_gpu_is_mali_g31()) return k;
+    if (!on || g_ires_set_by_env || k <= rung[0] || !pc_gpu_is_mali_g31()) return k;
     clock_gettime(CLOCK_MONOTONIC, &t);
     if (since.tv_sec == 0) since = t;
     if (last.tv_sec != 0) {
@@ -10070,30 +10075,58 @@ static f32 pc_ires_adapt(f32 k)
     last = t;
     if (n >= WIN) {
         double mean = sum_ns / n;
+        if (probe > 0 && --probe == 0) {
+            /* The second window after a step down (the first has the
+             * resize in it): a scene the CPU limits gains nothing from
+             * fewer pixels -- the four-player match ran no faster at 600
+             * lines than at 720 -- and is not left softer for it. Less
+             * than 8% faster and still short of 60: step back up and hold
+             * there two minutes. */
+            if (mean > SLOW_NS && mean > before_ns * 0.92) {
+                low--;
+                since = t;
+                hold = t;
+                hold.tv_sec += 120;
+                retry_s = 120.0;
+                fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx, %.1f before: not the GPU; back to %.2fx\n",
+                        mean / 1e6, (double) rung[low], before_ns / 1e6, low == 0 ? (double) k : (double) rung[low - 1]);
+                slow_wins = 0;
+                n = 0; sum_ns = 0.0;
+                last = t;
+                return low == 0 ? k : rung[low - 1];
+            }
+        }
         /* Two slow windows in a row: one is jitter (Battlefield at 59 fps
          * had isolated 17.6 ms windows). A trial is a probe: one is enough. */
-        if (!low && mean > SLOW_NS && (trial || slow_wins > 0)) {
-            low = 1;
-            since = t;
+        if (low < NRUNG && mean > SLOW_NS && (trial || slow_wins > 0) &&
+            (t.tv_sec > hold.tv_sec || (t.tv_sec == hold.tv_sec && t.tv_nsec >= hold.tv_nsec))) {
             if (trial) retry_s = retry_s < 120.0 ? retry_s * 2.0 : 120.0;
-            fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx: 1.50x; retry in %.0f s\n",
-                    mean / 1e6, (double) k, retry_s);
-        } else if (!low && trial) {
+            low++;
+            trial = 0;
+            probe = 2;
+            slow_wins = 0; /* the next rung needs its own two slow windows */
+            before_ns = mean;
+            since = t;
+            fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx: %.2fx; retry in %.0f s\n",
+                    mean / 1e6, low == 1 ? (double) k : (double) rung[low - 2], (double) rung[low - 1], retry_s);
+        } else if (low > 0 && trial) {
             trial = 0;
             retry_s = 15.0; /* the trial held */
         }
-        slow_wins = (!low && mean > SLOW_NS) ? slow_wins + 1 : 0;
+        slow_wins = (low < NRUNG && mean > SLOW_NS && probe == 0) ? slow_wins + 1 : 0;
         n = 0; sum_ns = 0.0;
     }
     held = (t.tv_sec - since.tv_sec) * 1e9 + (t.tv_nsec - since.tv_nsec);
-    if (low && held > retry_s * 1e9) {
-        low = 0;
+    if (low > 0 && !trial && !probe && held > retry_s * 1e9) {
+        /* One rung up, as a trial: a slow window within it steps back down
+         * and doubles the wait. */
+        low--;
         trial = 1;
         since = t;
-        n = 0; sum_ns = 0.0;
-        fprintf(stderr, "[IRES] trying %.2fx again\n", (double) k);
+        n = sum_ns = 0;
+        fprintf(stderr, "[IRES] trying %.2fx again\n", low == 0 ? (double) k : (double) rung[low - 1]);
     }
-    return low ? 1.5f : k;
+    return low == 0 ? k : rung[low - 1];
 }
 static f32 pc_ires_scale(void)
 {
