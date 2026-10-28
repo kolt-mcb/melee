@@ -4893,8 +4893,12 @@ static int pc_shc_enabled(void)
 static void pc_shc_path(char* out, size_t n, u32 h)
 {
     /* two independent hashes of the key in the name; the key itself is
-     * still compared in full inside the file */
-    u32 h2 = 2166136261u;
+     * still compared in full inside the file. The driver-and-template hash
+     * seeds the second: named by the key alone, a run under a switch that
+     * reshapes the shaders replaced the ordinary build's binaries with its
+     * own, and the next ordinary run compiled its two thousand variants
+     * again (~8 minutes on the Chromecast). */
+    u32 h2 = pc_shc_fnv(&g_shc_drv, sizeof(g_shc_drv), 2166136261u);
     int i;
     for (i = 0; i < g_spec_n; i++) {
         GLint v = g_spec_canon[g_spec_slots[i]];
