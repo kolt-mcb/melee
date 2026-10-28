@@ -3867,7 +3867,16 @@ static UniEntry g_uni_tab[] = {
 #define UNI_TAB_N_MAX 256
 
 static int g_vloc_total;
-static u8 g_vloc_spec[VLOC_MAX];
+/* Per-slot bookkeeping the staging hit path reads, in one 32-byte record:
+ * whether the slot is a specialisation constant, the generation and meta
+ * word of the last staged value, and the value itself when it is 16 bytes
+ * or fewer (a scalar, a vec4 -- nearly every call). Spread over five
+ * arrays, a call touched five cache lines on the in-order Cortex-A53, and
+ * the loads were the cost of pc_stage_uniform: 13% of the bridge thread in
+ * a four-player match on the Chromecast. */
+typedef struct { u8 val[16]; u32 gen; u32 meta; u8 spec; u8 pad[7]; } VlocHot;
+static VlocHot g_vh[VLOC_MAX];
+#define g_vloc_spec_at(v) (g_vh[v].spec)
 static GLint g_spec_vals[VLOC_MAX];
 static int g_spec_dirty = 1;
 static u32 g_spec_gen;          /* bumped on every specialisation change */
@@ -3925,9 +3934,7 @@ static u16 g_last_len[VLOC_MAX];
 static u8 g_last_kind[VLOC_MAX];
 static u8 g_last_tr[VLOC_MAX];
 static u16 g_last_n[VLOC_MAX];
-static u32 g_last_gen[VLOC_MAX];
 /* bytes<<16 | kind<<8 | transpose<<7 | n, so the hit path reads one word. */
-static u32 g_last_meta[VLOC_MAX];
 static u16 g_set_list[VLOC_MAX];
 static int g_set_n;
 
@@ -4391,13 +4398,13 @@ static int g_stage_check;
 static void pc_stage_check(GLint vloc, int n, const void* data, unsigned bytes)
 {
     int bad = 0, e;
-    if (g_vloc_spec[vloc]) {
+    if (g_vh[vloc].spec) {
         const GLint* p = (const GLint*) data;
         int k;
-        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vloc_spec[vloc + k]; k++) {
+        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vh[vloc + k].spec; k++) {
             if (g_spec_vals[vloc + k] != p[k]) bad = 1;
         }
-    } else if (g_last_gen[vloc] == 0 || g_last_len[vloc] != bytes ||
+    } else if (g_vh[vloc].gen == 0 || g_last_len[vloc] != bytes ||
                memcmp(g_last[vloc], data, bytes) != 0) {
         bad = 1;
     }
@@ -4417,7 +4424,7 @@ static void pc_stage_check(GLint vloc, int n, const void* data, unsigned bytes)
                 }
                 fprintf(stderr, "[STAGECHECK] frame %u %s[%d] stale (%s) gen %u len %u/%u n %d: staged %.3f %.3f %.3f %.3f | state %.3f %.3f %.3f %.3f\n", g_state.frame_count,
                         ent->name, (int) (vloc - ent->base), ent->spec ? "spec" : "uniform",
-                        g_last_gen[vloc], g_last_len[vloc], bytes, n, a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
+                        g_vh[vloc].gen, g_last_len[vloc], bytes, n, a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
             }
             return;
         }
@@ -4487,18 +4494,18 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
             static u32 s_last;
             if (pc_frame_number - s_last >= 600) { s_last = pc_frame_number; pc_stagestat_report(); }
             g_ss_calls[vloc]++;
-            if (g_vloc_spec[vloc] ? g_spec_vals[vloc] == *(const GLint*) data
-                                  : (g_last_gen[vloc] != 0 && g_last_len[vloc] == bytes &&
+            if (g_vh[vloc].spec ? g_spec_vals[vloc] == *(const GLint*) data
+                                  : (g_vh[vloc].gen != 0 && g_last_len[vloc] == bytes &&
                                      memcmp(g_last[vloc], data, bytes) == 0)) {
                 g_ss_same[vloc]++;
             }
         }
     }
     if (g_stage_check) { pc_stage_check(vloc, n, data, bytes); return; }
-    if (g_vloc_spec[vloc]) {
+    if (g_vh[vloc].spec) {
         const GLint* p = (const GLint*) data;
         int k;
-        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vloc_spec[vloc + k]; k++) {
+        for (k = 0; k < n && vloc + k < VLOC_MAX && g_vh[vloc + k].spec; k++) {
             if (g_spec_vals[vloc + k] != p[k]) {
                 g_spec_vals[vloc + k] = p[k];
                 g_spec_dirty = 1;
@@ -4518,19 +4525,20 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
     {
         u32 meta = ((u32) bytes << 16) | ((u32) kind << 8) |
                    ((u32) (transpose & 1) << 7) | ((u32) n & 0x7F);
-        if (g_last_gen[vloc] != 0 && g_last_meta[vloc] == meta &&
-            (n & ~0x7F) == 0)
-        {
-            const u8* prev = g_last[vloc];
+        VlocHot* h = &g_vh[vloc];
+        if (h->gen != 0 && h->meta == meta && (n & ~0x7F) == 0) {
             if (bytes == 4) {
-                if (memcmp(prev, data, 4) == 0) return;
+                if (memcmp(h->val, data, 4) == 0) return;
             } else if (bytes == 16) {
-                if (memcmp(prev, data, 16) == 0) return;
-            } else if (memcmp(prev, data, bytes) == 0) {
+                if (memcmp(h->val, data, 16) == 0) return;
+            } else if (bytes <= 16) {
+                if (memcmp(h->val, data, bytes) == 0) return;
+            } else if (memcmp(g_last[vloc], data, bytes) == 0) {
                 return;
             }
         }
-        g_last_meta[vloc] = (n & ~0x7F) ? 0xFFFFFFFFu : meta;
+        h->meta = (n & ~0x7F) ? 0xFFFFFFFFu : meta;
+        if (bytes <= 16) memcpy(h->val, data, bytes);
     }
     /* A slot that lives in the uniform block has no glUniform location in
      * any program: the block image is all it needs. Keeping it off the set
@@ -4544,16 +4552,17 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
         }
         if (all) {
             memcpy(g_last[vloc], data, bytes);
+            if (bytes <= 16) memcpy(g_vh[vloc].val, data, bytes);
             g_last_len[vloc] = (u16) bytes;
             g_last_kind[vloc] = (u8) kind;
             g_last_n[vloc] = (u16) n;
             g_last_tr[vloc] = (u8) transpose;
-            g_last_gen[vloc]++;
+            g_vh[vloc].gen++;
             pc_ubo_write(vloc, kind, n, transpose, data);
             return;
         }
     }
-    if (g_last_gen[vloc] == 0) {
+    if (g_vh[vloc].gen == 0) {
         g_set_list[g_set_n++] = (u16) vloc;
     }
     memcpy(g_last[vloc], data, bytes);
@@ -4561,7 +4570,7 @@ static void pc_stage_uniform(GLint vloc, int kind, int n, int transpose,
     g_last_kind[vloc] = (u8) kind;
     g_last_n[vloc] = (u16) n;
     g_last_tr[vloc] = (u8) transpose;
-    g_last_gen[vloc]++;
+    g_vh[vloc].gen++;
     g_stage_serial++;
     pc_ubo_write(vloc, kind, n, transpose, data);
 }
@@ -6179,8 +6188,8 @@ static void pc_prog_flush(void)
         int v = g_set_list[i];
         GLint gl;
         const void* d;
-        if (pr->gen[v] == g_last_gen[v]) continue;
-        pr->gen[v] = g_last_gen[v];
+        if (pr->gen[v] == g_vh[v].gen) continue;
+        pr->gen[v] = g_vh[v].gen;
         gl = pr->glloc[v];
         if (gl < 0) continue;
         d = g_last[v];
@@ -6216,7 +6225,7 @@ static void pc_vloc_init(void)
         ent->base = g_vloc_total;
         *ent->var = ent->base;
         for (k = 0; k < ent->count; k++) {
-            g_vloc_spec[ent->base + k] = (u8) ent->spec;
+            g_vh[ent->base + k].spec = (u8) ent->spec;
             if (ent->spec) g_spec_slots[g_spec_n++] = ent->base + k;
         }
         g_vloc_total += ent->count;
@@ -7046,6 +7055,9 @@ static int pc_pretrans_texgen_ok(void)
  * staging reads besides the texgen settings (g_gen_uni) and, for a texgen
  * through a PN row, the position matrices (g_gen_mtx). */
 static u32 g_gen_tcmtx;
+/* GXSetProjection: what u_proj follows. It was re-staged with the matrix
+ * group, ~550 times a frame for a value that changes a few times. */
+static u32 g_gen_proj;
 /* The texgen settings: GXSetTexCoordGen2 is their only writer. */
 static u32 g_gen_tg;
 static u32 g_desc_sig_gen;
@@ -7840,7 +7852,11 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
     /* Upload projection matrix (as uniform)
      * g_state.proj_matrix is row-major C array. GL_TRUE transposes to column-major. */
     if (g_proj_loc >= 0) {
-        UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+        static u32 s_proj_gen = (u32) -1;
+        if (s_proj_gen != g_gen_proj || g_stage_check) {
+            s_proj_gen = g_gen_proj;
+            UPMTX4(g_proj_loc, 1, GL_TRUE, &g_state.proj_matrix[0][0]);
+        }
     }
     /* The matrix palette, for a display list skinned on the GPU: the same
      * PNMTX rows (and normal matrices, or PNMTX where none was loaded) the
@@ -8133,8 +8149,13 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
     /* UV scale — identity by default (games send normalized [0,1] UVs).
      * The overlay code can override this when rendering pixel-space geometry. */
     if (g_uv_scale_loc >= 0) {
-        GLfloat uv_scale[2] = {1.0f, 1.0f};
-        UP2FV(g_uv_scale_loc, 1, uv_scale);
+        /* A constant; staged once (and on the self-check's compare pass). */
+        static int s_uv_once;
+        if (!s_uv_once || g_stage_check) {
+            GLfloat uv_scale[2] = {1.0f, 1.0f};
+            s_uv_once = 1;
+            UP2FV(g_uv_scale_loc, 1, uv_scale);
+        }
     }
     
     /* The texture-coordinate block -- texture matrices, post-transform
@@ -10226,8 +10247,13 @@ void pc_ires_present(void)
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); /* the window */
     glBindFramebuffer(GL_READ_FRAMEBUFFER, pc_ires_fbo);
     gls_viewport(0, 0, ww, wh); /* through the mirror, which others read */
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    /* The bars, when there are any; a picture that covers the window (a
+     * widescreen match on a 16:9 panel) leaves nothing to clear, and the
+     * clear was a pass over the whole window before the blit's own. */
+    if (dw < ww || dh < wh) {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
     glBlitFramebuffer(0, 0, pc_ires_w, pc_ires_h, dx, dy, dx + dw, dy + dh,
                       GL_COLOR_BUFFER_BIT, GL_LINEAR);
     pc_glq_default_fb = pc_ires_fbo;
@@ -10715,6 +10741,7 @@ void GXSetCurrentMtx(u32 id)
 void GXSetProjection(f32 mtx[4][4], u32 type)
 {
     gx_flush_pending_gl();
+    g_gen_proj++;
     { static int n = 0;
       if (ENV_FLAG("MELEE_VPTRACE") && n < 3 &&
           mtx[1][1] > 3.0f && mtx[1][1] < 4.0f) { n++;
@@ -11598,7 +11625,33 @@ void GXSetTevOp(u32 stage, u32 mode)
 /* Whether any active TEV stage names register `idx` (1-3: TEVREG0-2) as a
  * colour or alpha input or output. PREV (0) is always read: it is the
  * stage chain's result. */
+static u32 pc_tevreg_read_mask(void)
+{
+    /* Which of TEVREG0-2 the active stages read, as bits 1-3; the stages are
+     * set through calls that move g_gen_uni, so the mask holds between. */
+    static u32 s_gen = (u32) -1, s_mask;
+    u32 st, k, n = g_state.num_tev_stages, mask = 0;
+    if (s_gen == g_gen_uni) return s_mask;
+    if (n > 8) n = 8;
+    for (st = 0; st < n; st++) {
+        const TevStage* t = &g_state.tev_stages[st];
+        mask |= 1u << (g_tev_color_out_reg[st] & 3);
+        mask |= 1u << (g_tev_alpha_out_reg[st] & 3);
+        for (k = 0; k < 4; k++) {
+            if (t->color_inputs[k] < 8) mask |= 1u << (t->color_inputs[k] >> 1);
+            if (t->alpha_inputs[k] < 4) mask |= 1u << t->alpha_inputs[k];
+        }
+    }
+    s_gen = g_gen_uni;
+    s_mask = mask;
+    return mask;
+}
 static int pc_tevreg_read(u32 idx)
+{
+    if (idx == 0) return 1;
+    return (pc_tevreg_read_mask() >> idx) & 1;
+}
+static int pc_tevreg_read_slow(u32 idx)
 {
     u32 st, k, n = g_state.num_tev_stages;
     if (idx == 0) return 1;
@@ -11906,6 +11959,7 @@ typedef struct DlEntry {
     u8 gpu_slot_min, gpu_slot_max;
     s32 gpu_vbase;
     u32 gpu_ioff, gpu_icount;
+    u32 hashed_frame;         /* frame the bytes were last hashed (dl_cache_find_recent) */
     /* Model-space bounds of every position, for dl_offscreen. cull_state 0
      * not computed yet, 1 bounds valid, 2 never cull (lines or points,
      * which have a width; a position the draw path would clamp). */
@@ -12036,6 +12090,17 @@ static void dl_cache_evict(u32 frame)
         }
     }
 }
+/* An entry for this address and descriptor whose bytes were hashed within
+ * the last `every` frames, or NULL. */
+static DlEntry* dl_cache_find_recent(const void* list, u32 nbytes, u32 sig, u32 frame, u32 every)
+{
+    DlEntry* e = g_dl_map[dl_key_hash(list, nbytes)];
+    for (; e != NULL; e = e->next) {
+        if (e->list != list || e->nbytes != nbytes || e->sig != sig) continue;
+        return frame - e->hashed_frame < every ? e : NULL;
+    }
+    return NULL;
+}
 static DlEntry* dl_cache_find(const void* list, u32 nbytes, u32 sig, u32 chash)
 {
     DlEntry* e = g_dl_map[dl_key_hash(list, nbytes)];
@@ -12057,6 +12122,7 @@ static DlEntry* dl_cache_new(const void* list, u32 nbytes, u32 sig, u32 chash)
     u32 b;
     if (e == NULL) return NULL;
     e->list = list; e->nbytes = nbytes; e->sig = sig; e->chash = chash;
+    e->hashed_frame = g_state.frame_count;
     b = dl_key_hash(list, nbytes);
     e->next = g_dl_map[b];
     g_dl_map[b] = e;
@@ -13234,8 +13300,21 @@ void GXCallDisplayList(void* list, u32 nbytes)
 
     if (pc_dlcache_on() && pos_cnt == 3 && vsize != 0) {
         u32 sig = dl_desc_sig(pos_cnt, vsize);
-        u32 ch = dl_content_hash(ptr, nbytes);
-        DlEntry* e = dl_cache_find(list, nbytes, sig, ch);
+        u32 ch;
+        DlEntry* e;
+        /* The content hash guards against a list rewritten in place, which
+         * a match does not do (650 hits, 2 misses a frame); hashing every
+         * list every frame was ~0.9 ms of the Chromecast's bridge thread.
+         * A list hashed within the last few frames is taken on its address
+         * and descriptor; MELEE_DL_HASH_EVERY=1 hashes every call. */
+        static int every = -1;
+        if (every < 0) { const char* x = getenv("MELEE_DL_HASH_EVERY"); every = x ? atoi(x) : 4; if (every < 1) every = 1; }
+        e = every > 1 ? dl_cache_find_recent(list, nbytes, sig, g_state.frame_count, (u32) every) : NULL;
+        if (e == NULL) {
+            ch = dl_content_hash(ptr, nbytes);
+            e = dl_cache_find(list, nbytes, sig, ch);
+            if (e != NULL) e->hashed_frame = g_state.frame_count;
+        }
         if (e == NULL) {
             dl_cache_evict(g_state.frame_count);
             e = dl_cache_new(list, nbytes, sig, ch);
@@ -13723,8 +13802,6 @@ static void apply_texgen_uniforms(void)
      * 1/2 for POS/NRM, so no texgen ever ran. */
     {
         u32 c;
-        static int oldmtx = -1;
-        if (oldmtx < 0) oldmtx = getenv("MELEE_TEXGEN_OLDMTX") != NULL;
         for (c = 0; c < PC_TEXN; c++) {
             int en = g_state.tex_gen_enabled[c] ? 1 : 0;
             if (g_texgen_mode_loc >= 0) UP1I(g_texgen_mode_loc + (GLint) c, en ? (int) g_state.tex_gen_mode[c] : -1);
