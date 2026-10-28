@@ -10223,6 +10223,8 @@ static void pc_ires_ensure(void)
 void pc_ires_present(void)
 {
     extern GLuint pc_glq_default_fb;
+    extern void pc_gxq_frame_stat(void);
+    pc_gxq_frame_stat();
     void window_get_size(int* width, int* height);
     int ww = 0, wh = 0, dw, dh, dx, dy;
     f32 sx, sy, sc;

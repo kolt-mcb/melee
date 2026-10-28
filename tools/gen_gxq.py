@@ -85,8 +85,19 @@ PASS = {
     ("GXInitLightDistAttn", "lt_obj_raw"), ("GXInitLightPos", "lt_obj_raw"),
     ("GXInitLightSpot", "lt_obj_raw"),
 }
+# Nothing on the bridge side: never queued.
+DROP = {"GXPixModeSync"}
+# Setters the game thread filters against a shadow of what the bridge holds
+# (pc_gxq_filter.c): an identical repeat is not queued. The bridge's own
+# handler would have found nothing to do; this saves the queue round trip,
+# ~25,000 a frame in a four-player match on the Chromecast.
+FILTER = {"GXSetVtxDesc", "GXClearVtxDesc", "GXSetArray",
+          "GXLoadNrmMtxImm", "GXLoadTexMtxImm",
+          "GXSetTevOrder", "GXSetTevColorIn", "GXSetTevAlphaIn", "GXSetTevColorOp", "GXSetTevAlphaOp",
+          "GXSetTevKColorSel", "GXSetTevKAlphaSel", "GXSetTevSwapMode",
+          "GXSetNumChans", "GXSetNumTevStages", "GXSetTexCoordGen2"}
 # Run on the game thread before the call is queued.
-PRE = {"gx_frame_begin": "pc_gxq_pre_frame_begin(); pc_gxq_note_frame_begin_projection();",
+PRE = {"gx_frame_begin": "pc_gxq_pre_frame_begin(); pc_gxq_note_frame_begin_projection(); pc_gxq_filter_frame();",
        "GXSetProjection": "pc_gxq_note_projection(mtx, type);",
        "GXInitTexObj": "pc_texobj_stamp(texObj, image, width, height, fmt, s_clamp, t_clamp, mipmap);",
        "GXInitTexObjCI": "pc_texobj_stamp_ci(texObj, image, width, height, ci_fmt, s_wrap, t_wrap, mipmap, tlut_name);"}
@@ -155,6 +166,12 @@ def gen():
             g.append("%s pcgx_%s(%s) { %s%s(%s); }" % (ret, n, decl, "" if void else "return ", n, call))
             g.append("")
             continue
+        if n in DROP:
+            g.append("%s pcgx_%s(%s) { %s }" % (ret, n, decl, " ".join("(void) %s;" % v for _, v, _ in params)))
+            g.append("")
+            continue
+        if n in FILTER:
+            g.append("int pc_gxq_filter_%s(%s);" % (n, decl))
         sync = (not void and n not in ASYNC_RET) or n in SYNC or any((n, v) not in COPY and (n, v) not in PASS for _, v, _ in ptrs)
         st = "pcgxq_a_" + n
         g.append("typedef struct {%s%s } %s;" % ("".join(" " + field(t, v, d) for t, v, d in params),
@@ -167,6 +184,8 @@ def gen():
             g.append("    if (!pc_gxq_on_bridge_thread()) { %s }" % PRE[n])
         g.append("    if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { %s%s(%s); %s}" % (
             "" if void else "return ", n, call, "return; " if void else ""))
+        if n in FILTER:
+            g.append("    if (pc_gxq_filter_%s(%s)) return;" % (n, call))
         if sync:
             g.append("    {")
             g.append("        %s b_;" % st)

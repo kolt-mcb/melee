@@ -10,7 +10,8 @@ extern int pc_gxq_active;
 extern int pc_gxq_sync_all; /* MELEE_GXQ_SYNC_ALL: a diagnostic */
 /* MELEE_GXQ_SYNC_FNS=a,b,c: those wrappers synchronous (a bisection aid). */
 extern unsigned char pc_gxq_fn_sync_tab[256];
-static inline int pc_gxq_fn_sync(int i) { return pc_gxq_fn_sync_tab[i]; }
+extern int pc_gxq_last_fn; /* the wrapper about to push (MELEE_GXQ_STAT) */
+static inline int pc_gxq_fn_sync(int i) { pc_gxq_last_fn = i; return pc_gxq_fn_sync_tab[i]; }
 #if defined(__ANDROID__) && defined(__aarch64__)
 /* The bridge thread's thread pointer (TPIDR_EL0), set as it starts. Every GX
  * wrapper asks this, thousands of times a frame; an extern __thread in a
@@ -33,6 +34,7 @@ static inline size_t pc_gxq_pad(size_t n) { return (n + 15) & ~(size_t) 15; }
 
 /* Game thread, before a frame's gx_frame_begin is queued. */
 void pc_gxq_pre_frame_begin(void);
+void pc_gxq_filter_frame(void); /* pc_gxq_filter.c: the frame start drops the TEV shadows */
 /* Game thread: start the bridge thread (MELEE_GX_THREAD) if wanted. */
 void pc_gxq_maybe_start(void);
 /* Game thread: run fn on the bridge thread after everything queued so far --

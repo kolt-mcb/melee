@@ -39,11 +39,13 @@ void pcgx_GXCallDisplayList(void* list, u32 nbytes)
     }
 }
 
+int pc_gxq_filter_GXClearVtxDesc(void);
 typedef struct { } pcgxq_a_GXClearVtxDesc;
 static void pcgxq_x_GXClearVtxDesc(void* p_) { pcgxq_a_GXClearVtxDesc* a_ = (pcgxq_a_GXClearVtxDesc*) p_; GXClearVtxDesc(); (void) a_; }
 void pcgx_GXClearVtxDesc(void)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXClearVtxDesc(); return; }
+    if (pc_gxq_filter_GXClearVtxDesc()) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(2)) { pcgxq_a_GXClearVtxDesc b_; pc_gxq_call_sync(pcgxq_x_GXClearVtxDesc, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXClearVtxDesc, pc_gxq_pad(sizeof(pcgxq_a_GXClearVtxDesc)) + 0);
@@ -518,11 +520,13 @@ void pcgx_GXLoadLightObjImm(void * lt_obj_raw, u32 light_id)
     }
 }
 
+int pc_gxq_filter_GXLoadNrmMtxImm(f32 mtx[3][4], u32 id);
 typedef struct { f32 (*mtx)[4]; u32 id; } pcgxq_a_GXLoadNrmMtxImm;
 static void pcgxq_x_GXLoadNrmMtxImm(void* p_) { pcgxq_a_GXLoadNrmMtxImm* a_ = (pcgxq_a_GXLoadNrmMtxImm*) p_; GXLoadNrmMtxImm(a_->mtx, a_->id); (void) a_; }
 void pcgx_GXLoadNrmMtxImm(f32 mtx[3][4], u32 id)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXLoadNrmMtxImm(mtx, id); return; }
+    if (pc_gxq_filter_GXLoadNrmMtxImm(mtx, id)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(32)) { pcgxq_a_GXLoadNrmMtxImm b_; b_.mtx = mtx; b_.id = id; pc_gxq_call_sync(pcgxq_x_GXLoadNrmMtxImm, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXLoadNrmMtxImm, pc_gxq_pad(sizeof(pcgxq_a_GXLoadNrmMtxImm)) + pc_gxq_pad(mtx ? (size_t) (48) : 0));
@@ -552,11 +556,13 @@ void pcgx_GXLoadPosMtxImm(f32 mtx[3][4], u32 id)
     }
 }
 
+int pc_gxq_filter_GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type);
 typedef struct { f32 (*mtx)[4]; u32 id; u32 type; } pcgxq_a_GXLoadTexMtxImm;
 static void pcgxq_x_GXLoadTexMtxImm(void* p_) { pcgxq_a_GXLoadTexMtxImm* a_ = (pcgxq_a_GXLoadTexMtxImm*) p_; GXLoadTexMtxImm(a_->mtx, a_->id, a_->type); (void) a_; }
 void pcgx_GXLoadTexMtxImm(f32 mtx[][4], u32 id, u32 type)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXLoadTexMtxImm(mtx, id, type); return; }
+    if (pc_gxq_filter_GXLoadTexMtxImm(mtx, id, type)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(34)) { pcgxq_a_GXLoadTexMtxImm b_; b_.mtx = mtx; b_.id = id; b_.type = type; pc_gxq_call_sync(pcgxq_x_GXLoadTexMtxImm, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXLoadTexMtxImm, pc_gxq_pad(sizeof(pcgxq_a_GXLoadTexMtxImm)) + pc_gxq_pad(mtx ? (size_t) (48) : 0));
@@ -638,20 +644,7 @@ void pcgx_GXNormal3f32(f32 x, f32 y, f32 z)
     }
 }
 
-typedef struct { } pcgxq_a_GXPixModeSync;
-static void pcgxq_x_GXPixModeSync(void* p_) { pcgxq_a_GXPixModeSync* a_ = (pcgxq_a_GXPixModeSync*) p_; GXPixModeSync(); (void) a_; }
-void pcgx_GXPixModeSync(void)
-{
-    if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXPixModeSync(); return; }
-    if (pc_gxq_sync_all || pc_gxq_fn_sync(39)) { pcgxq_a_GXPixModeSync b_; pc_gxq_call_sync(pcgxq_x_GXPixModeSync, &b_); return; }
-    {
-        char* q_ = (char*) pc_gxq_push(pcgxq_x_GXPixModeSync, pc_gxq_pad(sizeof(pcgxq_a_GXPixModeSync)) + 0);
-        pcgxq_a_GXPixModeSync* a_ = (pcgxq_a_GXPixModeSync*) q_;
-        size_t o_ = pc_gxq_pad(sizeof(pcgxq_a_GXPixModeSync));
-        (void) o_;
-        pc_gxq_commit();
-    }
-}
+void pcgx_GXPixModeSync(void) {  }
 
 typedef struct { f32 x; f32 y; } pcgxq_a_GXPosition2f32;
 static void pcgxq_x_GXPosition2f32(void* p_) { pcgxq_a_GXPosition2f32* a_ = (pcgxq_a_GXPosition2f32*) p_; GXPosition2f32(a_->x, a_->y); (void) a_; }
@@ -743,11 +736,13 @@ void pcgx_GXSetAlphaUpdate(u32 enable)
     }
 }
 
+int pc_gxq_filter_GXSetArray(u32 attr, const void* base_ptr, u8 stride);
 typedef struct { u32 attr; const void* base_ptr; u8 stride; } pcgxq_a_GXSetArray;
 static void pcgxq_x_GXSetArray(void* p_) { pcgxq_a_GXSetArray* a_ = (pcgxq_a_GXSetArray*) p_; GXSetArray(a_->attr, a_->base_ptr, a_->stride); (void) a_; }
 void pcgx_GXSetArray(u32 attr, const void* base_ptr, u8 stride)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetArray(attr, base_ptr, stride); return; }
+    if (pc_gxq_filter_GXSetArray(attr, base_ptr, stride)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(46)) { pcgxq_a_GXSetArray b_; b_.attr = attr; b_.base_ptr = base_ptr; b_.stride = stride; pc_gxq_call_sync(pcgxq_x_GXSetArray, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetArray, pc_gxq_pad(sizeof(pcgxq_a_GXSetArray)) + 0);
@@ -1027,11 +1022,13 @@ void pcgx_GXSetLineWidth(u32 w, u32 texOffsets)
     }
 }
 
+int pc_gxq_filter_GXSetNumChans(u32 n);
 typedef struct { u32 n; } pcgxq_a_GXSetNumChans;
 static void pcgxq_x_GXSetNumChans(void* p_) { pcgxq_a_GXSetNumChans* a_ = (pcgxq_a_GXSetNumChans*) p_; GXSetNumChans(a_->n); (void) a_; }
 void pcgx_GXSetNumChans(u32 n)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetNumChans(n); return; }
+    if (pc_gxq_filter_GXSetNumChans(n)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(62)) { pcgxq_a_GXSetNumChans b_; b_.n = n; pc_gxq_call_sync(pcgxq_x_GXSetNumChans, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetNumChans, pc_gxq_pad(sizeof(pcgxq_a_GXSetNumChans)) + 0);
@@ -1059,11 +1056,13 @@ void pcgx_GXSetNumIndStages(u32 n)
     }
 }
 
+int pc_gxq_filter_GXSetNumTevStages(u32 n);
 typedef struct { u32 n; } pcgxq_a_GXSetNumTevStages;
 static void pcgxq_x_GXSetNumTevStages(void* p_) { pcgxq_a_GXSetNumTevStages* a_ = (pcgxq_a_GXSetNumTevStages*) p_; GXSetNumTevStages(a_->n); (void) a_; }
 void pcgx_GXSetNumTevStages(u32 n)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetNumTevStages(n); return; }
+    if (pc_gxq_filter_GXSetNumTevStages(n)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(64)) { pcgxq_a_GXSetNumTevStages b_; b_.n = n; pc_gxq_call_sync(pcgxq_x_GXSetNumTevStages, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetNumTevStages, pc_gxq_pad(sizeof(pcgxq_a_GXSetNumTevStages)) + 0);
@@ -1145,11 +1144,13 @@ void pcgx_GXSetScissor(u32 x, u32 y, u32 w, u32 h)
     }
 }
 
+int pc_gxq_filter_GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d);
 typedef struct { u32 stage; u32 a; u32 b; u32 c; u32 d; } pcgxq_a_GXSetTevAlphaIn;
 static void pcgxq_x_GXSetTevAlphaIn(void* p_) { pcgxq_a_GXSetTevAlphaIn* a_ = (pcgxq_a_GXSetTevAlphaIn*) p_; GXSetTevAlphaIn(a_->stage, a_->a, a_->b, a_->c, a_->d); (void) a_; }
 void pcgx_GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevAlphaIn(stage, a, b, c, d); return; }
+    if (pc_gxq_filter_GXSetTevAlphaIn(stage, a, b, c, d)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(69)) { pcgxq_a_GXSetTevAlphaIn b_; b_.stage = stage; b_.a = a; b_.b = b; b_.c = c; b_.d = d; pc_gxq_call_sync(pcgxq_x_GXSetTevAlphaIn, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevAlphaIn, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevAlphaIn)) + 0);
@@ -1165,11 +1166,13 @@ void pcgx_GXSetTevAlphaIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
     }
 }
 
+int pc_gxq_filter_GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg);
 typedef struct { u32 stage; u32 op; u32 bias; u32 scl; u32 clamp; u32 out_reg; } pcgxq_a_GXSetTevAlphaOp;
 static void pcgxq_x_GXSetTevAlphaOp(void* p_) { pcgxq_a_GXSetTevAlphaOp* a_ = (pcgxq_a_GXSetTevAlphaOp*) p_; GXSetTevAlphaOp(a_->stage, a_->op, a_->bias, a_->scl, a_->clamp, a_->out_reg); (void) a_; }
 void pcgx_GXSetTevAlphaOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevAlphaOp(stage, op, bias, scl, clamp, out_reg); return; }
+    if (pc_gxq_filter_GXSetTevAlphaOp(stage, op, bias, scl, clamp, out_reg)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(70)) { pcgxq_a_GXSetTevAlphaOp b_; b_.stage = stage; b_.op = op; b_.bias = bias; b_.scl = scl; b_.clamp = clamp; b_.out_reg = out_reg; pc_gxq_call_sync(pcgxq_x_GXSetTevAlphaOp, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevAlphaOp, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevAlphaOp)) + 0);
@@ -1220,11 +1223,13 @@ void pcgx_GXSetTevColor(u32 reg, GXColor color)
     }
 }
 
+int pc_gxq_filter_GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d);
 typedef struct { u32 stage; u32 a; u32 b; u32 c; u32 d; } pcgxq_a_GXSetTevColorIn;
 static void pcgxq_x_GXSetTevColorIn(void* p_) { pcgxq_a_GXSetTevColorIn* a_ = (pcgxq_a_GXSetTevColorIn*) p_; GXSetTevColorIn(a_->stage, a_->a, a_->b, a_->c, a_->d); (void) a_; }
 void pcgx_GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevColorIn(stage, a, b, c, d); return; }
+    if (pc_gxq_filter_GXSetTevColorIn(stage, a, b, c, d)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(73)) { pcgxq_a_GXSetTevColorIn b_; b_.stage = stage; b_.a = a; b_.b = b; b_.c = c; b_.d = d; pc_gxq_call_sync(pcgxq_x_GXSetTevColorIn, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevColorIn, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevColorIn)) + 0);
@@ -1240,11 +1245,13 @@ void pcgx_GXSetTevColorIn(u32 stage, u32 a, u32 b, u32 c, u32 d)
     }
 }
 
+int pc_gxq_filter_GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg);
 typedef struct { u32 stage; u32 op; u32 bias; u32 scl; u32 clamp; u32 out_reg; } pcgxq_a_GXSetTevColorOp;
 static void pcgxq_x_GXSetTevColorOp(void* p_) { pcgxq_a_GXSetTevColorOp* a_ = (pcgxq_a_GXSetTevColorOp*) p_; GXSetTevColorOp(a_->stage, a_->op, a_->bias, a_->scl, a_->clamp, a_->out_reg); (void) a_; }
 void pcgx_GXSetTevColorOp(u32 stage, u32 op, u32 bias, u32 scl, u32 clamp, u32 out_reg)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevColorOp(stage, op, bias, scl, clamp, out_reg); return; }
+    if (pc_gxq_filter_GXSetTevColorOp(stage, op, bias, scl, clamp, out_reg)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(74)) { pcgxq_a_GXSetTevColorOp b_; b_.stage = stage; b_.op = op; b_.bias = bias; b_.scl = scl; b_.clamp = clamp; b_.out_reg = out_reg; pc_gxq_call_sync(pcgxq_x_GXSetTevColorOp, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevColorOp, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevColorOp)) + 0);
@@ -1319,11 +1326,13 @@ void pcgx_GXSetTevIndirect(u32 tev_stage, u32 ind_stage, u32 format, u32 bias_se
     }
 }
 
+int pc_gxq_filter_GXSetTevKAlphaSel(u32 stage, u32 sel);
 typedef struct { u32 stage; u32 sel; } pcgxq_a_GXSetTevKAlphaSel;
 static void pcgxq_x_GXSetTevKAlphaSel(void* p_) { pcgxq_a_GXSetTevKAlphaSel* a_ = (pcgxq_a_GXSetTevKAlphaSel*) p_; GXSetTevKAlphaSel(a_->stage, a_->sel); (void) a_; }
 void pcgx_GXSetTevKAlphaSel(u32 stage, u32 sel)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevKAlphaSel(stage, sel); return; }
+    if (pc_gxq_filter_GXSetTevKAlphaSel(stage, sel)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(78)) { pcgxq_a_GXSetTevKAlphaSel b_; b_.stage = stage; b_.sel = sel; pc_gxq_call_sync(pcgxq_x_GXSetTevKAlphaSel, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevKAlphaSel, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevKAlphaSel)) + 0);
@@ -1353,11 +1362,13 @@ void pcgx_GXSetTevKColor(u32 kcolor, GXColor color)
     }
 }
 
+int pc_gxq_filter_GXSetTevKColorSel(u32 stage, u32 sel);
 typedef struct { u32 stage; u32 sel; } pcgxq_a_GXSetTevKColorSel;
 static void pcgxq_x_GXSetTevKColorSel(void* p_) { pcgxq_a_GXSetTevKColorSel* a_ = (pcgxq_a_GXSetTevKColorSel*) p_; GXSetTevKColorSel(a_->stage, a_->sel); (void) a_; }
 void pcgx_GXSetTevKColorSel(u32 stage, u32 sel)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevKColorSel(stage, sel); return; }
+    if (pc_gxq_filter_GXSetTevKColorSel(stage, sel)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(80)) { pcgxq_a_GXSetTevKColorSel b_; b_.stage = stage; b_.sel = sel; pc_gxq_call_sync(pcgxq_x_GXSetTevKColorSel, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevKColorSel, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevKColorSel)) + 0);
@@ -1387,11 +1398,13 @@ void pcgx_GXSetTevOp(u32 stage, u32 mode)
     }
 }
 
+int pc_gxq_filter_GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan);
 typedef struct { u32 stage; u32 coord; u32 tex; u32 chan; } pcgxq_a_GXSetTevOrder;
 static void pcgxq_x_GXSetTevOrder(void* p_) { pcgxq_a_GXSetTevOrder* a_ = (pcgxq_a_GXSetTevOrder*) p_; GXSetTevOrder(a_->stage, a_->coord, a_->tex, a_->chan); (void) a_; }
 void pcgx_GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevOrder(stage, coord, tex, chan); return; }
+    if (pc_gxq_filter_GXSetTevOrder(stage, coord, tex, chan)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(82)) { pcgxq_a_GXSetTevOrder b_; b_.stage = stage; b_.coord = coord; b_.tex = tex; b_.chan = chan; pc_gxq_call_sync(pcgxq_x_GXSetTevOrder, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevOrder, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevOrder)) + 0);
@@ -1406,11 +1419,13 @@ void pcgx_GXSetTevOrder(u32 stage, u32 coord, u32 tex, u32 chan)
     }
 }
 
+int pc_gxq_filter_GXSetTevSwapMode(u32 stage, u32 swp0, u32 swp1);
 typedef struct { u32 stage; u32 swp0; u32 swp1; } pcgxq_a_GXSetTevSwapMode;
 static void pcgxq_x_GXSetTevSwapMode(void* p_) { pcgxq_a_GXSetTevSwapMode* a_ = (pcgxq_a_GXSetTevSwapMode*) p_; GXSetTevSwapMode(a_->stage, a_->swp0, a_->swp1); (void) a_; }
 void pcgx_GXSetTevSwapMode(u32 stage, u32 swp0, u32 swp1)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTevSwapMode(stage, swp0, swp1); return; }
+    if (pc_gxq_filter_GXSetTevSwapMode(stage, swp0, swp1)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(83)) { pcgxq_a_GXSetTevSwapMode b_; b_.stage = stage; b_.swp0 = swp0; b_.swp1 = swp1; pc_gxq_call_sync(pcgxq_x_GXSetTevSwapMode, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTevSwapMode, pc_gxq_pad(sizeof(pcgxq_a_GXSetTevSwapMode)) + 0);
@@ -1444,11 +1459,13 @@ void pcgx_GXSetTevSwapModeTable(u32 table, u32 red, u32 green, u32 blue, u32 alp
     }
 }
 
+int pc_gxq_filter_GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 pt_texmtx);
 typedef struct { u32 tex; u32 type; u32 mat; u32 mtx; u32 normalize; u32 pt_texmtx; } pcgxq_a_GXSetTexCoordGen2;
 static void pcgxq_x_GXSetTexCoordGen2(void* p_) { pcgxq_a_GXSetTexCoordGen2* a_ = (pcgxq_a_GXSetTexCoordGen2*) p_; GXSetTexCoordGen2(a_->tex, a_->type, a_->mat, a_->mtx, a_->normalize, a_->pt_texmtx); (void) a_; }
 void pcgx_GXSetTexCoordGen2(u32 tex, u32 type, u32 mat, u32 mtx, u32 normalize, u32 pt_texmtx)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetTexCoordGen2(tex, type, mat, mtx, normalize, pt_texmtx); return; }
+    if (pc_gxq_filter_GXSetTexCoordGen2(tex, type, mat, mtx, normalize, pt_texmtx)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(85)) { pcgxq_a_GXSetTexCoordGen2 b_; b_.tex = tex; b_.type = type; b_.mat = mat; b_.mtx = mtx; b_.normalize = normalize; b_.pt_texmtx = pt_texmtx; pc_gxq_call_sync(pcgxq_x_GXSetTexCoordGen2, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetTexCoordGen2, pc_gxq_pad(sizeof(pcgxq_a_GXSetTexCoordGen2)) + 0);
@@ -1544,11 +1561,13 @@ void pcgx_GXSetVtxAttrFmt(u32 vtxfmt, u32 attr, u32 cnt, u32 type, u8 frac)
     }
 }
 
+int pc_gxq_filter_GXSetVtxDesc(u32 attr, u32 type);
 typedef struct { u32 attr; u32 type; } pcgxq_a_GXSetVtxDesc;
 static void pcgxq_x_GXSetVtxDesc(void* p_) { pcgxq_a_GXSetVtxDesc* a_ = (pcgxq_a_GXSetVtxDesc*) p_; GXSetVtxDesc(a_->attr, a_->type); (void) a_; }
 void pcgx_GXSetVtxDesc(u32 attr, u32 type)
 {
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { GXSetVtxDesc(attr, type); return; }
+    if (pc_gxq_filter_GXSetVtxDesc(attr, type)) return;
     if (pc_gxq_sync_all || pc_gxq_fn_sync(90)) { pcgxq_a_GXSetVtxDesc b_; b_.attr = attr; b_.type = type; pc_gxq_call_sync(pcgxq_x_GXSetVtxDesc, &b_); return; }
     {
         char* q_ = (char*) pc_gxq_push(pcgxq_x_GXSetVtxDesc, pc_gxq_pad(sizeof(pcgxq_a_GXSetVtxDesc)) + 0);
@@ -1694,7 +1713,7 @@ typedef struct { } pcgxq_a_gx_frame_begin;
 static void pcgxq_x_gx_frame_begin(void* p_) { pcgxq_a_gx_frame_begin* a_ = (pcgxq_a_gx_frame_begin*) p_; gx_frame_begin(); (void) a_; }
 void pcgx_gx_frame_begin(void)
 {
-    if (!pc_gxq_on_bridge_thread()) { pc_gxq_pre_frame_begin(); pc_gxq_note_frame_begin_projection(); }
+    if (!pc_gxq_on_bridge_thread()) { pc_gxq_pre_frame_begin(); pc_gxq_note_frame_begin_projection(); pc_gxq_filter_frame(); }
     if (!pc_gxq_active || pc_gxq_on_bridge_thread()) { gx_frame_begin(); return; }
     if (pc_gxq_sync_all || pc_gxq_fn_sync(99)) { pcgxq_a_gx_frame_begin b_; pc_gxq_call_sync(pcgxq_x_gx_frame_begin, &b_); return; }
     {

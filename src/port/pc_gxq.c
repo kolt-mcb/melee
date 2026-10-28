@@ -166,9 +166,39 @@ static int q_has_room(void* need)
 {
     return q_head + *(size_t*) need - atomic_load_explicit(&q_tail, memory_order_acquire) <= Q_CAP;
 }
+/* PC diag: MELEE_GXQ_STAT=1 -- queued GX calls per frame, every 600 frames
+ * (pc_gxq_frame_stat, from the present). */
+unsigned long pc_gxq_pushes, pc_gxq_push_bytes;
+int pc_gxq_last_fn;
+static unsigned long pc_gxq_hist[256];
+void pc_gxq_frame_stat(void)
+{
+    static int on = -1;
+    static unsigned frames;
+    int k, j;
+    if (on < 0) on = getenv("MELEE_GXQ_STAT") != NULL;
+    if (!on || ++frames < 600) return;
+    { extern unsigned long pc_gxq_filtered;
+      fprintf(stderr, "[GXQ] %.0f calls, %.0f KB queued per frame, %.0f filtered; by function:", pc_gxq_pushes / 600.0, pc_gxq_push_bytes / 600.0 / 1024.0, pc_gxq_filtered / 600.0);
+      pc_gxq_filtered = 0; }
+    for (k = 0; k < 24; k++) {
+        int b = -1; unsigned long best = 0;
+        for (j = 0; j < 256 && pc_gxq_fn_names[j] != NULL; j++) if (pc_gxq_hist[j] > best) { best = pc_gxq_hist[j]; b = j; }
+        if (b < 0 || best < 600) break;
+        fprintf(stderr, " %s %.0f", pc_gxq_fn_names[b], best / 600.0);
+        pc_gxq_hist[b] = 0;
+    }
+    fprintf(stderr, "\n");
+    memset(pc_gxq_hist, 0, sizeof pc_gxq_hist);
+    pc_gxq_pushes = pc_gxq_push_bytes = 0;
+    frames = 0;
+}
 void* pc_gxq_push(void (*fn)(void*), size_t bytes)
 {
     QHdr* h;
+    pc_gxq_pushes++;
+    pc_gxq_push_bytes += bytes;
+    if ((unsigned) pc_gxq_last_fn < 256) pc_gxq_hist[pc_gxq_last_fn]++;
     int heap = bytes > Q_BIG;
     size_t body = heap ? 16 : pc_gxq_pad(bytes), need = sizeof(QHdr) + body, at = q_head % Q_CAP;
     if (at + need > Q_CAP) {
