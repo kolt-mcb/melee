@@ -7,6 +7,7 @@
 #ifndef PC_GLQ_H
 #define PC_GLQ_H
 
+#include <stdatomic.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -22,6 +23,7 @@ extern int pc_norender;
 
 void* pc_glq_push(void (*fn)(void*), size_t bytes);
 void pc_glq_commit(void);
+extern atomic_uint pc_glq_swap_us; /* render-thread time inside the swap, us, wrapping */
 void pc_glq_call_sync(void (*fn)(void*), void* args);
 size_t pc_glq_pixel_bytes(int width, int height, unsigned format, unsigned type);
 static inline size_t pc_glq_pad(size_t n) { return (n + 15) & ~(size_t) 15; }

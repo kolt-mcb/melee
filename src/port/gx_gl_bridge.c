@@ -10259,6 +10259,8 @@ static f32 pc_ires_adapt(f32 k)
     const double SLOW_NS = 17.5e6, HITCH_NS = 100e6;
     static int on = -1, low, n, trial, slow_wins, probe;
     static double sum_ns, retry_s = 15.0, before_ns;
+    static unsigned swap0; /* pc_glq_swap_us at the window's start */
+#define IRES_WIN_RESET() do { n = 0; sum_ns = 0.0; swap0 = atomic_load_explicit(&pc_glq_swap_us, memory_order_relaxed); } while (0)
     static struct timespec hold; /* no step down before this, after a step back up */
     static struct timespec last, since;
     struct timespec t;
@@ -10276,12 +10278,15 @@ static f32 pc_ires_adapt(f32 k)
             retry_s = 15.0;
             trial = 0;
             if (low) since = t;
-            n = 0; sum_ns = 0.0;
+            IRES_WIN_RESET();
         }
     }
     last = t;
     if (n >= WIN) {
         double mean = sum_ns / n;
+        /* The render thread's wait inside the swap, per present: with
+         * frames this slow it is the GPU behind (no free buffer), not vsync. */
+        double swap = (double) (unsigned) (atomic_load_explicit(&pc_glq_swap_us, memory_order_relaxed) - swap0) * 1e3 / n;
         if (probe > 0 && --probe == 0) {
             /* The second window after a step down (the first has the
              * resize in it): a scene the CPU limits gains nothing from
@@ -10289,7 +10294,14 @@ static f32 pc_ires_adapt(f32 k)
              * lines than at 720 -- and is not left softer for it. Less
              * than 8% faster and still short of 60: step back up and hold
              * there two minutes. */
-            if (mean > SLOW_NS && mean > before_ns * 0.92) {
+            if (mean > SLOW_NS && mean > before_ns * 0.92 && swap > mean * 0.15) {
+                /* No faster, but the swap still waits on the GPU: a scene
+                 * the GPU limits at both sizes (or a throttled one -- the
+                 * device after ten minutes of shader compiles ran every
+                 * size slow). Fewer pixels can only help; stay. */
+                fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx, %.1f before, swap waits %.1f ms: the GPU; staying\n",
+                        mean / 1e6, (double) rung[low - 1], before_ns / 1e6, swap / 1e6);
+            } else if (mean > SLOW_NS && mean > before_ns * 0.92) {
                 low--;
                 since = t;
                 hold = t;
@@ -10298,7 +10310,7 @@ static f32 pc_ires_adapt(f32 k)
                 fprintf(stderr, "[IRES] %.1f ms a frame at %.2fx, %.1f before: not the GPU; back to %.2fx\n",
                         mean / 1e6, (double) rung[low], before_ns / 1e6, low == 0 ? (double) k : (double) rung[low - 1]);
                 slow_wins = 0;
-                n = 0; sum_ns = 0.0;
+                IRES_WIN_RESET();
                 last = t;
                 return low == 0 ? k : rung[low - 1];
             }
@@ -10321,7 +10333,7 @@ static f32 pc_ires_adapt(f32 k)
             retry_s = 15.0; /* the trial held */
         }
         slow_wins = (low < NRUNG && mean > SLOW_NS && probe == 0) ? slow_wins + 1 : 0;
-        n = 0; sum_ns = 0.0;
+        IRES_WIN_RESET();
     }
     held = (t.tv_sec - since.tv_sec) * 1e9 + (t.tv_nsec - since.tv_nsec);
     if (low > 0 && !trial && !probe && held > retry_s * 1e9) {
@@ -10330,7 +10342,7 @@ static f32 pc_ires_adapt(f32 k)
         low--;
         trial = 1;
         since = t;
-        n = sum_ns = 0;
+        IRES_WIN_RESET();
         fprintf(stderr, "[IRES] trying %.2fx again\n", low == 0 ? (double) k : (double) rung[low - 1]);
     }
     return low == 0 ? k : rung[low - 1];

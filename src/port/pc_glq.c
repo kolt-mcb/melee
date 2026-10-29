@@ -132,6 +132,8 @@ static void ds_note(const char* fn, int line)
         return;
     }
     if (!strcmp(fn, "glUseProgram")) ds_mask |= 1u << DS_PROG;
+    /* glUniform1i is the block window's slot select: a block change */
+    else if (!strcmp(fn, "glUniform1i")) ds_mask |= 1u << DS_UBO;
     else if (!strcmp(fn, "glBindTexture") || !strcmp(fn, "glActiveTexture") || !strncmp(fn, "glTexParam", 10) ||
              !strcmp(fn, "glBindSampler")) ds_mask |= 1u << DS_TEX;
     else if (!strcmp(fn, "glBindBufferRange") || !strcmp(fn, "glBindBufferBase")) ds_mask |= 1u << DS_UBO;
@@ -762,9 +764,20 @@ void pcq_glGenTextures(GLsizei n, GLuint* textures)
 }
 
 /* ---- present, swap interval -------------------------------------------- */
+/* Microseconds the render thread has spent inside the swap, wrapping: a
+ * swap that waits is the GPU behind (no free buffer), or vsync when the
+ * frame is light; the resolution controller reads the delta over a window
+ * of presents (pc_ires_adapt), where only the first of those can be. */
+atomic_uint pc_glq_swap_us;
 static void q_swap_exec(void* p)
 {
+    struct timespec s0, s1;
+    clock_gettime(CLOCK_MONOTONIC, &s0);
     SDL_GL_SwapWindow(*(SDL_Window**) p);
+    clock_gettime(CLOCK_MONOTONIC, &s1);
+    atomic_fetch_add_explicit(&pc_glq_swap_us,
+                              (unsigned) (((s1.tv_sec - s0.tv_sec) * 1000000000ll + (s1.tv_nsec - s0.tv_nsec)) / 1000),
+                              memory_order_relaxed);
     atomic_fetch_add_explicit(&q_frames_done, 1, memory_order_release);
     q_wake_game();
 }
