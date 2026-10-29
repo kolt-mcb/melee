@@ -3172,6 +3172,19 @@ static GLuint compile_shader(GLenum type, const char* src)
  * responsible, and the log names it. A match takes minutes to reach on a
  * tablet; this takes seconds, and the sources can be edited on the host. */
 static u32 g_ubo_size;
+/* The block's window (native, pc_ubo_commit_win): the shader's block is an
+ * array of g_ubo_win_k copies of the block, a window of the vertex ring
+ * bound once, and a draw selects its copy with one plain `uniform int
+ * pc_blk`. glBindBufferRange cost Mali-G31 ~34 us a draw even for the range
+ * already bound (MELEE_SHTEST_BENCH's ubo-same), and a match rebound it for
+ * ~450 of 550 draws; glUniform1i is free there. MELEE_UBO_WIN=1 is the old
+ * scheme, one block bound per change. */
+static int g_ubo_win_k = 1;         /* blocks a window holds; 1 = no window */
+static int g_ubo_win_idx;           /* the window's next free slot */
+static int g_ubo_blk_cur;           /* the slot the current block is in */
+static GLintptr g_ubo_win_off = -1; /* ring offset of the bound window */
+static u32 g_ubo_stride;            /* bytes from one slot to the next */
+static u32 g_ubo_lap = (u32) -1;    /* the ring lap the bound range was streamed in */
 
 /* MELEE_SHTEST_BENCH=1 (with MELEE_SHTEST=<dir>): the driver's per-draw cost
  * model. Two dumped variants, a small indexed triangle list from a buffer,
@@ -3231,7 +3244,7 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
     static u16 idx[96];
     static u8 blk[16384], texel[64 * 64 * 4];
     int c, i;
-    static const char* const names[] = { "plain", "ubo-range", "ubo-data", "prog", "tex", "verts", "basevertex", "idx-offset", "blend", "depth", "all4", "persist-write", "persist-same" };
+    static const char* const names[] = { "plain", "ubo-range", "ubo-data", "prog", "tex", "verts", "basevertex", "idx-offset", "blend", "depth", "all4", "persist-write", "persist-same", "vao-alt", "vao-fmt", "vbo-alt", "ubo-same", "ubo-persist", "ubo-2alt", "uniform1i", "uniform4f" };
     if (sscanf(ids, "%u,%u", &a, &b) < 2) { a = 240; b = 867; }
     pa = pc_shtest_link(dir, a);
     pb = pc_shtest_link(dir, b);
@@ -3279,9 +3292,44 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
         pmap = (unsigned char*) glMapBufferRange(GL_ARRAY_BUFFER, 0, (GLsizeiptr) sizeof(vtx) * 4096, f);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
     }
-    for (c = 0; c < 13; c++) {
+    /* Cases 13-15: the vertex-array switch between consecutive draws, as the
+     * arena (SVert, 48 bytes, a slot attribute) and the stream (Vertex, 56
+     * bytes) alternate in a match -- two arrays of the same layout, two of
+     * different layouts, and the same array with the buffer rebound. */
+    GLuint vao2[3] = { 0, 0, 0 }, vbo2 = 0;
+    {
+        int k;
+        glGenBuffers(1, &vbo2); glBindBuffer(GL_ARRAY_BUFFER, vbo2);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vtx) * 64, NULL, GL_DYNAMIC_DRAW);
+        glGenVertexArrays(3, vao2);
+        for (k = 0; k < 3; k++) {
+            int stride = k == 2 ? 48 : (int) sizeof(Vertex);
+            glBindVertexArray(vao2[k]);
+            glBindBuffer(GL_ARRAY_BUFFER, k == 1 ? vbo2 : vbo);
+            glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*) 0);
+            glEnableVertexAttribArray(1); glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*) 12);
+            glEnableVertexAttribArray(2); glVertexAttribPointer(2, 4, k == 2 ? GL_UNSIGNED_BYTE : GL_FLOAT, k == 2 ? GL_TRUE : GL_FALSE, stride, (void*) 24);
+            glEnableVertexAttribArray(3); glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, stride, (void*) (k == 2 ? 28 : 40));
+            glEnableVertexAttribArray(4); glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, stride, (void*) (k == 2 ? 36 : 48));
+            if (k == 2) { glEnableVertexAttribArray(5); glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, stride, (void*) 44); }
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+        }
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    }
+    GLint uloc = glGetUniformLocation(pa, "u_dbg_drawid"), uloc4 = glGetUniformLocation(pa, "u_light_atten_a");
+    for (c = 0; c < 21; c++) {
         struct timespec t0, t1;
-        if (c >= 11) {
+        if (c >= 16) {
+            /* The block bound as the match binds it: from the persistently
+             * mapped ring at a fresh offset per draw (ubo-persist), the same
+             * range again (ubo-same), or alternating two ranges (ubo-2alt). */
+            if (pmap == NULL) break;
+            glBindVertexArray(vao2[0]);
+        } else if (c >= 13) {
+            glBindVertexArray(vao2[0]);
+        } else if (c >= 11) {
             if (pmap == NULL) break;
             glBindBuffer(GL_ARRAY_BUFFER, pbuf);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (uintptr_t) offsetof(Vertex, pos));
@@ -3317,6 +3365,14 @@ static void pc_shtest_bench(const char* dir, GLuint ubo)
             if (c == 11) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 4000) * 64);
             else if (c == 6 || c == 10) glDrawElementsBaseVertex(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0, (i % 63) * 64);
             else if (c == 7) glDrawElements(GL_TRIANGLES, 48, GL_UNSIGNED_SHORT, (const void*) (uintptr_t) ((i % 48) * 2));
+            else if (c == 13) { glBindVertexArray(vao2[i & 1]); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 14) { glBindVertexArray(vao2[(i & 1) ? 2 : 0]); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 15) { glBindBuffer(GL_ARRAY_BUFFER, (i & 1) ? vbo2 : vbo); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) 0); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 16) { glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, (GLsizeiptr) g_ubo_size); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 17) { glBindBufferRange(GL_UNIFORM_BUFFER, 0, pbuf, (GLintptr) ((i % 50) * 4096), (GLsizeiptr) g_ubo_size); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 18) { glBindBufferRange(GL_UNIFORM_BUFFER, 0, pbuf, (GLintptr) ((i & 1) * 4096), (GLsizeiptr) g_ubo_size); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 19) { glUniform1i(uloc, i & 15); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
+            else if (c == 20) { GLfloat v[3] = { (f32) (i & 7), 1.0f, 0.0f }; glUniform3fv(uloc4, 1, v); glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0); }
             else glDrawElements(GL_TRIANGLES, 96, GL_UNSIGNED_SHORT, 0);
         }
         glFinish();
@@ -3330,7 +3386,8 @@ static void pc_shtest(const char* dir)
     DIR* d = opendir(dir);
     struct dirent* e;
     GLuint ubo = 0, vao = 0;
-    static u8 zeros[16384];
+    static u8 zeros[65536];
+    const GLsizeiptr blk = (GLsizeiptr) g_ubo_stride * g_ubo_win_k; /* the window, if any */
     int n = 0, bad = 0;
     if (d == NULL) { fprintf(stderr, "[SHTEST] cannot open %s\n", dir); return; }
     glGenBuffers(1, &ubo);
@@ -3339,9 +3396,9 @@ static void pc_shtest(const char* dir)
     /* The range the game binds: the block's own size, not the whole buffer.
      * MELEE_SHTEST_WHOLE=1 binds all of it instead. */
     if (getenv("MELEE_SHTEST_WHOLE") != NULL) glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
-    else glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, (GLsizeiptr) g_ubo_size);
+    else glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, blk);
     fprintf(stderr, "[SHTEST] block bound as %s (%u bytes)\n",
-            getenv("MELEE_SHTEST_WHOLE") ? "the whole buffer" : "the block's range", (unsigned) g_ubo_size);
+            getenv("MELEE_SHTEST_WHOLE") ? "the whole buffer" : "the block's range", (unsigned) blk);
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
     glEnable(GL_BLEND);
@@ -3946,7 +4003,14 @@ typedef struct Prog {
     u32 gen[VLOC_MAX];
     u32 flushed_serial; /* g_stage_serial when this program last took the upload loop */
     u32 last_used;      /* pc_frame_number when last selected (pc_prog_evict) */
+    GLint blk_loc;      /* pc_blk, the block window's slot select (-1: no window) */
+    GLint blk_val;      /* the slot this program was last told */
 } Prog;
+static void pc_prog_blk_init(Prog* pr)
+{
+    pr->blk_loc = g_ubo_win_k > 1 ? glGetUniformLocation(pr->id, "pc_blk") : -1;
+    pr->blk_val = -1;
+}
 static u32 g_stage_serial = 1;
 u32 pc_diag_prog_switch, pc_diag_uni_upload, pc_diag_flush_skip;
 static Prog* g_progs[PROG_MAX];
@@ -4132,7 +4196,11 @@ static char* pc_ubo_source(const char* src)
         o += len;
         nl = e;
     }
-    o += (size_t) sprintf(out + o, "layout(std140) uniform PcUniforms {\n");
+    /* With a window the block is a struct array and every member name is a
+     * macro for its field in the selected copy; the struct is declared
+     * before the macros exist, and a macro does not re-expand inside its
+     * own expansion, so `pc_b[pc_blk].u_mvp` is what the source reads. */
+    o += (size_t) sprintf(out + o, g_ubo_win_k > 1 ? "struct PcBlock {\n" : "layout(std140) uniform PcUniforms {\n");
     if (pc_ubo_pad("MELEE_UBO_PAD_HEAD") > 0) o += (size_t) sprintf(out + o, "    vec4 pc_pad_head[%d];\n", pc_ubo_pad("MELEE_UBO_PAD_HEAD"));
     for (i = 0; i < g_ubo_n; i++) {
         const UboMember* m = &g_ubo_mem[i];
@@ -4141,6 +4209,14 @@ static char* pc_ubo_source(const char* src)
     }
     if (pc_ubo_pad("MELEE_UBO_PAD_TAIL") > 0) o += (size_t) sprintf(out + o, "    vec4 pc_pad_tail[%d];\n", pc_ubo_pad("MELEE_UBO_PAD_TAIL"));
     o += (size_t) sprintf(out + o, "};\n");
+    if (g_ubo_win_k > 1) {
+        o += (size_t) sprintf(out + o, "layout(std140) uniform PcUniforms { PcBlock pc_b[%d]; };\nuniform int pc_blk;\n", g_ubo_win_k);
+        for (i = 0; i < g_ubo_n; i++) {
+            const char* nm = g_ubo_mem[i].ent->name;
+            o += (size_t) sprintf(out + o, "#define %s pc_b[pc_blk].%s\n", nm, nm);
+            if (o + 1024 > cap) { cap *= 2; out = (char*) realloc(out, cap); }
+        }
+    }
     p = nl + 1;
     while (*p) {
         const char* eol = strchr(p, '\n');
@@ -4193,11 +4269,8 @@ static void pc_ubo_reconcile(GLuint prog)
         const char* names[1];
         GLuint idx = GL_INVALID_INDEX;
         GLint off = -1, astride = 0, mstride = 0;
-        if (m->arr) {
-            snprintf(nm, sizeof(nm), "%s[0]", m->ent->name);
-        } else {
-            snprintf(nm, sizeof(nm), "%s", m->ent->name);
-        }
+        snprintf(nm, sizeof(nm), "%s%s%s", g_ubo_win_k > 1 ? "pc_b[0]." : "",
+                 m->ent->name, m->arr ? "[0]" : "");
         names[0] = nm;
         glGetUniformIndices(prog, 1, names, &idx);
         if (idx == GL_INVALID_INDEX) {
@@ -4244,12 +4317,33 @@ static void pc_ubo_reconcile(GLuint prog)
             }
         }
     }
+    if (g_ubo_win_k > 1 && g_ubo_n > 0) {
+        /* The slot stride is the struct's std140 size: the second copy's
+         * first member says what the driver made of it. */
+        char nm[128];
+        const char* names[1];
+        GLuint idx = GL_INVALID_INDEX;
+        GLint off = -1;
+        snprintf(nm, sizeof(nm), "pc_b[1].%s%s", g_ubo_mem[0].ent->name, g_ubo_mem[0].arr ? "[0]" : "");
+        names[0] = nm;
+        glGetUniformIndices(prog, 1, names, &idx);
+        if (idx != GL_INVALID_INDEX) glGetActiveUniformsiv(prog, 1, &idx, GL_UNIFORM_OFFSET, &off);
+        if (off > 0 && (u32) off - g_ubo_mem[0].off != g_ubo_stride) {
+            fprintf(stderr, "[UBOCHECK] slot stride ours %u | driver %u   <-- MISMATCH, taking the driver's\n",
+                    g_ubo_stride, (u32) off - g_ubo_mem[0].off);
+            g_ubo_stride = (u32) off - g_ubo_mem[0].off;
+            mism++;
+        } else if (verbose) {
+            fprintf(stderr, "[UBOCHECK] slot stride %u, %d slots a window\n", g_ubo_stride, g_ubo_win_k);
+        }
+    }
     if (mism != 0) {
         fprintf(stderr,
                 "[UBOCHECK] %d of %d members were at a different offset than "
                 "computed; using the driver's layout\n",
                 mism, g_ubo_n);
         g_ubo_dirty = 1;
+        g_ubo_win_off = -1; /* a window laid out by the old arithmetic is stale */
     }
     if (miss != 0) {
         /* Worth saying out loud: a driver that will not report the block's
@@ -4319,9 +4413,84 @@ static GLintptr g_ubo_reserve(void)
 #if defined(__EMSCRIPTEN__)
     return 0; /* the block has its own buffer on the web (pc_ubo_commit) */
 #else
-    return g_ubo_ok ? (GLintptr) g_ubo_align + (GLintptr) g_ubo_size : 0;
+    if (!g_ubo_ok) return 0;
+    if (g_ubo_win_k > 1) {
+        /* A new window only when this draw opens one: alignment slack, the
+         * window, and as much again in case it would have straddled a ring
+         * segment and moves to the next one (pc_ubo_commit_win). */
+        if (g_ubo_win_off < 0 || g_ubo_lap != g_vbo_lap || (g_ubo_pending && g_ubo_win_idx >= g_ubo_win_k)) {
+            return (GLintptr) g_ubo_align + 2 * (GLintptr) g_ubo_stride * g_ubo_win_k;
+        }
+        return 0;
+    }
+    return (GLintptr) g_ubo_align + (GLintptr) g_ubo_size;
 #endif
 }
+#if !defined(__EMSCRIPTEN__)
+/* The block image into a slot of the bound window. No segment sync: the
+ * window was synced whole when it was opened, and it never straddles one. */
+static void pc_ubo_slot_write(GLintptr off)
+{
+    if (g_vbo_mode == PC_VBO_PERSIST) {
+        memcpy(g_vbo_base + off, g_ubo_img, g_ubo_size);
+    } else if (g_vbo_mode == PC_VBO_SUBDATA) {
+        glBufferSubData(GL_ARRAY_BUFFER, off, (GLsizeiptr) g_ubo_size, g_ubo_img);
+    } else {
+        void* dst = glMapBufferRange(GL_ARRAY_BUFFER, off, (GLsizeiptr) g_ubo_size,
+                                     GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT |
+                                         GL_MAP_INVALIDATE_RANGE_BIT);
+        if (dst != NULL) {
+            memcpy(dst, g_ubo_img, g_ubo_size);
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+        } else {
+            glBufferSubData(GL_ARRAY_BUFFER, off, (GLsizeiptr) g_ubo_size, g_ubo_img);
+        }
+    }
+}
+u32 pc_diag_ubo_writes;
+static void pc_ubo_commit_win(void)
+{
+    const GLintptr win = (GLintptr) g_ubo_stride * g_ubo_win_k;
+    Prog* pr = g_cur_prog;
+    int fresh = 0;
+    if (g_ubo_win_off < 0 || g_ubo_lap != g_vbo_lap || (g_ubo_pending && g_ubo_win_idx >= g_ubo_win_k)) {
+        GLintptr off = (g_vbo_off + g_ubo_align - 1) / g_ubo_align * g_ubo_align;
+        /* Not across a segment boundary: a slot written later into a
+         * segment the write pointer has left would fence and wait on it. */
+        if (g_vbo_seg_bytes > 0 && off / g_vbo_seg_bytes != (off + win - 1) / g_vbo_seg_bytes) {
+            off = (off / g_vbo_seg_bytes + 1) * g_vbo_seg_bytes;
+        }
+        if (off + win > g_vbo_ring_bytes) {
+            /* The reserve before this draw covers the window; this is the
+             * guard for a stream that wrapped the ring between the two. */
+            if (g_vbo_mode != PC_VBO_PERSIST) {
+                glBufferData(GL_ARRAY_BUFFER, g_vbo_ring_bytes, NULL, GL_STREAM_DRAW);
+            }
+            off = 0;
+            g_vbo_lap++;
+        }
+        if (g_vbo_mode == PC_VBO_PERSIST) pc_vbo_seg_sync(off);
+        g_vbo_off = off + win;
+        g_ubo_win_off = off;
+        g_ubo_win_idx = 0;
+        g_ubo_lap = g_vbo_lap;
+        glBindBufferRange(GL_UNIFORM_BUFFER, 0, g_vbo, off, win);
+        pc_diag_ubo_binds++;
+        fresh = 1;
+    }
+    if (g_ubo_pending || fresh) {
+        g_ubo_blk_cur = g_ubo_win_idx++;
+        pc_ubo_slot_write(g_ubo_win_off + (GLintptr) g_ubo_blk_cur * (GLintptr) g_ubo_stride);
+        g_ubo_pending = 0;
+        pc_diag_ubo_writes++;
+    }
+    /* The select is program state: a program switch repeats it. */
+    if (pr != NULL && pr->blk_loc >= 0 && pr->blk_val != g_ubo_blk_cur) {
+        glUniform1i(pr->blk_loc, g_ubo_blk_cur);
+        pr->blk_val = g_ubo_blk_cur;
+    }
+}
+#endif
 #if defined(__EMSCRIPTEN__)
 /* The web's uniform block lives in a buffer of its own, used for nothing
  * else, overwritten whole before each draw that changed it and bound once.
@@ -4338,7 +4507,6 @@ static GLintptr g_ubo_reserve(void)
  * 3.4 KB, not the 3.5 MB ring that was the trouble there. */
 static GLuint g_web_ubo;
 #endif
-static u32 g_ubo_lap = (u32) -1; /* the ring lap the bound range was streamed in */
 static void pc_ubo_commit(void)
 {
     GLintptr off;
@@ -4371,6 +4539,7 @@ static void pc_ubo_commit(void)
      * about to reuse (persistent). A stage building drawn from cached
      * display lists -- no uniform change for many batches -- vanished
      * for whole frames that way (golden match_move, frame 195). */
+    if (g_ubo_win_k > 1) { pc_ubo_commit_win(); return; }
     if (!g_ubo_pending && g_ubo_lap == g_vbo_lap) return;
     g_ubo_lap = g_vbo_lap;
     g_vbo_off = (g_vbo_off + g_ubo_align - 1) / g_ubo_align * g_ubo_align;
@@ -4386,12 +4555,26 @@ static void pc_ubo_init(void)
     if (g_ubo_n == 0 || g_ubo_size > sizeof(g_ubo_img)) return;
     glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &g_ubo_align);
     if (g_ubo_align < 16) g_ubo_align = 16;
+    g_ubo_stride = g_ubo_size; /* std140 rounds a struct to 16, as the layout did */
+#if !defined(__EMSCRIPTEN__)
+    {
+        /* As many slots as fit the driver's block size limit, 16 at most:
+         * 3.4 KB blocks at 16 are 55 KB, within a ring segment, and a
+         * match's ~450 block changes a frame are ~30 windows. */
+        const char* e = getenv("MELEE_UBO_WIN");
+        GLint maxb = 16384;
+        glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &maxb);
+        g_ubo_win_k = e != NULL ? atoi(e) : 16;
+        while (g_ubo_win_k > 1 && (GLint) g_ubo_stride * g_ubo_win_k > maxb) g_ubo_win_k--;
+        if (g_ubo_win_k < 1) g_ubo_win_k = 1;
+    }
+#endif
     g_vert_src = pc_ubo_source(g_vert_src);
     g_frag_src = pc_ubo_source(g_frag_src);
     memset(g_ubo_img, 0, sizeof(g_ubo_img));
     g_ubo_ok = 1;
     g_ubo_dirty = 1;
-    fprintf(stderr, "[UBO] %d members, %u bytes, offset alignment %d\n", g_ubo_n, g_ubo_size, (int) g_ubo_align);
+    fprintf(stderr, "[UBO] %d members, %u bytes, offset alignment %d, %d slots a window\n", g_ubo_n, g_ubo_size, (int) g_ubo_align, g_ubo_win_k);
 }
 
 static int g_stage_check;
@@ -4766,6 +4949,7 @@ static Prog* pc_prog_finish(GLuint id)
         GLuint bi = glGetUniformBlockIndex(id, "PcUniforms");
         if (bi != GL_INVALID_INDEX) glUniformBlockBinding(id, bi, 0);
     }
+    pc_prog_blk_init(pr);
     for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
     for (i = 0; i < UNI_TAB_N; i++) {
         const UniEntry* ent = &g_uni_tab[i];
@@ -4786,6 +4970,7 @@ static Prog* pc_prog_finish_pooled(GLuint id, const int* locs)
     Prog* pr = (Prog*) calloc(1, sizeof(Prog));
     int i, j = 0, k;
     pr->id = id;
+    pc_prog_blk_init(pr);
     for (i = 0; i < VLOC_MAX; i++) pr->glloc[i] = -1;
     for (i = 0; i < UNI_TAB_N; i++) {
         const UniEntry* ent = &g_uni_tab[i];
@@ -5987,6 +6172,7 @@ static Prog* pc_uber(void)
     if (g_uber != NULL || g_shader_program == 0) return g_uber;
     g_uber = (Prog*) calloc(1, sizeof(Prog));
     g_uber->id = g_shader_program;
+    pc_prog_blk_init(g_uber);
     for (i = 0; i < VLOC_MAX; i++) g_uber->glloc[i] = -1;
     for (i = 0; i < UNI_TAB_N; i++) {
         const UniEntry* ent = &g_uni_tab[i];
