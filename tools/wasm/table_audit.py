@@ -23,6 +23,8 @@ TABLES = {
     "ItemStateTable": [None, (1, True), (1, False), (1, True)],
     # anim, iasa, phys, coll, camera: all void (Fighter_GObj*)
     "MotionState": [None, None, None] + [(1, False)] * 5,
+    # hookCreate, hookDelete: void (HSD_Particle*); setUserData: void (pp, u8, f32)
+    "HSD_PSUserFunc": [(1, False), (1, False), (3, False)],
 }
 
 
@@ -65,13 +67,15 @@ def main():
     for f in sorted(SRC.rglob("*.c")):
         text = f.read_text(errors="ignore")
         for tname, shape in TABLES.items():
-            for m in re.finditer(r"\b%s\s+\w+\s*\[[^\]]*\]\s*=\s*\{" % tname, text):
+            # an array of tables, or (no brackets) a single table
+            for m in re.finditer(r"\b%s\s+\w+\s*(\[[^\]]*\])?\s*=\s*\{" % tname, text):
                 depth, i = 1, m.end()
                 while depth and i < len(text):
                     depth += {"{": 1, "}": -1}.get(text[i], 0)
                     i += 1
                 body = re.sub(r"/\*.*?\*/|//[^\n]*", "", text[m.end():i - 1], flags=re.S)
-                for entry in re.findall(r"\{([^{}]*)\}", body):
+                entries = re.findall(r"\{([^{}]*)\}", body) if m.group(1) else [body]
+                for entry in entries:
                     fields = [x.strip() for x in entry.split(",")]
                     for slot, want in zip(fields, shape):
                         if want is None:
