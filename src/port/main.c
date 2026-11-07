@@ -45,6 +45,15 @@
  * the return address, which names the caller even when the unwinder cannot
  * walk a stack whose PC is not code. */
 #define PC_CTX_LR(uc) ((uc)->uc_mcontext.regs[30])
+#elif defined(__arm__)
+/* 32-bit ARM (Chromecast): bionic's struct sigcontext has named arm_*
+ * fields. FP and LR both map to r14-equivalent hardware on the signal
+ * frame; use arm_fp for the frame pointer, arm_lr for the link register
+ * (still the return address on a call through a bad pointer). */
+#define PC_CTX_PC(uc) ((uc)->uc_mcontext.arm_pc)
+#define PC_CTX_SP(uc) ((uc)->uc_mcontext.arm_sp)
+#define PC_CTX_FP(uc) ((uc)->uc_mcontext.arm_fp)
+#define PC_CTX_LR(uc) ((uc)->uc_mcontext.arm_lr)
 #elif defined(__EMSCRIPTEN__)
 /* wasm has no signals and no machine registers in linear memory, so the
  * crash handler below never runs: install_crash_handler() skips sigaction
@@ -435,6 +444,16 @@ int main(int argc, char* argv[])
         /* PR_SET_PTRACER = 0x59616d61 ("Yama"), PR_SET_PTRACER_ANY = -1. */
         prctl(0x59616d61, -1L, 0L, 0L, 0L);
     }
+#endif
+
+#if defined(__ANDROID__) && defined(PC_DIAG_FPS)
+    /* Diagnostic build: am start cannot pass environment variables, so
+     * force MELEE_FPS here and let the [FPS]/[SPLIT]/[FRAME] reports go
+     * to logcat. */
+    /* Diagnostic build: fps stats only (no glFinish serialization -- that
+     * removes CPU/GPU overlap and makes the build slower than the real one).
+     * [DIP] hitch lines are on by default (MELEE_HITCH_MS, 20 ms). */
+    setenv("MELEE_FPS", "1", 0);
 #endif
 
     /* Increase main thread stack from 128KB to 2MB */

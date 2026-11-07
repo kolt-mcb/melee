@@ -1324,9 +1324,29 @@ static inline void grZebes_801DA254_inline2(HSD_LObj* lobj, GXColor color)
 void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 {
     Ground* gp = GET_GROUND(gobj);
+    /* PC port (32-bit fix): re-derive the light from the live GX light list
+     * every call instead of trusting the zebes4.xDC cache across frames.
+     *
+     * The original caches the first `flags & 1` light and reuses it forever.
+     * That cache is never cleared when the stage tears down, so after a match
+     * ends -- when the light GObj is freed but one last per-frame tick of
+     * gobj_proc (grZebes_801D925C) still runs -- the cache dangles and
+     * HSD_LObjSetColor writes through it. On the 32-bit Cast build the freed
+     * heap holds a wild pointer (~0xc37495ed) and the write segfaults (the
+     * 64-bit builds carry the same latent bug but their freed heap happens to
+     * hold harmless values). Re-deriving from HSD_GObjGXLinkHead[4] is the
+     * same lookup the original did once; the light list is stable for the
+     * life of a match (so this finds the identical object every frame) and is
+     * cleared on unload (so this finds nothing and skips, never a freed ptr).
+     */
+#if BUILD_TARGET_PC
+    HSD_LObj* lobj = NULL;
+    {
+#else
     HSD_LObj* lobj = (HSD_LObj*) gp->u.zebes4.xDC;
     gp->u.zebes4.xDC = PC_GVPTR(lobj);
     if (lobj == NULL) {
+#endif
         HSD_GObj* lgobj = HSD_GObjGXLinkHead[4];
         if (lgobj != NULL) {
             lobj = (HSD_LObj*) lgobj->hsd_obj;
@@ -1337,8 +1357,13 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
                 lobj = HSD_LObjGetNext(lobj);
             }
         }
+#if BUILD_TARGET_PC
+    }
+    gp->u.zebes4.xDC = PC_GVPTR(lobj);
+#else
         gp->u.zebes4.xDC = PC_GVPTR(lobj);
     }
+#endif
 
     if (lobj != NULL) {
         GXColor c1 = { 0xE6, 0xFF, 0x96, 0xFF };

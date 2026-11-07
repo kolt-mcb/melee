@@ -110,6 +110,7 @@ static double s_web_entry_ms, s_web_end_ms, s_web_wait_ms, s_web_late_ms;
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include "pc_adpf.h"
 extern void pc_fb_apply(void); /* gx_gl_bridge.c: the scene framebuffer's deferred bind-back */
 
 int pc_render_frame_now = 0;
@@ -651,6 +652,7 @@ static void render_present_tail(int frame)
                 }
             }
 #else
+            pc_adpf_here(); /* the game thread is one of the frame's */
             if (s_pace) {
                 struct timespec t;
                 clock_gettime(CLOCK_MONOTONIC, &t);
@@ -979,12 +981,13 @@ static void render_present_tail(int frame)
                 extern u32 pc_diag_stage_full, pc_diag_stage_mtx, pc_diag_stage_none;
                 extern u32 pc_diag_prog_switch, pc_diag_uni_upload, pc_diag_flush_skip;
                 extern u32 pc_diag_batch_calls, pc_diag_draw_calls;
+                extern u64 pc_diag_dls_find_ns, pc_diag_dls_gpu_ns, pc_diag_dls_replay_ns;
                 extern u64 pc_diag_replay_ns; extern u32 pc_diag_replay_verts, pc_diag_replay_skinned;
                 extern u64 pc_diag_fence_ns; extern u32 pc_diag_fence_waits;
                 extern u32 pc_diag_ubo_binds;
                 extern unsigned long long pc_diag_io_ns; extern unsigned pc_diag_io_opens, pc_diag_io_reads, pc_diag_io_bytes;
                 static u64 s_fence_prev; static u32 s_fw_prev;
-                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  fence %u waits %.2f ms  io %.2f ms (%u opens %u reads %u KB)  per frame: draws %u (calls %u, batches %u) glstate %u (skipped %u) stage %u/%u/%u prog %u uni %u ubo %u (flush skipped %u) dl %.2f ms (%u hit %u miss, %u cached; replay %.2f ms %u verts %u skinned) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
+                fprintf(stderr, "[FPS] %.1f fps  wall %.2f ms/frame  work (excl. swap wait) %.2f ms/frame  gpu(glFinish) %.2f ms/frame  gpu(query) %.2f ms/frame  fence %u waits %.2f ms  io %.2f ms (%u opens %u reads %u KB)  per frame: draws %u (calls %u, batches %u) glstate %u (skipped %u) stage %u/%u/%u prog %u uni %u ubo %u (flush skipped %u) dl %.2f ms (%u hit %u miss, %u cached; replay %.2f ms %u verts %u skinned; dls find/gpu/replay %.2f/%.2f/%.2f ms) texhash %u (%.2f ms, %.0f KB) upload %u mipgen %u  efb %u (read %.2f ms, pack %.2f ms)\n",
                         s_n * 1e9 / wall, wall / s_n / 1e6, s_busy_ns / s_n / 1e6, s_fin_ns / s_n / 1e6,
                         pc_diag_gpu_frames ? (double) pc_diag_gpu_ns / pc_diag_gpu_frames / 1e6 : 0.0,
                         (pc_diag_fence_waits - s_fw_prev) / s_n, (double) (pc_diag_fence_ns - s_fence_prev) / s_n / 1e6,
@@ -995,6 +998,7 @@ static void render_present_tail(int frame)
                         pc_diag_prog_switch / s_n, pc_diag_uni_upload / s_n, pc_diag_ubo_binds / s_n, pc_diag_flush_skip / s_n,
                         (double) pc_diag_dl_ns / s_n / 1e6, pc_diag_dl_hits / s_n, pc_diag_dl_misses / s_n, pc_diag_dl_entries,
                         (double) pc_diag_replay_ns / s_n / 1e6, pc_diag_replay_verts / s_n, pc_diag_replay_skinned / s_n,
+                        (double) pc_diag_dls_find_ns / s_n / 1e6, (double) pc_diag_dls_gpu_ns / s_n / 1e6, (double) pc_diag_dls_replay_ns / s_n / 1e6,
                         pc_diag_hashes / s_n,
                         (double) pc_diag_hash_ns / s_n / 1e6,
                         (double) pc_diag_hash_bytes / s_n / 1024.0,
@@ -1052,6 +1056,7 @@ static void render_present_tail(int frame)
                 pc_diag_prog_switch = pc_diag_uni_upload = pc_diag_flush_skip = 0; pc_diag_ubo_binds = 0;
                 pc_diag_batch_calls = pc_diag_draw_calls = 0;
                 pc_diag_replay_ns = 0; pc_diag_replay_verts = pc_diag_replay_skinned = 0;
+                pc_diag_dls_find_ns = pc_diag_dls_gpu_ns = pc_diag_dls_replay_ns = 0;
                 s_fence_prev = pc_diag_fence_ns; s_fw_prev = pc_diag_fence_waits;
                 pc_diag_io_ns = 0; pc_diag_io_opens = pc_diag_io_reads = pc_diag_io_bytes = 0;
                 pc_diag_gpu_ns = 0; pc_diag_gpu_frames = 0;

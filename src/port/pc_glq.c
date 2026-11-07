@@ -41,6 +41,7 @@
 #include <GL/glcorearb.h>
 
 #include "pc_glq.h"
+#include "pc_adpf.h"
 #include <dlfcn.h>
 /* Synchronous calls by function, for MELEE_GLTIME (pc_glq_wait_report). */
 static struct { void (*fn)(void*); unsigned n; } q_sync_tab[32];
@@ -772,6 +773,7 @@ atomic_uint pc_glq_swap_us;
 static void q_swap_exec(void* p)
 {
     struct timespec s0, s1;
+    pc_adpf_here(); /* the render thread is one of the frame's */
     clock_gettime(CLOCK_MONOTONIC, &s0);
     SDL_GL_SwapWindow(*(SDL_Window**) p);
     clock_gettime(CLOCK_MONOTONIC, &s1);

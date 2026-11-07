@@ -97,6 +97,7 @@ typedef uint8_t GXTlutFmt;
  * MELEE_GL_THREAD=1 -- the queue to the render thread (pc_glq.c). */
 static void pc_gl_crumb_textures(void);
 #include "pc_glq.h"
+#include "pc_adpf.h"
 #include "platform.h"
 
 /* Dolphin typedefs u32/u8 etc as long-sized on x86_64.
@@ -2547,9 +2548,11 @@ static GLenum pc_gl_prim_of(u32 gx_prim)
 }
 
 static int pc_indexed_on(void);
+static int pc_ptidx_on(void);
 static int pc_gpu_dl_on(void);
 static int pc_xdl_on(void);
 static int pc_tri_class(GLenum m);
+static int pc_idx_class(GLenum m);
 static void pc_ubo_commit(void);
 static GLintptr pc_vbo_stream_raw(const void* src, GLsizeiptr bytes);
 /* Make room for `bytes` of ring before a run of streams that must land
@@ -2668,7 +2671,9 @@ static void pc_batch_flush(void)
 #else
     const u32 ibase = 0;
 #endif
-    if (pc_indexed_on() && g_batch_n > 1 && pc_tri_class(g_batch_mode) &&
+    if (pc_indexed_on() && g_batch_n > 1 &&
+        (pc_tri_class(g_batch_mode) ||
+         (pc_ptidx_on() && (g_batch_mode == GL_POINTS || g_batch_mode == GL_LINES))) &&
         g_stage_n + ibase <= 65535u)
     {
         u32 n = 0;
@@ -2691,6 +2696,16 @@ static void pc_batch_flush(void)
             case GL_TRIANGLE_FAN:
                 for (k = 1; k + 1 < c; k++) {
                     g_istage[n++] = (u16) f; g_istage[n++] = (u16) (f + k); g_istage[n++] = (u16) (f + k + 1);
+                }
+                break;
+            case GL_POINTS:
+                for (k = 0; k < c; k++) {
+                    g_istage[n++] = (u16) (f + k);
+                }
+                break;
+            case GL_LINES:
+                for (k = 0; k + 1 < c; k += 2) {
+                    g_istage[n++] = (u16) (f + k); g_istage[n++] = (u16) (f + k + 1);
                 }
                 break;
             default:
@@ -2867,9 +2882,28 @@ static int pc_indexed_on(void)
     if (on < 0) on = getenv("MELEE_NO_INDEXED") == NULL;
     return on;
 }
+/* A/B gate for the point/line extension of the indexed batch path. */
+static int pc_ptidx_on(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("MELEE_NO_PTIDX") == NULL;
+    return on;
+}
 static int pc_tri_class(GLenum m)
 {
     return m == GL_TRIANGLES || m == GL_TRIANGLE_STRIP || m == GL_TRIANGLE_FAN;
+}
+/* Primitives whose runs are self-contained per index (or index pair) and so
+ * can share one glDrawElements across many primitives: triangles in all
+ * three flavors, and -- the point of this class -- points and line segments.
+ * Line STRIPS are excluded: a strip's vertices connect to their neighbours,
+ * so merging two strips would draw the segment between them. Points and
+ * lines are the bulk of a match's per-primitive glDrawArrays (particles,
+ * item glints, ~1,900 a frame); on the Mali-G31 Cast build each of those
+ * calls cost ~40 us, which is most of the 100 ms frame. */
+static int pc_idx_class(GLenum m)
+{
+    return pc_tri_class(m) || m == GL_POINTS || m == GL_LINES;
 }
 static void pc_batch_add(GLenum mode, GLint first, GLsizei count)
 {
@@ -7340,6 +7374,7 @@ static int g_batch_pre_state;
  * current state; the batch stays open and no generation moves. */
 static void gx_flush_pending_desc(void)
 {
+    g_desc_sig_gen++;
     if (g_state.vert_count > 0) {
         bridge_upload_and_draw();
     }
@@ -8048,11 +8083,30 @@ static int pc_stage_uniforms(int stage_a, int stage_b, f32 mvp[4][4])
      * PNMTX rows (and normal matrices, or PNMTX where none was loaded) the
      * CPU path reads per vertex. Only the slots the list uses. */
     if (g_skin_loc >= 0) {
-        UP1I(g_skin_loc, g_gpu_skin);
+        /* PC port (60fps): u_skin is the only uniform the arena draw sets
+         * that the game's generation bookkeeping does not track, so memoise
+         * it by value instead of forcing a group re-walk per arena draw. */
+        static int s_skin = -1;
+        if (s_skin != g_gpu_skin) {
+            UP1I(g_skin_loc, g_gpu_skin);
+            s_skin = g_gpu_skin;
+        }
     }
     if (g_gpu_skin && g_pnmtx_loc >= 0 && g_nrmmtx_loc >= 0) {
+        /* PC port (60fps): stage the palette incrementally. A change of
+         * g_gen_mtx means the game re-loaded some pos/nrm matrix (both
+         * loaders go through gx_flush_pending_mtx), so everything uploaded
+         * earlier is suspect and the slot mask resets. Within one matrix
+         * generation a slot an earlier draw uploaded is still current. The
+         * old code re-uploaded the list's whole range on every arena draw
+         * (the value memo in pc_stage_uniform made each hit a 48-byte
+         * memcmp, but ~330 draws x up to 20 locations a frame still cost
+         * the bulk of the 5.5 ms the GPU-list path took on the Cast). */
+        static u32 s_pal_gen = 0;
+        static u16 s_pal_up = 0;
         int k;
         for (k = g_gpu_slot_min; k <= g_gpu_slot_max; k++) {
+            if (s_pal_up & (1u << k)) continue;
             const f32 (*m)[4] = (const f32 (*)[4]) g_state.mtx_array[k * 3];
             const f32 (*nm)[4] = g_nrm_mtx_valid[k * 3]
                                      ? (const f32 (*)[4]) g_nrm_mtx_array[k * 3] : m;
@@ -10425,6 +10479,19 @@ void pc_ires_present(void)
     pc_gxq_frame_stat();
     void window_get_size(int* width, int* height);
     int ww = 0, wh = 0, dw, dh, dx, dy;
+    {
+        /* The interval between presents is the frame's duration as the
+         * power HAL should see it (pc_adpf.c); a long gap is a load. */
+        static struct timespec prev;
+        struct timespec t;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        pc_adpf_here();
+        if (prev.tv_sec != 0) {
+            long long dt = (t.tv_sec - prev.tv_sec) * 1000000000ll + (t.tv_nsec - prev.tv_nsec);
+            if (dt < 100000000ll) pc_adpf_report(dt);
+        }
+        prev = t;
+    }
     f32 sx, sy, sc;
     static const GLenum all[3] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT };
     if (pc_ires_fbo == 0) {
@@ -12171,6 +12238,7 @@ typedef struct DlEntry {
 static DlEntry* g_dl_map[DL_MAP_N];
 static size_t g_dl_bytes;
 u32 pc_diag_dl_hits, pc_diag_dl_misses, pc_diag_dl_entries;
+u64 pc_diag_dls_find_ns, pc_diag_dls_gpu_ns, pc_diag_dls_replay_ns;
 u32 pc_diag_s3tc_uploads;
 u64 pc_diag_dl_ns;
 
@@ -12229,6 +12297,14 @@ static u32 dl_content_hash(const u8* p, u32 n)
  * four-player match on Hyrule Temple). */
 static u32 dl_desc_sig(u32 pos_cnt, u32 vsize)
 {
+    /* PC port (60fps): the sig is a 50-word walk over the vertex-descriptor
+     * state plus a hash of the g_vf_* format tables, built on every display
+     * list call (~2 us x 530 lists a frame). Every input it reads is written
+     * only by the descriptor setters, which all bump g_desc_sig_gen, so the
+     * result is stable between those and can be cached. */
+    static u32 s_gen = 0, s_pos = 0, s_vsize = 0, s_val = 0;
+    if (s_gen == g_desc_sig_gen && s_pos == pos_cnt && s_vsize == vsize)
+        return s_val;
     u32 w[21 + 6 * 6 + 6 * 2 + 2], n = 0, a;
     for (a = 0; a <= 20; a++) w[n++] = (u32) g_state.va_mode[a];
     for (a = 9; a <= 14; a++) {
@@ -12254,6 +12330,7 @@ static u32 dl_desc_sig(u32 pos_cnt, u32 vsize)
         h = dl_fnv_w(h, g_vf_pos_type, sizeof(g_vf_pos_type) / 4);
         h = dl_fnv_w(h, g_vf_pos_frac, sizeof(g_vf_pos_frac) / 4);
         h = dl_fnv_w(h, g_vf_pos_set, sizeof(g_vf_pos_set) / 4);
+        s_gen = g_desc_sig_gen; s_pos = pos_cnt; s_vsize = vsize; s_val = h;
         return h;
     }
 }
@@ -13099,9 +13176,29 @@ static int dl_gpu_build(DlEntry* e)
     SVert* sv;
     u16* ix;
     GLsizeiptr vbytes, ibytes;
-    if (n == 0 || n > 65535 || e->nprims == 0) return 0;
+#if BUILD_TARGET_PC
+    /* MELEE_GPUDL_STAT: why lists keep being rejected from the GPU arena */
+    static u32 rj[6], rjv[6];
+    static u32 rj_frame = 0;
+    static int rj_on = -1;
+    if (rj_on < 0) rj_on = PC_DBG_FLAG("MELEE_GPUDL_STAT");
+    if (rj_on) {
+        rj_frame = g_state.frame_count;
+        const char* r[6] = { "noprims/size", "nopo", "prim", "attr", "mid", "arena" };
+        fprintf(stderr, "[GPUDLSTAT] frame %u rej: ", (unsigned) g_state.frame_count);
+        for (unsigned _i = 0; _i < 6; _i++) if (rj[_i]) fprintf(stderr, "%s %u/%u ", r[_i], rj[_i], rjv[_i]);
+        fprintf(stderr, "cum ");
+        for (unsigned _i = 0; _i < 6; _i++) if (rj[_i] == 0 && rjv[_i] == 0) { /* keep */ }
+        fprintf(stderr, "\n");
+        memset(rj, 0, sizeof rj); memset(rjv, 0, sizeof rjv);
+    }
+#define RJ(x) do { if (rj_on) { rj[x]++; rjv[x] += n; } } while (0)
+#else
+#define RJ(x) do {} while (0)
+#endif
+    if (n == 0 || n > 65535 || e->nprims == 0) { RJ(0); return 0; }
     flags = e->verts[0].flags;
-    if (!(flags & DLV_POS)) return 0;
+    if (!(flags & DLV_POS)) { RJ(1); return 0; }
     for (i = 0; i < e->nprims; i++) {
         const DlPrim* dp = &e->prims[i];
         switch (dp->gcn_prim) {
@@ -13109,16 +13206,16 @@ static int dl_gpu_build(DlEntry* e)
         case GX_TRIANGLES:     ni += dp->nverts / 3 * 3; break;
         case GX_TRIANGLESTRIP:
         case GX_TRIANGLEFAN:   if (dp->nverts >= 3) ni += (dp->nverts - 2) * 3; break;
-        default:               return 0;
+        default:               { RJ(2); return 0; }
         }
     }
-    if (ni == 0) return 0;
+    if (ni == 0) { RJ(2); return 0; }
     for (i = 0; i < n; i++) {
         const DlVert* d = &e->verts[i];
-        if (d->flags != flags) return 0;
+        if (d->flags != flags) { RJ(3); return 0; }
         if (has_mid) {
             int sl;
-            if (d->mid >= 28 || d->mid % 3 != 0) return 0;
+            if (d->mid >= 28 || d->mid % 3 != 0) { RJ(4); return 0; }
             sl = d->mid / 3;
             if (sl < smin) smin = sl;
             if (sl > smax) smax = sl;
@@ -13299,9 +13396,18 @@ static int dl_gpu_draw(DlEntry* e)
         if (min_verts < 0) {
             const char* m = getenv("MELEE_GPU_DL_MIN");
             /* 100: measured on the tablet (4 CPUs, Pokemon Stadium) against
-             * 0, 300 and the CPU path -- 47.0 fps against 44.9, 46.1 and
-             * 45.9, with a quarter less CPU work a frame than the CPU path. */
-            min_verts = m != NULL ? atoi(m) : 100;
+             * 300 and the CPU path -- 47.0 fps against 46.1 and 45.9, with a
+             * quarter less CPU work a frame than the CPU path. On the
+             * Chromecast 3 (Mali-G31, 4xA53) 30 won the same sweep: the
+             * Bifrost driver's per-draw cost is high enough that even a
+             * 40-vertex list is cheaper in the arena, and 0 was measurably
+             * worse (the extra per-draw state churn on the GPU side costs
+             * more than the replay it saves). */
+            if (m != NULL) min_verts = atoi(m);
+            else {
+                const char* r = (const char*) glGetString(GL_RENDERER);
+                min_verts = (r != NULL && strstr(r, "Mali") != NULL) ? 30 : 100;
+            }
             if (min_verts < 0) min_verts = 0;
         }
         if ((int) e->nverts < min_verts) return 0;
@@ -13335,7 +13441,13 @@ static int dl_gpu_draw(DlEntry* e)
     g_gpu_slot_max = e->gpu_slot_max;
     g_batch_pretransformed = skin; /* the position matrix is in the palette */
     g_state.prim_type = GX_TRIANGLES;
-    g_gen_mtx++;                   /* u_skin and the palette differ from the last draw */
+    /* PC port (60fps): no g_gen_mtx bump around the arena draw. The old
+     * double bump forced stage_a (the whole matrix group: projection, MVP,
+     * light model, skin, palette) to re-walk every one of the ~330 arena
+     * draws a frame even when nothing had changed; the values that are
+     * arena-specific (u_skin, the palette range) are now memoised in
+     * pc_stage_uniforms themselves, and everything else in the group is
+     * re-staged exactly when the game's own setters bump the generation. */
     bridge_upload_and_draw();
     g_gpu_entry = NULL;
     g_gpu_skin = 0;
@@ -13499,6 +13611,9 @@ void GXCallDisplayList(void* list, u32 nbytes)
     }
 
     if (pc_dlcache_on() && pos_cnt == 3 && vsize != 0) {
+        static int dls_timed = -1;
+        if (dls_timed < 0) dls_timed = pc_drawsec_on();
+        struct timespec dls_t, dls_u;
         u32 sig = dl_desc_sig(pos_cnt, vsize);
         u32 ch;
         DlEntry* e;
@@ -13526,13 +13641,26 @@ void GXCallDisplayList(void* list, u32 nbytes)
             pc_diag_dl_hits++;
         }
         if (e != NULL) {
+            if (dls_timed) {
+                clock_gettime(CLOCK_MONOTONIC, &dls_t);
+                pc_diag_dls_find_ns += (u64) ((dls_t.tv_sec - dl_t0.tv_sec) * 1000000000ll
+                                              + (dls_t.tv_nsec - dl_t0.tv_nsec));
+            }
             e->last_frame = g_state.frame_count;
             if (e->nprims > 0 && dl_offscreen(e)) {
                 dl_skip_replay(e);
                 goto dl_end;
             }
             n_draws += (int) e->nprims;
-            if (!dl_gpu_draw(e)) dl_replay(e);
+            int drew_gpu = dl_gpu_draw(e);
+            if (!drew_gpu) dl_replay(e);
+            if (dls_timed) {
+                clock_gettime(CLOCK_MONOTONIC, &dls_u);
+                if (drew_gpu) pc_diag_dls_gpu_ns += (u64) ((dls_u.tv_sec - dls_t.tv_sec) * 1000000000ll
+                                                           + (dls_u.tv_nsec - dls_t.tv_nsec));
+                else pc_diag_dls_replay_ns += (u64) ((dls_u.tv_sec - dls_t.tv_sec) * 1000000000ll
+                                                     + (dls_u.tv_nsec - dls_t.tv_nsec));
+            }
             goto dl_end;
         }
     }
