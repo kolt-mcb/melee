@@ -228,6 +228,16 @@ static int trace_f32(char* buf, int cap, f32 v)
  * than hanging on a window nobody is driving any more. */
 static int sync_fd = -1;
 static int sync_done = 0;
+/* MELEE_SYNC_RL=1: an agent is driving, not the lockstep comparer (see
+ * pc_trace_sync_wait). */
+static int sync_rl = -1;
+static int sync_rl_on(void)
+{
+    if (sync_rl < 0) {
+        sync_rl = getenv("MELEE_SYNC_RL") != NULL;
+    }
+    return sync_rl;
+}
 
 static void sync_open(void)
 {
@@ -312,7 +322,8 @@ int pc_trace_stale_regs(u32* r5, u32* r30)
     size_t used = 0;
     unsigned a, b;
 
-    if (sync_fd < 0) {
+    /* An agent driver has no console to ask; the defaults stand. */
+    if (sync_fd < 0 || sync_rl_on()) {
         return 0;
     }
     if (send(sync_fd, "NEED\n", 5, MSG_NOSIGNAL) != 5) {
@@ -372,37 +383,151 @@ static void pc_trace_send_pad(void)
     }
 }
 
-void pc_trace_sync_wait(void)
-{
-    char reply[64];
-    size_t used = 0;
+/* MELEE_SYNC_RL=1: the socket carries what an agent needs on top of the
+ * state row, once per presented frame, before the port waits for GO:
+ *
+ *   "C <slot> <buttons hex> <sx> <sy> <cx> <cy> <lt> <rt>"  per fighter --
+ *       the controller the fighter's CPU chose this frame (fp->cpu; zero for
+ *       a human slot). That is the teacher an imitation model learns from,
+ *       read where the game itself reads it, so every press is on the frame
+ *       it took effect.
+ *   "F <w> <h>" then w*h*3 raw bytes -- the presented frame, when
+ *       MELEE_SYNC_PIXELS=1 is set as well (render.c).
+ *
+ * And the driver can answer with more than GO:
+ *
+ *   "PAD <n> <buttons hex> <sx> <sy> <cx> <cy> <lt> <rt>"  sets pad n from
+ *       the next frame on, until the next PAD (pc_sync_pads, undef_stubs.c).
+ *   "GO"    runs the next frame.      "QUIT"  exits.
+ *
+ * Several lines may arrive in one read, so the buffer is kept across calls
+ * and consumed a line at a time. */
+extern GCPadStatus pc_sync_pads[4];
+extern int pc_sync_pad_on[4];
+extern const unsigned char* pc_render_sync_pixels(int* w, int* h)
+    __attribute__((weak));
 
-    if (sync_fd < 0) {
-        return;
-    }
-    pc_trace_send_pad();
-    for (;;) {
-        ssize_t got = recv(sync_fd, reply + used, sizeof(reply) - 1 - used, 0);
-        if (got <= 0) {
-            /* Timeout or the driver closed: stop waiting for good rather than
-             * blocking every frame from here on. */
+static char sync_inbuf[512];
+static size_t sync_inused;
+
+static void sync_send_all(const void* data, size_t n)
+{
+    const char* p = (const char*) data;
+    while (n > 0) {
+        ssize_t sent = send(sync_fd, p, n, MSG_NOSIGNAL);
+        if (sent <= 0) {
             close(sync_fd);
             sync_fd = -1;
             return;
         }
-        used += (size_t) got;
-        reply[used] = '\0';
-        if (strchr(reply, '\n') != NULL) {
-            break;
+        p += sent;
+        n -= (size_t) sent;
+    }
+}
+
+static void pc_trace_sync_send_rl(void)
+{
+    int i;
+    char line[160];
+
+    for (i = 0; i < PC_TRACE_PLAYERS; i++) {
+        StaticPlayer* sp = Player_GetPtrForSlot(i);
+        HSD_GObj* gobj = sp != NULL ? sp->player_entity[0] : NULL;
+        Fighter* fp = (gobj != NULL) ? (Fighter*) gobj->user_data : NULL;
+        if (fp == NULL) {
+            continue;
         }
-        if (used >= sizeof(reply) - 1) {
-            used = 0;
+        snprintf(line, sizeof(line), "C %d %08X %d %d %d %d %d %d", i,
+                 (unsigned) fp->cpu.buttons, (int) fp->cpu.lstick.x,
+                 (int) fp->cpu.lstick.y, (int) fp->cpu.cstick.x,
+                 (int) fp->cpu.cstick.y, (int) fp->cpu.ltrigger,
+                 (int) fp->cpu.rtrigger);
+        sync_send_raw(line);
+    }
+    if (pc_render_sync_pixels != NULL) {
+        int w = 0, h = 0;
+        const unsigned char* px = pc_render_sync_pixels(&w, &h);
+        if (px != NULL && w > 0 && h > 0) {
+            int n = snprintf(line, sizeof(line), "F %d %d\n", w, h);
+            sync_send_all(line, (size_t) n);
+            sync_send_all(px, (size_t) w * (size_t) h * 3u);
         }
     }
-    if (strncmp(reply, "QUIT", 4) == 0) {
+    /* The driver reads until this line, so it never has to guess how many
+     * fighters there are or whether a frame block follows. */
+    sync_send_raw("W");
+}
+
+/* One complete line from the driver, without its newline. Returns 1 for GO,
+ * 0 for anything that only changes state. */
+static int pc_trace_sync_line(const char* l)
+{
+    if (strncmp(l, "GO", 2) == 0) {
+        return 1;
+    }
+    if (strncmp(l, "QUIT", 4) == 0) {
         close(sync_fd);
         sync_fd = -1;
         exit(0);
+    }
+    if (strncmp(l, "PAD ", 4) == 0) {
+        int n, sx, sy, cx, cy, lt, rt;
+        unsigned b;
+        if (sscanf(l + 4, "%d %x %d %d %d %d %d %d", &n, &b, &sx, &sy, &cx,
+                   &cy, &lt, &rt) == 8 && n >= 0 && n < 4)
+        {
+            GCPadStatus* p = &pc_sync_pads[n];
+            p->button = b;
+            p->stickX = (int8_t) sx;
+            p->stickY = (int8_t) sy;
+            p->subStickX = (int8_t) cx;
+            p->subStickY = (int8_t) cy;
+            p->analogL = (uint8_t) lt;
+            p->analogR = (uint8_t) rt;
+            pc_sync_pad_on[n] = 1;
+        }
+    }
+    return 0;
+}
+
+void pc_trace_sync_wait(void)
+{
+    if (sync_fd < 0) {
+        return;
+    }
+    pc_trace_send_pad();
+    if (sync_rl_on()) {
+        pc_trace_sync_send_rl();
+    }
+    for (;;) {
+        char* nl;
+        /* Consume every complete line already buffered. */
+        while ((nl = memchr(sync_inbuf, '\n', sync_inused)) != NULL) {
+            size_t len = (size_t) (nl - sync_inbuf);
+            int go;
+            *nl = '\0';
+            go = pc_trace_sync_line(sync_inbuf);
+            memmove(sync_inbuf, nl + 1, sync_inused - len - 1);
+            sync_inused -= len + 1;
+            if (go) {
+                return;
+            }
+        }
+        if (sync_inused >= sizeof(sync_inbuf) - 1) {
+            sync_inused = 0;   /* a line longer than the buffer: drop it */
+        }
+        {
+            ssize_t got = recv(sync_fd, sync_inbuf + sync_inused,
+                               sizeof(sync_inbuf) - 1 - sync_inused, 0);
+            if (got <= 0) {
+                /* Timeout or the driver closed: stop waiting for good rather
+                 * than blocking every frame from here on. */
+                close(sync_fd);
+                sync_fd = -1;
+                return;
+            }
+            sync_inused += (size_t) got;
+        }
     }
 }
 
