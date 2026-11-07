@@ -13,16 +13,23 @@ process.env.MELEE_LIVENESS_MS = '300';
 process.env.MELEE_SWEEP_MS = '50';
 process.env.MELEE_MATCH_STUCK_MS = '2000';
 process.env.MELEE_WATCH_MS = '50';
+process.env.MELEE_PREFS_WRITE_MS = '50';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const relay = require('./relay.js');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const PROFILE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'melee-profiles-'));
+relay.setProfileDir(PROFILE_DIR);
+process.on('exit', () => fs.rmSync(PROFILE_DIR, { recursive: true, force: true }));
 
 const MAGIC = 0x4D4E5031, MSG_INPUT = 4, MSG_BYE = 6, HDR = 8, PAD_BYTES = 10;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let addr = 0;
-function page(name) {
+function page(name, email) {
     const conn = {
         socket: { writableLength: 0, remoteAddress: `10.0.0.${++addr}` },
         out: [], closed: false, lastSeen: Date.now(), onmessage: null, onclose: null,
@@ -30,7 +37,8 @@ function page(name) {
         ping() { /* the browser would pong; the test moves lastSeen itself */ },
         close(clean) { if (conn.closed) return; conn.closed = true; if (conn.onclose) conn.onclose(!!clean); },
     };
-    relay.join(conn, { headers: {} });
+    // `email`: the address the gateway's SSO forwards (X-Forwarded-Email).
+    relay.join(conn, { headers: email ? { 'x-forwarded-email': email } : {} });
     const p = {
         conn, name,
         say: (obj) => conn.onmessage(Buffer.from(JSON.stringify(obj))),
@@ -48,12 +56,12 @@ function page(name) {
         // A fresh socket claiming this page's seat (lobby.js connect, hello.resume).
         resume() {
             const lobby = p.last('lobby'), start = p.last('start');
-            const q = page(name);
+            const q = page(name, email);
             q.say({ t: 'hello', name, resume: { id: lobby.you, seed: start.seed, token: lobby.token } });
             return q;
         },
     };
-    p.say({ t: 'hello', name });
+    if (name !== null) p.say({ t: 'hello', name });
     return p;
 }
 
@@ -185,4 +193,56 @@ test('a host gone silent in the lobby loses the seat', async () => {
     assert.equal(a.conn.closed, true);
     assert.equal(b.last('lobby').host, b.last('lobby').you);
     b.conn.close(true);
+});
+
+test('a signed-in page has its preferences kept under its address and handed back on the next visit', async () => {
+    await empty();
+    const a = page('Kolt', 'Kolt@Example.com');
+    const prof = a.last('profile');
+    assert.equal(prof.email, 'kolt@example.com', 'the address, lower-cased');
+    assert.equal(prof.prefs, null, 'nothing saved yet');
+    assert.equal(a.last('lobby').players[0].email, 'kolt@example.com', 'the lobby names the account');
+    a.say({ t: 'prefs', prefs: { name: 'Kolt', ckind: 2, color: 3, guests: [{ ckind: 9, color: 1 }],
+                                 volume: 40, muted: true, keys: { a: ['KeyX'], bogus: 'no' }, evil: '<script>' } });
+    await run(150, a);
+    const file = path.join(PROFILE_DIR, 'kolt@example.com.json');
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(saved.email, 'kolt@example.com');
+    assert.deepEqual(saved.prefs, { name: 'Kolt', ckind: 2, color: 3, guests: [{ ckind: 9, color: 1 }],
+                                    keys: { a: ['KeyX'] }, volume: 40, muted: true }, 'only known keys, in range');
+    a.conn.close(true);
+    await empty();
+
+    // Another computer: its browser has defaults, the account has the picks.
+    const b = page(null, 'kolt@example.com');
+    b.say({ t: 'hello', name: '', ckind: 8, color: 0, guests: [] });
+    assert.deepEqual(b.last('profile').prefs.guests, [{ ckind: 9, color: 1 }]);
+    const ps = b.last('lobby').players;
+    assert.equal(ps.length, 2, 'the saved guest is seated too');
+    assert.equal(ps[0].name, 'Kolt');
+    assert.equal(ps[0].ckind, 2);
+    assert.equal(ps[0].color, 3);
+    assert.equal(ps[1].ckind, 9);
+    b.conn.close(true);
+});
+
+test('a page with no forwarded address saves nothing and is told it is not signed in', async () => {
+    await empty();
+    const before = fs.readdirSync(PROFILE_DIR).length;
+    const a = page(null);
+    a.say({ t: 'hello' });
+    assert.equal(a.last('profile').email, null);
+    assert.match(a.last('lobby').players[0].name, /^Player \d+$/);
+    a.say({ t: 'prefs', prefs: { name: 'X' } });
+    await run(150, a);
+    assert.equal(fs.readdirSync(PROFILE_DIR).length, before, 'no file written');
+    a.conn.close(true);
+});
+
+test('a signed-in page that gives no name is called by its address', async () => {
+    await empty();
+    const a = page(null, 'someone.long.name@example.org');
+    a.say({ t: 'hello', name: '  ' });
+    assert.equal(a.last('lobby').players[0].name, 'someone.long.nam', 'the first part, cut to 16');
+    a.conn.close(true);
 });

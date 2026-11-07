@@ -127,10 +127,35 @@
 
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  /* ---- the player's account ----
+   * The gateway signs every player in with Google before the page loads, and
+   * the relay hears the address with the /net socket. It answers the page's
+   * hello with a `profile`: that address, and the preferences saved under it
+   * (relay.js, profiles.js). These keys follow the account from computer to
+   * computer; the rest of `store` (graphics, the full download) belongs to
+   * this computer. localStorage stays the working copy -- it is what the page
+   * reads on load, before the relay has answered -- and every change to a
+   * synced key goes up to the account a moment later. */
+  const SYNCED = ['name', 'ckind', 'color', 'guests', 'cpus', 'cpulevel', 'keyPreset', 'keys', 'volume', 'muted'];
+  let account;            // undefined until the relay says; then the address, or null (not signed in)
+  let applyingProfile = false, prefsTimer = 0;
+  const queuePrefs = () => {
+    if (!account || applyingProfile) return;
+    clearTimeout(prefsTimer);
+    prefsTimer = setTimeout(sendPrefs, 400);
+  };
   const store = {
     get(k, d) { try { const v = localStorage.getItem('melee.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem('melee.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+    set(k, v) {
+      try { localStorage.setItem('melee.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ }
+      if (SYNCED.includes(k)) queuePrefs();
+    },
   };
+  function sendPrefs() {
+    const prefs = {};
+    for (const k of SYNCED) { const v = store.get(k, undefined); if (v !== undefined) prefs[k] = v; }
+    send({ t: 'prefs', prefs });
+  }
   const setStatus = (t, bad) => { $('status').textContent = t; $('status').classList.toggle('bad', !!bad); };
 
   const wasmVersion = document.currentScript && document.currentScript.dataset.wasmV;
@@ -491,9 +516,9 @@
       // fighter before it reads as the text. Sheik has none (see NO_PORTRAIT).
       const face = NO_PORTRAIT.has(FIGHTERS[p.ckind]) ? '' : ` style="background-image:url(css/f${p.ckind}.png)"`;
       return `<div class="slot s${i}${p.id === lobby.you ? ' me' : ''}">
-        <div class="who">P${i + 1} · <b class="nm">${escapeHtml(p.name)}</b>${p.id === lobby.host && !p.seat ? '<span class="tag">host</span>' : ''}</div>
+        <div class="who">P${i + 1} · <b class="nm"${p.email ? ` title="${escapeHtml(p.email)}"` : ''}>${escapeHtml(p.name)}</b>${p.id === lobby.host && !p.seat ? '<span class="tag">host</span>' : ''}</div>
         <div class="face"${face}></div>
-        <div class="what">${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.ping != null ? ` · ${p.ping} ms` : ''}${p.inMatch ? ' · <b>in a match</b>' : ''}${p.pre != null && p.pre < 100 && !p.inMatch ? ` · <b>downloading ${p.pre}%</b>` : ''}</div></div>`;
+        <div class="what">${p.email && !p.seat ? `<span class="acct">${escapeHtml(p.email)}</span>` : ''}${FIGHTERS[p.ckind]} · costume ${p.color + 1}${p.ping != null ? ` · ${p.ping} ms` : ''}${p.inMatch ? ' · <b>in a match</b>' : ''}${p.pre != null && p.pre < 100 && !p.inMatch ? ` · <b>downloading ${p.pre}%</b>` : ''}</div></div>`;
     }).join('');
     const host = isHost();
     $('host-note').textContent = host ? 'you are the host' : 'the host chooses';
@@ -666,6 +691,7 @@
     if (msg.t === 'ping') send({ t: 'pong', s: msg.s });        // the relay measuring the round trip
     else if (msg.t === 'lobby') { lobby = msg; if (msg.rtc) dgramStart(); if (!started) { paintLobby(); prefetchMatch(); } }
     else if (msg.t === 'rtc' || msg.t === 'rtc-ice') dgramSignal(msg);
+    else if (msg.t === 'profile') applyProfile(msg);
     else if (msg.t === 'start') { lastStart = msg; startMatch(msg); }
     else if (msg.t === 'stale' && !started) {
       // A deploy since this page loaded. The page is never cached, so a
@@ -686,6 +712,47 @@
     }
   }
   function send(obj) { if (ws && ws.readyState === 1) ws.send(new TextEncoder().encode(JSON.stringify(obj))); }
+  /* The relay's answer to the hello: who this page is signed in as, and the
+   * preferences saved under that account. Saved ones replace this browser's
+   * (the relay has already put the picks in the lobby); with none saved yet,
+   * this browser's become the account's. Also after a relay restart, when
+   * the page says hello again: then the two agree and nothing moves. */
+  function applyProfile(msg) {
+    account = msg.email || null;
+    paintAccount();
+    if (!account) return;
+    const p = msg.prefs;
+    if (!p) { sendPrefs(); return; }
+    applyingProfile = true;
+    try { for (const k of SYNCED) if (p[k] !== undefined) store.set(k, p[k]); }
+    finally { applyingProfile = false; }
+    if (typeof p.name === 'string') { me.name = p.name; $('name').value = p.name; }
+    if (p.ckind != null) me.ckind = p.ckind;
+    if (p.color != null) me.color = p.color;
+    if (Array.isArray(p.guests)) {
+      guests.length = 0;
+      for (const g of p.guests.slice(0, MAX_LOCAL - 1)) guests.push({ ckind: g.ckind, color: g.color });
+    }
+    if (p.cpus != null) rules.cpus = p.cpus;
+    if (p.cpulevel != null) rules.cpulevel = p.cpulevel;
+    if (p.keyPreset != null || p.keys) {
+      keyPreset = store.get('keyPreset', 'box');
+      keys = Object.assign(presetOf('box'), store.get('keys', null) || presetOf(KEY_PRESETS[keyPreset] ? keyPreset : 'box'));
+      paintKeys();
+    }
+    paintPicks();
+    paintSound();
+    if (lobby && !started) paintLobby();
+    console.log(`[lobby] signed in as ${account}; preferences restored from the account`);
+  }
+  function paintAccount() {
+    const el = $('account');
+    if (!el) return;
+    el.textContent = account ? `Signed in as ${account}` : '';
+    el.title = account ? 'Your name, fighters, keys and sound are saved to this account and follow you to any computer' : '';
+    // A player who never typed a name is called by their address's first part.
+    if (account) $('name').placeholder = account.split('@')[0].slice(0, 16);
+  }
   let started = false, matchOver = false;
   /* A socket that drops during a match is retried, not fatal: the relay holds
    * the seat for a while (relay.js RESUME_MS), the engine stalls on the

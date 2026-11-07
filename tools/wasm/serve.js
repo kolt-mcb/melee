@@ -56,6 +56,10 @@ const REPORT_MAX_BYTES = 8 << 20, REPORT_MAX_FILES = 1000;
 // OOM this process -- which is the page, the disc stream and the relay at once.
 const MAX_WS_MSG = 64 << 10;
 const relay = require('./relay.js');
+// Each signed-in player's saved preferences (profiles.js). Inside the reports
+// directory by default: the compose file already mounts that from the host,
+// so profiles outlive the container with no compose change.
+const PROFILES = path.resolve(opt('--profiles', process.env.MELEE_PROFILES || path.join(REPORTS, 'profiles')));
 
 if (!ISO || !fs.existsSync(ISO)) {
     console.error('usage: node tools/wasm/serve.js --iso /path/to/Melee.iso [--port N] [--http]');
@@ -128,7 +132,9 @@ function receiveReport(req, res) {
             const seed = report.match && report.match.seed != null ? (report.match.seed >>> 0).toString(16) : 'lobby';
             const file = path.join(REPORTS, `${when}_${seed}_${clean(report.name || req.socket.remoteAddress, 24)}_` +
                                             `${clean(report.kind, 12)}_${crypto.randomBytes(2).toString('hex')}.json`);
-            report.received = { at: new Date().toISOString(), from: req.socket.remoteAddress };
+            // Who sent it: the gateway's signed-in address, when there is one.
+            report.received = { at: new Date().toISOString(), from: req.socket.remoteAddress,
+                                email: req.headers['x-forwarded-email'] || null };
             fs.writeFileSync(file, JSON.stringify(report));
             const sum = report.prof && report.prof.summary;
             console.log(`[report] ${report.name || '?'} (${report.kind || '?'})` +
@@ -228,6 +234,7 @@ const fileVersion = (name) => {
 };
 // The relay keeps pages on an older engine out of a match.
 relay.setWasmVersion(() => fileVersion('melee.wasm'));
+relay.setProfileDir(PROFILES);
 function servePage(req, res, file) {
     let html;
     try { html = fs.readFileSync(file, 'utf8'); } catch (e) { res.writeHead(404); return res.end('not found'); }
@@ -429,4 +436,5 @@ server.listen(PORT, '0.0.0.0', () => {
     for (const a of ['localhost', ...lanAddresses()]) console.log(`  ${scheme}://${a}:${PORT}/`);
     if (!PLAIN) console.log('  (self-signed certificate: accept the browser warning once per device)');
     console.log(`  reports from the players' pages go to ${REPORTS}`);
+    console.log(`  signed-in players' preferences are kept in ${PROFILES}`);
 });

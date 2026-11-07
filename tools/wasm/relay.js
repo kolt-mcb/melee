@@ -45,6 +45,7 @@
 
 const crypto = require('crypto');
 const rtc = require('./rtc.js');
+const profiles = require('./profiles.js');
 
 const MAX_PLAYERS = 8; // the PC build's fighter slots
 const MAX_LOCAL = 4;   // players at one page: the four pads the engine reads
@@ -57,6 +58,7 @@ const KEEP_PADS = 256;               // each slot's newest pads, for the leaver'
 const MAX_MEMBERS = 64;              // the whole room; a home lobby is a handful
 const PER_IDENT_MAX = 8;             // sockets one SSO identity may hold at once
 const OFFER_MIN_MS = 1000;           // least time between a page's datagram-channel offers
+const PREFS_WRITE_MS = +process.env.MELEE_PREFS_WRITE_MS || 1000;  // a page's preference saves coalesce to one write in this
 console.log(`[relay] datagram channel: ${rtc.describe()}`);
 /* How long a seat is held for a page whose socket dropped mid-match. The
  * engine stalls on the missing input and resends what the peer has not
@@ -96,11 +98,22 @@ let nextId = 1;
  * older than this check, and so stale too. */
 let currentWasm = () => null;
 exports.setWasmVersion = (fn) => { currentWasm = fn; };
+/* Where each signed-in player's saved preferences live (profiles.js);
+ * serve.js names the directory. Without one nothing is saved or restored,
+ * and the page is told it is not signed in. */
+exports.setProfileDir = (dir) => profiles.init(dir);
 // Not before the page's hello: the socket is a member, and is broadcast to,
 // a moment before the hello saying which engine it runs arrives.
 const stale = (m) => { const cur = currentWasm(); return !!cur && m.said && m.wasm !== cur; };
 
 const json = (conn, obj) => conn.send(Buffer.from(JSON.stringify(obj)));
+
+/* The part of a saved profile that is a pick: what the lobby shows. */
+const pickOf = (prefs) => {
+    const o = {};
+    for (const k of ['name', 'ckind', 'color', 'guests']) if (prefs[k] !== undefined) o[k] = prefs[k];
+    return o;
+};
 
 /* A member's players: its own, then its guests'. */
 const seatsOf = (m) => [{ name: m.name, ckind: m.ckind, color: m.color },
@@ -133,6 +146,9 @@ function lobbyState(forId) {
             // `stale`, and its player has to see it somewhere.
             id: m.id, seat, name: stale(m) ? `${p.name} (old version: reload)` : p.name, stale: stale(m), ckind: p.ckind, color: p.color, ping: pingOf(m), pre: m.pre, loaded: m.loaded,
             inMatch: !!(room.match && room.match.players.includes(m)),
+            // The account behind the page (the gateway's SSO address), so the
+            // lobby can say who a name belongs to. Guests share their host's.
+            email: m.email,
         }))),
         waiting: room.members.length - in_.length,
         rules: room.rules,
@@ -446,7 +462,11 @@ exports.join = (conn, req) => {
      * identity, with the socket address as the fallback off-gateway. Counted
      * from room.members itself, so the resume path (which splices a member)
      * needs no separate bookkeeping. */
+    /* MELEE_DEV_EMAIL: a local serve.js has no gateway to forward an
+     * address; the operator may name one so the profile path can be tried
+     * from a browser. Never set in the container. */
     const ident = (req && req.headers && req.headers['x-forwarded-email']) ||
+                  process.env.MELEE_DEV_EMAIL ||
                   (conn.socket && conn.socket.remoteAddress) || '?';
     if (room.members.length >= MAX_MEMBERS ||
         room.members.filter((o) => o.ident === ident).length >= PER_IDENT_MAX) {
@@ -455,12 +475,17 @@ exports.join = (conn, req) => {
         try { conn.socket && conn.socket.destroy(); } catch (e) { /* */ }
         return;
     }
-    const m = { conn, id: nextId++, ident, token: crypto.randomBytes(16).toString('hex'),
-                name: `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
+    /* The signed-in account, when the gateway forwarded one. Off the gateway
+     * `ident` is a socket address, which names a computer, not a player. */
+    const email = profiles.emailOf(ident);
+    const m = { conn, id: nextId++, ident, email, token: crypto.randomBytes(16).toString('hex'),
+                // A page that gives no name is called by its address, not a number.
+                name: email ? email.split('@')[0].slice(0, 16) : `Player ${nextId - 1}`, ckind: 8, color: 0, guests: [],
                 slot: -1, slots: [], lastFrame: -1, lastFrames: {}, pads: {}, solid: {}, done: false, rtts: [], pingAt: 0, pingSeq: 0, pre: null,
                 lastOfferAt: 0, away: null };
     room.members.push(m);
     attach(m, conn);
+    console.log(`[relay] joined: ${email || ident} (${room.members.length} in the room)`);
     if (!sweeper) sweeper = setInterval(sweep, SWEEP_MS).unref();
     broadcastLobby();
 };
@@ -532,6 +557,22 @@ function attach(m, conn) {
                 broadcastLobby();
                 break;
             }
+            /* The page's first hello: tell it who the gateway says it is,
+             * and hand over the preferences saved under that address. A
+             * saved profile wins over what the page's own storage held --
+             * the player chose those on some computer, and this one may be
+             * a borrowed browser with defaults -- so its picks replace the
+             * hello's before the pick below reads them. The page applies the
+             * same values to its own controls when the message arrives. A
+             * page with no saved profile is told so; it then sends its local
+             * preferences as the first save. Once per socket: a later hello
+             * on the same socket would be odd, and a 'pick' never does this. */
+            if (!m.profiled) {
+                m.profiled = true;
+                const prefs = m.email ? profiles.load(m.email) : null;
+                json(conn, { t: 'profile', email: m.email, prefs });
+                if (prefs) msg = { ...msg, ...pickOf(prefs) };
+            }
             // fallthrough: a first hello is a pick
         case 'pick':
             m.said = true;
@@ -548,6 +589,20 @@ function attach(m, conn) {
                 }));
             }
             broadcastLobby();
+            break;
+        case 'prefs': // the page's preferences, to keep under its account
+            if (!m.email) break;
+            // Coalesced: a slider sends one a tick. The last one wins, written
+            // a moment later and no more than once a second per page.
+            m.prefsPending = msg.prefs;
+            if (!m.prefsTimer) {
+                m.prefsTimer = setTimeout(() => {
+                    m.prefsTimer = null;
+                    const saved = profiles.save(m.email, m.prefsPending);
+                    m.prefsPending = null;
+                    if (saved) console.log(`[relay] ${m.email}: preferences saved`);
+                }, PREFS_WRITE_MS).unref();
+            }
             break;
         case 'rules':
             if (!isHost || room.match) break;

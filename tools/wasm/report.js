@@ -114,7 +114,7 @@ if (fs.statSync(target).isDirectory()) {
     for (const f of fs.readdirSync(target).filter((x) => x.endsWith('.json')).sort()) {
         let r;
         try { r = load(path.join(target, f)); } catch (e) { console.log(`${f}  (unreadable: ${e.message})`); continue; }
-        console.log(`${f}  ${r.crash ? 'CRASH ' : ''}${s(r.prof && r.prof.summary)}${r.note ? `  "${r.note}"` : ''}`);
+        console.log(`${f}  ${r.received && r.received.email ? `[${r.received.email}] ` : ''}${r.crash ? 'CRASH ' : ''}${s(r.prof && r.prof.summary)}${r.note ? `  "${r.note}"` : ''}`);
     }
     process.exit(0);
 }
@@ -122,6 +122,7 @@ if (fs.statSync(target).isDirectory()) {
 const r = load(target);
 const p = r.page || {};
 console.log(`${r.name || '?'}: ${r.kind} report at ${r.time}${r.note ? `\n  note: "${r.note}"` : ''}`);
+if (r.received && r.received.email) console.log(`  account   ${r.received.email}`);
 console.log(`  browser   ${p.ua}`);
 console.log(`  machine   ${p.platform}, ${p.cores} cores, ${p.memoryGB || '?'} GB, GPU ${p.gpu || '(hidden)'}`);
 console.log(`  display   screen ${p.screen && p.screen.join('x')} dpr ${p.dpr}, viewport ${p.viewport && p.viewport.join('x')}, ` +
