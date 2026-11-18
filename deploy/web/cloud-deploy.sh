@@ -33,7 +33,11 @@ ID=$(gcloud compute instances describe "$VM" --zone "$ZONE" --format='value(id)'
 SSH_CMD="ssh -o BatchMode=yes -o ConnectTimeout=20 -i $HOME/.ssh/google_compute_engine \
  -o UserKnownHostsFile=$HOME/.ssh/google_compute_known_hosts -o HostKeyAlias=compute.$ID \
  -o ProxyCommand='gcloud compute start-iap-tunnel $VM 22 --listen-on-stdin --zone $ZONE --verbosity=error'"
-ssh_vm() { eval "$SSH_CMD" "$USER_AT@$VM" "$@"; }
+# -n: a remote command here never needs stdin, and an ssh that reads it eats
+# whatever the caller piped in. (rsync's own ssh does need it, so not in SSH_CMD.)
+ssh_vm() { eval "$SSH_CMD" -n "$USER_AT@$VM" "$@"; }
+# A failed step names itself instead of the script just stopping.
+trap 'echo "[cloud-deploy] FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 case "${1:-}" in
   --check) ssh_vm "sudo bash /opt/melee/cloud-apply.sh --check"; exit ;;
